@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-25T10:20:00.000Z",
+  "title": "Design System: Mediyaz ART Bank",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Surgical Obsidian",
+        "canonical": "oklch(0.205 0 0)",
+        "tonalRamp": [
+          "oklch(0.1 0 0)",
+          "oklch(0.15 0 0)",
+          "oklch(0.205 0 0)",
+          "oklch(0.3 0 0)",
+          "oklch(0.4 0 0)",
+          "oklch(0.6 0 0)",
+          "oklch(0.8 0 0)",
+          "oklch(0.95 0 0)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Charcoal Slate",
+        "canonical": "oklch(0.145 0 0)",
+        "tonalRamp": [
+          "oklch(0.08 0 0)",
+          "oklch(0.145 0 0)",
+          "oklch(0.25 0 0)",
+          "oklch(0.4 0 0)",
+          "oklch(0.6 0 0)",
+          "oklch(0.75 0 0)",
+          "oklch(0.9 0 0)",
+          "oklch(0.97 0 0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display Heading",
+        "purpose": "Used for main page welcoming and section hero units."
+      },
+      "body": {
+        "displayName": "Body Copy",
+        "purpose": "Standard details text and informational blocks."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ambient-low",
+        "value": "0 4px 24px rgba(0,0,0,0.05)",
+        "purpose": "Subtle indicator focus on input elements and card state changes."
+      }
+    ],
+    "motion": [
+      {
+        "name": "transition-standard",
+        "value": "background-color 0.2s ease, border-color 0.2s ease",
+        "purpose": "Default hover timings for buttons and links."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard call-to-action button for clinical bookings and submissions.",
+      "html": "<button class=\"ds-btn-primary\">Book Consultation</button>",
+      "css": ".ds-btn-primary { background: oklch(0.205 0 0); color: oklch(0.985 0 0); padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 14px; border: none; transition: background-color 0.2s ease; cursor: pointer; } .ds-btn-primary:hover { background-color: oklch(0.145 0 0); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Clinical Sanctuary",
+    "overview": "Mediyaz presents a visual environment defined by clean, premium, and serene aesthetics. As a high-trust reproductive medical platform, it rejects flashy decorations and complex elements to prioritize patient accessibility, data clarity, and high-trust clinical precision. Spacing is comfortable, layouts are uncluttered, and interactions are designed to feel calm and deliberate.",
+    "keyCharacteristics": [
+      "High-trust clinical minimalism",
+      "Serene whitespace and comfortable readability",
+      "Muted color relationships with strict attention to data and privacy layout boundaries",
+      "Consistent Indian Rupee (₹) currency alignment"
+    ],
+    "rules": [
+      {
+        "name": "The Absolute Focus Rule",
+        "body": "Accent colors (like destructive red or clinical teal) must be used on <=10% of any given screen. Rarity emphasizes critical actions and fields.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ambient Elevation Rule",
+        "body": "Shadows are omitted at rest. Soft ambient shadows (0 4px 24px rgba(0,0,0,0.05)) appear only as interactive responses to focus or hover states on cards, dialog overlays, and dropdown panels.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Consistent Corner Rule",
+        "body": "Primary cards, input blocks, buttons, and alert bars utilize a consistent corner radius of 10px (rounded.lg). Subtle child components utilize 8px (rounded.md) or 4px (rounded.sm).",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do wrap service catalog grids in direct slug links to specific details pages.",
+      "Do format all price strings using the Indian Rupee symbol (₹).",
+      "Do align the tracking status layout to match actual ConsultationRequest and DonorRegistration database schemas."
+    ],
+    "donts": [
+      "Don't use any AI icons (Sparkles) anywhere on the site.",
+      "Don't add duplicate CTAs or action buttons in the navigation header or page footers.",
+      "Don't render financial donation indicators or charts on the administrative dashboard panels."
+    ]
+  }
+}
