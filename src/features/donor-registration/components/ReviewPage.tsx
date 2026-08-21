@@ -21,6 +21,16 @@ function DynamicField({
   );
 }
 
+const formatAddress = (addr = "", city = "", state = "", country = "", pin = "") => {
+  if (!addr) return "";
+  const parts = [addr];
+  if (city) parts.push(city);
+  if (state) parts.push(state);
+  if (country) parts.push(country);
+  if (pin) parts.push(pin);
+  return parts.join(", ");
+};
+
 // Page Sheet Container (replicates a printed PDF page)
 function PdfPageSheet({
   pageNum,
@@ -63,6 +73,10 @@ export function ReviewPage({
     donorType,
     registrationId,
     assignedHospital,
+    spermDonorInfo,
+    eggDonorInfo,
+    investigations,
+    physicalExamination,
   } = store;
   const p = personalInfo as any;
   const m = medicalInfo as any;
@@ -106,21 +120,12 @@ export function ReviewPage({
       <div className="space-y-8 pb-12 font-serif">
         <div className="space-y-0 print:space-y-0">
           {/* SHEET 1: REGISTRATION FORM FOR OOCYTE DONOR */}
-          <PdfPageSheet pageNum={1} title="REGISTRATION FORM FoR OOCYTE DONOR">
-            <div className="flex flex-wrap gap-6 font-bold text-sm border-b border-slate-300 pb-4">
-              <div>
-                ART Clinic: <DynamicField value="FertiJoy IVF & Fertility" />
-              </div>
-              <div>
-                Dr. <DynamicField value="Ramya Mishra" />
-              </div>
-            </div>
-
+          <PdfPageSheet pageNum={1} title="REGISTRATION FORM FOR OOCYTE DONOR">
             <div className="space-y-4 text-justify mt-4">
               <p>
                 I, <DynamicField value={p.fullName} /> W/O{" "}
                 <DynamicField value={p.spouseName || "______________"} />, House
-                no. <DynamicField value={c.currentAddress} /> and Aadhar No{" "}
+                no. <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} /> and Aadhar No{" "}
                 <DynamicField value={p.aadhaarNumber} /> date of birth{" "}
                 <DynamicField value={p.dateOfBirth} /> and Mobile no{" "}
                 <DynamicField value={c.mobileNumber} />, is willing to donate my
@@ -130,7 +135,7 @@ export function ReviewPage({
               <p className="text-slate-600 dark:text-slate-400">
                 मैं <DynamicField value={p.fullName} /> पत्नी{" "}
                 <DynamicField value={p.spouseName || "______________"} />, मकान
-                नं. <DynamicField value={c.currentAddress} /> और आधार नंबर{" "}
+                नं. <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} /> और आधार नंबर{" "}
                 <DynamicField value={p.aadhaarNumber} /> जन्म तिथि{" "}
                 <DynamicField value={p.dateOfBirth} /> और मोबाइल नंबर{" "}
                 <DynamicField value={c.mobileNumber} />, जरूरतमंद जोड़े/महिला को
@@ -328,7 +333,7 @@ export function ReviewPage({
                   <strong>Second Part</strong> I{" "}
                   <DynamicField value={p.fullName} /> W/O{" "}
                   <DynamicField value={p.spouseName || "______________"} />,
-                  House no. <DynamicField value={c.currentAddress} /> and Aadhar
+                  House no. <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} /> and Aadhar
                   No <DynamicField value={p.aadhaarNumber} /> date of birth{" "}
                   <DynamicField value={p.dateOfBirth} /> and Mobile no{" "}
                   <DynamicField value={c.mobileNumber} />, herein referred to as
@@ -340,7 +345,7 @@ export function ReviewPage({
                 <p className="text-slate-600 dark:text-slate-400">
                   दूसरा भाग है, मैं <DynamicField value={p.fullName} /> पत्नी{" "}
                   <DynamicField value={p.spouseName || "______________"} />,
-                  मकान नं. <DynamicField value={c.currentAddress} />
+                  मकान नं. <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} />
                   ...
                 </p>
               </div>
@@ -487,332 +492,6 @@ export function ReviewPage({
               </div>
             </div>
           </PdfPageSheet>
-
-          {/* SHEET 3: INFORMATION FORM FOR OOCYTE DONOR */}
-          <PdfPageSheet pageNum={3} title="INFORMATION FORM FOR OOCYTE DONOR">
-            {/* GRID 1: Basic Info & History */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 text-sm">
-              {/* Left Column: Basic Info */}
-              <div className="space-y-3">
-                <h3 className="font-bold border-b border-black pb-1 uppercase tracking-wider">
-                  Basic Information:
-                </h3>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">Donor Name</span>
-                  <span>{p.fullName}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">Donor ID</span>
-                  <span>{registrationId || "MAB/OD/___"}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">
-                    1. Identification number
-                  </span>
-                  <span>{p.aadhaarNumber}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">2. Age / Date of birth</span>
-                  <span>{p.dateOfBirth}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">3. Marital status</span>
-                  <span>{p.maritalStatus}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">4. Education of donor</span>
-                  <span>{p.education}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">5. Education spouse</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">6. Occupation of donor</span>
-                  <span>{p.occupation}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">7. Occupation of spouse</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">
-                    8. Religion / Nationality
-                  </span>
-                  <span>{p.religion || "Hindu"} / Indian</span>
-                </div>
-              </div>
-
-              {/* Right Column: History */}
-              <div className="space-y-3">
-                <h3 className="font-bold border-b border-black pb-1 uppercase tracking-wider">
-                  History:
-                </h3>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">9. Obstetric history</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2 pl-4 text-xs">
-                  <span>a. Number of deliveries</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2 pl-4 text-xs">
-                  <span>b. Number of abortions</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2 pl-4 text-xs">
-                  <span>c. other points of note</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">10. Menstrual history</span>
-                  <span>{m.menstrualCycle || "Regular"}</span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">
-                    11. Use of contraceptives
-                  </span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">12. Medical history</span>
-                  <span>{m.medicalHistory || "No"}</span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">
-                    13. Family history (medical)
-                  </span>
-                  <span>{m.familyMedicalHistory || "No"}</span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">
-                    14. Abnormality in a child
-                  </span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">15. Blood transfusion</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-                <div className="grid grid-cols-[2fr_1fr] gap-2 border-b border-slate-200 pb-2">
-                  <span className="font-semibold">16. Substance abuse</span>
-                  <span>
-                    <DynamicField value={null} />
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* FEATURES */}
-            <div className="space-y-3 mt-6">
-              <h3 className="font-bold border-b border-black pb-1 uppercase tracking-wider">
-                Features:
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="font-semibold">17. Height:</span> {p.height}
-                </div>
-                <div>
-                  <span className="font-semibold">18. Weight:</span> {p.weight}
-                </div>
-                <div>
-                  <span className="font-semibold">19. Skin:</span>{" "}
-                  {p.complexion}
-                </div>
-                <div>
-                  <span className="font-semibold">20. Hair:</span> {p.hairColor}
-                </div>
-                <div>
-                  <span className="font-semibold">21. Eyes:</span> {p.eyeColor}
-                </div>
-              </div>
-            </div>
-
-            {/* INVESTIGATIONS */}
-            <div className="space-y-3 mt-6">
-              <h3 className="font-bold border-b border-black pb-1 uppercase tracking-wider">
-                Investigations (To be filled by Investigator):
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>22. Blood group and Rh status</span>{" "}
-                  <DynamicField value={p.bloodGroup} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>25. Blood urea / Serum creatinine</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between font-semibold mt-2">
-                  23. Complete blood picture
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between mt-2">
-                  <span>26. SGPT</span> <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between pl-4">
-                  <span>a. Hb</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>27. Routine urine examination</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between pl-4">
-                  <span>b. Total RBC count</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>28. HBsAg status</span> <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between pl-4">
-                  <span>c. Total WBC count</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>29. Hepatitis C status</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between pl-4">
-                  <span>d. Differential WBC count</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>30. HIV status w/ date</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between pl-4">
-                  <span>e. Platelet count</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>31. Hemoglobin A2 (thalassemia)</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between pl-4">
-                  <span>f. Peripheral smear</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>32. Any other specific test</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>24. Random blood sugar</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-              </div>
-            </div>
-
-            {/* PHYSICAL EXAM */}
-            <div className="space-y-3 mt-6">
-              <h3 className="font-bold border-b border-black pb-1 uppercase tracking-wider">
-                Detailed Physical Examination:
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>33. Pulse</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>36. Respiratory system</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>34. Blood pressure</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>37. Cardiovascular system</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>35. Temperature</span> <DynamicField value={null} />
-                </div>
-                <div className="border-b border-slate-200 pb-1 flex justify-between">
-                  <span>38. Per abdominal examination</span>{" "}
-                  <DynamicField value={null} />
-                </div>
-              </div>
-              <div className="text-[10px] text-slate-500 italic pt-2">
-                Footnotes: (1) To be carried out within 15 days prior to oocyte
-                donation. (2) Any additional test carried out on the basis of
-                the history and examination of donor.
-              </div>
-            </div>
-          </PdfPageSheet>
-
-          {/* SHEET 4: FORM 14 A */}
-          <PdfPageSheet pageNum={4} title="FORM 14 A">
-            <div className="text-center font-bold mb-6">
-              <p className="text-sm">[See rule 13 (2) (i)]</p>
-              <h3 className="text-lg underline uppercase mt-2">
-                For Oocyte Donors
-              </h3>
-              <p className="text-sm font-normal mt-1">
-                Passport / ID no. <DynamicField value={p.aadhaarNumber} /> (For
-                donors recruited and screened by the ART bank)
-              </p>
-            </div>
-
-            <div className="border border-black mb-8 text-sm">
-              <div className="grid grid-cols-2 border-b border-black p-2 font-bold">
-                <div>(Name of the ART bank) MEDIYAZ ART BANK</div>
-                <div className="text-right">
-                  Registration No DL/AB/2022/10605/AB/SEB/21
-                </div>
-              </div>
-
-              {/* Table Header */}
-              <div className="grid grid-cols-6 border-b border-black text-xs font-bold bg-slate-50">
-                <div className="p-2 border-r border-black">Donor ID</div>
-                <div className="p-2 border-r border-black">
-                  Recruitment Date
-                </div>
-                <div className="p-2 border-r border-black">
-                  Name of person Recruiting
-                </div>
-                <div className="p-2 border-r border-black">Signature</div>
-                <div className="p-2 border-r border-black">Supply Date</div>
-                <div className="p-2">ART Clinic</div>
-              </div>
-
-              {/* Table Row */}
-              <div className="grid grid-cols-6 text-xs h-16 items-center">
-                <div className="p-2 border-r border-black h-full">
-                  {registrationId || "MAB/OD/___"}
-                </div>
-                <div className="p-2 border-r border-black h-full">
-                  {cn.signatureDate}
-                </div>
-                <div className="p-2 border-r border-black h-full">
-                  Imtiyaz Shaikh
-                </div>
-                <div className="p-2 border-r border-black h-full"></div>
-                <div className="p-2 border-r border-black h-full">
-                  <DynamicField value={null} />
-                </div>
-                <div className="p-2 h-full">FertiJoy IVF & Fertility</div>
-              </div>
-            </div>
-          </PdfPageSheet>
         </div>
       </div>
     );
@@ -830,7 +509,7 @@ export function ReviewPage({
             <p>
               I, Mr <DynamicField value={p.fullName} /> age{" "}
               <DynamicField value={p.age} /> years, R/o{" "}
-              <DynamicField value={c.currentAddress} />; having Aadhar Card No.{" "}
+              <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} />; having Aadhar Card No.{" "}
               <DynamicField value={p.aadhaarNumber} /> and date of birth{" "}
               <DynamicField value={p.dateOfBirth} />, is willing to donate my
               Sperm to needy couple/woman and agree to abide by following terms.
@@ -838,7 +517,7 @@ export function ReviewPage({
             <p className="text-slate-600 dark:text-slate-400">
               मैं, श्री <DynamicField value={p.fullName} />, आयु{" "}
               <DynamicField value={p.age} /> वर्ष, निवासी{" "}
-              <DynamicField value={c.currentAddress} />; आधार कार्ड संख्या{" "}
+              <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} />; आधार कार्ड संख्या{" "}
               <DynamicField value={p.aadhaarNumber} /> और जन्म तिथि{" "}
               <DynamicField value={p.dateOfBirth} /> है। ज़रूरतमंद कपल/महिला को
               अपना स्पर्म डोनेट करने को तैयार हूँ और नीचे दी गई शर्तों को मानने
@@ -1021,7 +700,7 @@ export function ReviewPage({
                 <strong>Second Part</strong> being Mr.{" "}
                 <DynamicField value={p.fullName} /> age{" "}
                 <DynamicField value={p.age} /> years, R/o{" "}
-                <DynamicField value={c.currentAddress} />; having Aadhar Card
+                <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} />; having Aadhar Card
                 No. <DynamicField value={p.aadhaarNumber} /> and date of birth{" "}
                 <DynamicField value={p.dateOfBirth} />, herein referred to as
                 the Donor...
@@ -1131,7 +810,7 @@ export function ReviewPage({
 
             <p className="mt-6">
               I, Mr. <DynamicField value={p.fullName} /> Address. R/o{" "}
-              <DynamicField value={c.currentAddress} /> Mobile number.{" "}
+              <DynamicField value={formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode)} /> Mobile number.{" "}
               <DynamicField value={c.mobileNumber} /> AADHAR card number.{" "}
               <DynamicField value={p.aadhaarNumber} /> Willingly consent to
               donate my sperm to couple/individual who are unable to have a

@@ -220,23 +220,6 @@ function DonorPageContent() {
           </div>
         </div>
 
-        {/* Approved Registration Resume Card */}
-        <Card className="rounded-2xl border-dashed border-2 border-slate-200 dark:border-slate-800 bg-teal-500/5 dark:bg-teal-950/10 p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
-          <div className="space-y-2 text-left">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-              Already Have a Registration ID?
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
-              If you have already submitted your pre-screening inquiry, been contacted by our clinical staff, and received your unique onboarding approval code, you can access the registration portal directly.
-            </p>
-          </div>
-          <Link href={`/donor/register?type=${donorType}`} className="shrink-0 w-full md:w-auto">
-            <Button className="w-full md:w-auto bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white font-bold rounded-xl text-xs h-11 px-6 flex items-center justify-center gap-1.5 cursor-pointer">
-              Complete Profile Registration <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-        </Card>
 
       </div>
 

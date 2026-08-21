@@ -105,6 +105,25 @@ export async function PATCH(
       { new: true }
     );
 
+    // Track Audit Log for employee operational trace
+    if (status && inquiry.status !== status) {
+      try {
+        const { createAuditLog } = await import("@/features/audit-logs/services/audit-log.service");
+        await createAuditLog(
+          req,
+          "Inquiry Status Changed",
+          "DonorInquiry",
+          id,
+          session.user.name || session.user.email,
+          inquiry.status,
+          status,
+          `Changed status of inquiry for "${inquiry.fullName}" from "${inquiry.status}" to "${status}"`
+        );
+      } catch (auditErr) {
+        console.error("Failed to log donor query update audit:", auditErr);
+      }
+    }
+
     // Trigger workflow notification for specific status updates
     if (status === "Consultation Scheduled" && consultationDateTime) {
       try {
@@ -212,18 +231,7 @@ export async function PUT(
     });
     await inquiry.save();
 
-    // Trigger email containing the Registration ID to the user's email
-    try {
-      const { sendRegistrationApprovedCodeEmail } = await import("@/features/email/services/email.service");
-      await sendRegistrationApprovedCodeEmail(
-        inquiry.emailAddress,
-        inquiry.fullName,
-        registrationId,
-        inquiry.donationInterest
-      );
-    } catch (emailErr) {
-      console.error("Failed to send registration ID email:", emailErr);
-    }
+
 
     return NextResponse.json({
       success: true,

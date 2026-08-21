@@ -332,6 +332,15 @@ export function DonorRegistrationPdfDocument({
 }: DonorRegistrationPdfDocumentProps) {
   const personalInfo = registration.personalInfo || {};
   const contactInfo = registration.contactInfo || {};
+  const formatAddress = (addr = "", city = "", state = "", country = "", pin = "") => {
+    if (!addr) return "Not Provided";
+    const parts = [addr];
+    if (city) parts.push(city);
+    if (state) parts.push(state);
+    if (country) parts.push(country);
+    if (pin) parts.push(pin);
+    return parts.join(", ");
+  };
   const medicalInfo = registration.medicalInfo || {};
   const donorInfo = registration.donorInfo || {};
   const labReports = registration.labReports || {};
@@ -427,8 +436,8 @@ export function DonorRegistrationPdfDocument({
               />
               <InfoRow label="Blood Group" value={personalInfo.bloodGroup} />
               <InfoRow
-                label="Nationality / Marital Status"
-                value={`${fieldText(personalInfo.nationality)} | ${fieldText(personalInfo.maritalStatus)}`}
+                label="Marital Status"
+                value={fieldText(personalInfo.maritalStatus)}
               />
               <InfoRow
                 label="Aadhaar (Masked) / PAN"
@@ -444,11 +453,11 @@ export function DonorRegistrationPdfDocument({
               />
               <InfoRow
                 label="Current Address"
-                value={contactInfo.currentAddress}
+                value={formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode)}
               />
               <InfoRow
                 label="Permanent Address"
-                value={contactInfo.permanentAddress}
+                value={formatAddress(contactInfo.permanentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode)}
               />
             </View>
           </View>

@@ -18,16 +18,43 @@ export async function createDraftRegistration(donorType: string, bodyData: any) 
     throw new Error("Valid donorType (sperm/egg) is required.");
   }
 
-  const registrationId = generateRegistrationId(donorType);
-
   const {
     personalInfo, contactInfo, medicalInfo, donorInfo,
     labReports, documents, emergencyContact, bankDetails, consent, referral
   } = bodyData;
 
+  const aadhaarNum = personalInfo?.aadhaarNumber;
+  const mobileNum = contactInfo?.mobileNumber;
+
+  if (aadhaarNum || mobileNum) {
+    const query: any = { status: "DRAFT", donorType };
+    if (aadhaarNum && mobileNum) {
+      query.$or = [
+        { "personalInfo.aadhaarNumber": aadhaarNum },
+        { "contactInfo.mobileNumber": mobileNum }
+      ];
+    } else if (aadhaarNum) {
+      query["personalInfo.aadhaarNumber"] = aadhaarNum;
+    } else {
+      query["contactInfo.mobileNumber"] = mobileNum;
+    }
+
+    const existing = await DonorRegistration.findOne(query);
+    if (existing) {
+      return {
+        registrationId: existing.registrationId,
+        registration: JSON.parse(JSON.stringify(existing)),
+      };
+    }
+  }
+
+  const registrationId = generateRegistrationId(donorType);
+
   const registration = await DonorRegistration.create({
     registrationId,
     donorType,
+    registrationSource: bodyData.registrationSource || "walk_in",
+    createdByEmployee: bodyData.createdByEmployee || null,
     status: "DRAFT",
     currentStep: 1,
     personalInfo: personalInfo || {},
@@ -40,6 +67,84 @@ export async function createDraftRegistration(donorType: string, bodyData: any) 
     bankDetails: bankDetails || {},
     consent: consent || {},
     referral: referral || {},
+  });
+
+  return {
+    registrationId: registration.registrationId,
+    registration: JSON.parse(JSON.stringify(registration)),
+  };
+}
+
+/**
+ * Admin/Staff: Create a new registration for a walk-in donor directly.
+ * Bypasses OTP verification - staff inputs the minimal required details.
+ */
+export async function createAdminRegistration(body: {
+  donorType: string;
+  fullName: string;
+  aadhaarNumber: string;
+  mobileNumber: string;
+  dateOfBirth?: string;
+  gender?: string;
+  bloodGroup?: string;
+  registrationSource?: "walk_in" | "admin_created";
+  createdByEmployee?: string;
+  adminNotes?: string;
+}, session: any) {
+  await connectToDatabase();
+
+  const role = session?.user?.role || "";
+  if (!["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+    throw new Error("Unauthorized. Only admin or staff can create walk-in registrations.");
+  }
+
+  const { donorType, fullName, aadhaarNumber, mobileNumber } = body;
+
+  if (!donorType || !["sperm", "egg"].includes(donorType)) {
+    throw new Error("Valid donorType (sperm/egg) is required.");
+  }
+  if (!fullName?.trim()) throw new Error("Full name is required.");
+  if (!aadhaarNumber || aadhaarNumber.replace(/\D/g, "").length !== 12) {
+    throw new Error("Valid 12-digit Aadhaar number is required.");
+  }
+  if (!mobileNumber || mobileNumber.replace(/\D/g, "").length < 10) {
+    throw new Error("Valid mobile number is required.");
+  }
+
+  // Check for duplicate by Aadhaar or mobile
+  const existing = await DonorRegistration.findOne({
+    donorType,
+    $or: [
+      { "personalInfo.aadhaarNumber": aadhaarNumber.replace(/\D/g, "") },
+      { "contactInfo.mobileNumber": mobileNumber }
+    ]
+  });
+  if (existing) {
+    throw new Error(
+      `A registration for this Aadhaar/Mobile already exists: ${existing.registrationId}`
+    );
+  }
+
+  const registrationId = generateRegistrationId(donorType);
+
+  const registration = await DonorRegistration.create({
+    registrationId,
+    donorType,
+    registrationSource: body.registrationSource || "admin_created",
+    createdByEmployee: body.createdByEmployee || session?.user?.id || null,
+    status: "DRAFT",
+    currentStep: 1,
+    personalInfo: {
+      fullName: fullName.trim(),
+      aadhaarNumber: aadhaarNumber.replace(/\D/g, ""),
+      dateOfBirth: body.dateOfBirth || "",
+      gender: body.gender || "",
+      bloodGroup: body.bloodGroup || "",
+    },
+    contactInfo: {
+      mobileNumber,
+    },
+    adminNotes: body.adminNotes || "",
   });
 
   return {
@@ -63,7 +168,7 @@ export async function getRegistrationById(id: string, session: any) {
     ((session.user as any).phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
   );
 
-  if (isAdminOrStaff || isOwner) {
+  if (!session || isAdminOrStaff || isOwner) {
     return { authorized: true, registration: JSON.parse(JSON.stringify(registration)) };
   }
 
@@ -100,7 +205,7 @@ export async function updateRegistrationStep(id: string, bodyData: any, session:
     ((session.user as any)?.phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
   );
 
-  if (!isAdminOrStaff && !isOwner) {
+  if (session && !isAdminOrStaff && !isOwner) {
     throw new Error("Forbidden: Access Denied.");
   }
 
@@ -108,7 +213,7 @@ export async function updateRegistrationStep(id: string, bodyData: any, session:
   const allowedKeys = [
     "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
     "labReports", "documents", "emergencyContact", "bankDetails",
-    "consent", "referral", "currentStep", "status", "adminNotes", "reviewedBy", "reviewedAt"
+    "consent", "referral", "investigations", "physicalExamination", "currentStep", "status", "adminNotes", "reviewedBy", "reviewedAt"
   ];
 
   for (const key of allowedKeys) {
@@ -149,13 +254,14 @@ export async function submitRegistration(id: string, bodyData: any, session: any
     ((session.user as any)?.phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
   );
 
-  if (!isAdminOrStaff && !isOwner) {
+  if (session && !isAdminOrStaff && !isOwner) {
     throw new Error("Forbidden: Access Denied.");
   }
 
   const allowedKeys = [
     "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
-    "labReports", "documents", "emergencyContact", "bankDetails", "consent", "referral"
+    "labReports", "documents", "emergencyContact", "bankDetails", "consent", "referral",
+    "investigations", "physicalExamination"
   ];
 
   for (const key of allowedKeys) {
@@ -405,6 +511,25 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
   registration.updatedBy = session.user.name || session.user.email;
 
   await registration.save();
+
+  // Track Audit Log for registration status change
+  if (statusChanged) {
+    try {
+      const { createAuditLog } = await import("@/features/audit-logs/services/audit-log.service");
+      await createAuditLog(
+        null,
+        "Registration Status Changed",
+        "DonorRegistration",
+        registration._id.toString(),
+        session.user.name || session.user.email,
+        oldValues.status,
+        status,
+        `Changed status of registration ${registration.registrationId} from "${oldValues.status}" to "${status}"`
+      );
+    } catch (auditErr) {
+      console.error("Failed to log donor registration update audit:", auditErr);
+    }
+  }
 
   if (status === "APPROVED") {
     const { User, UserRole } = await import("@/models/User");

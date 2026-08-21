@@ -52,26 +52,26 @@ export function StepEmergencyContact({ errors }: { errors?: Record<string, strin
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Contact Person Name <span className="text-red-500">*</span></label>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Contact Person Name <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
           <Input placeholder="Full name of emergency contact" value={emergencyContact.contactPersonName} onChange={(e) => updateEmergencyContact({ contactPersonName: e.target.value })} className={getFieldClassName("contactPersonName")} />
           {renderError("contactPersonName")}
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Relationship <span className="text-red-500">*</span></label>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Relationship <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
           <select value={emergencyContact.relationship} onChange={(e) => updateEmergencyContact({ relationship: e.target.value })}
             className={getSelectClassName("relationship")}>
-            <option value="">Select Relationship</option>
+            <option value="">Select Relationship (Optional)</option>
             {["Father", "Mother", "Spouse", "Sibling", "Friend", "Relative", "Guardian", "Other"].map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           {renderError("relationship")}
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Phone Number <span className="text-red-500">*</span></label>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Phone Number <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
           <Input placeholder="+91 XXXXX XXXXX" value={emergencyContact.phoneNumber} onChange={(e) => updateEmergencyContact({ phoneNumber: e.target.value })} className={getFieldClassName("phoneNumber")} />
           {renderError("phoneNumber")}
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Address <span className="text-red-500">*</span></label>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Address <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
           <textarea
             placeholder="Full address of emergency contact"
             value={emergencyContact.address}

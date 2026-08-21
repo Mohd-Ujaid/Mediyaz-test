@@ -3,11 +3,26 @@ import { headers } from "next/headers";
 import { getNotificationsForUser } from "@/features/notifications/services/notification.service";
 import AdminLayoutClient from "./AdminLayoutClient";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const reqHeaders = await headers();
   const session = await auth.api.getSession({ headers: reqHeaders });
+  const pathname = reqHeaders.get("x-pathname") || "";
 
-  const allowedRoles = ["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"];
+  if (/^\/admin\/manage-registrations\/[^/]+\/print\/?$/.test(pathname)) {
+    return <>{children}</>;
+  }
+
+  const allowedRoles = [
+    "ADMIN",
+    "SUPER_ADMIN",
+    "STAFF",
+    "DOCTOR",
+    "RECEPTIONIST",
+  ];
   const userRole = (session?.user as any)?.role;
   const isAllowedRole = session && allowedRoles.includes(userRole);
 
@@ -20,7 +35,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       initialNotifications = data.notifications;
       initialUnreadCount = data.unreadCount;
     } catch (err) {
-      console.error("Failed to prefetch notifications in layout server-component:", err);
+      console.error(
+        "Failed to prefetch notifications in layout server-component:",
+        err,
+      );
     }
   }
 

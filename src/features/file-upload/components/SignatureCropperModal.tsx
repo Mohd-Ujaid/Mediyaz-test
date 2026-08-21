@@ -55,18 +55,36 @@ export function SignatureCropperModal({
     "4:3" | "3:2" | "1:1" | "16:9" | "3:1"
   >(isSignature ? "3:1" : isPhoto ? "1:1" : "4:3");
 
-  // Dimensions of UI Crop Box
-  const CROP_BOX_WIDTH = 300;
+  // Responsive UI Crop Box Dimensions
+  const [cropBoxWidth, setCropBoxWidth] = useState(300);
 
-  let CROP_BOX_HEIGHT = 225; // default 4:3
-  if (selectedRatio === "3:1") CROP_BOX_HEIGHT = 100;
-  else if (selectedRatio === "3:2") CROP_BOX_HEIGHT = 200;
-  else if (selectedRatio === "1:1") CROP_BOX_HEIGHT = 300;
-  else if (selectedRatio === "16:9") CROP_BOX_HEIGHT = 168;
+  useEffect(() => {
+    const handleResize = () => {
+      const screenWidth = window.innerWidth;
+      if (screenWidth < 360) {
+        setCropBoxWidth(220);
+      } else if (screenWidth < 400) {
+        setCropBoxWidth(255);
+      } else if (screenWidth < 450) {
+        setCropBoxWidth(280);
+      } else {
+        setCropBoxWidth(300);
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  let cropBoxHeight = Math.round(cropBoxWidth * 0.75); // default 4:3
+  if (selectedRatio === "3:1") cropBoxHeight = Math.round(cropBoxWidth / 3);
+  else if (selectedRatio === "3:2") cropBoxHeight = Math.round((cropBoxWidth * 2) / 3);
+  else if (selectedRatio === "1:1") cropBoxHeight = cropBoxWidth;
+  else if (selectedRatio === "16:9") cropBoxHeight = Math.round((cropBoxWidth * 9) / 16);
 
   const CANVAS_WIDTH = 600;
   const CANVAS_HEIGHT = Math.round(
-    CROP_BOX_HEIGHT * (CANVAS_WIDTH / CROP_BOX_WIDTH),
+    cropBoxHeight * (CANVAS_WIDTH / cropBoxWidth),
   );
 
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -96,11 +114,11 @@ export function SignatureCropperModal({
   // Dynamically adjust scale to cover the crop box when image size or crop box dimensions change
   useEffect(() => {
     if (imageSize.width === 0 || imageSize.height === 0) return;
-    const scaleX = CROP_BOX_WIDTH / imageSize.width;
-    const scaleY = CROP_BOX_HEIGHT / imageSize.height;
+    const scaleX = cropBoxWidth / imageSize.width;
+    const scaleY = cropBoxHeight / imageSize.height;
     const initialScale = Math.max(scaleX, scaleY);
     setBaseScale(initialScale);
-  }, [CROP_BOX_HEIGHT, imageSize.width, imageSize.height]);
+  }, [cropBoxHeight, cropBoxWidth, imageSize.width, imageSize.height]);
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -189,7 +207,7 @@ export function SignatureCropperModal({
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const S = canvas.width / CROP_BOX_WIDTH; // S = 2 — ratio of output canvas to UI crop box
+    const S = canvas.width / cropBoxWidth; // ratio of output canvas to UI crop box
 
     // 1. Move context origin to the center of the canvas
     ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -296,7 +314,7 @@ export function SignatureCropperModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px] p-6 gap-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-100 dark:border-slate-800 animate-in fade-in-50 zoom-in-95 duration-200">
+      <DialogContent className="w-[95vw] max-w-[420px] p-4 sm:p-6 gap-4 sm:gap-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-100 dark:border-slate-800 animate-in fade-in-50 zoom-in-95 duration-200 overflow-y-auto max-h-[96vh]">
         <DialogHeader className="space-y-1">
           <DialogTitle className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             {isSignature
@@ -371,15 +389,15 @@ export function SignatureCropperModal({
             <div className="flex-1 bg-black/60 w-full" />
             <div
               className="flex w-full"
-              style={{ height: `${CROP_BOX_HEIGHT}px` }}
+              style={{ height: `${cropBoxHeight}px` }}
             >
               {/* Left mask */}
               <div className="bg-black/60 flex-1" />
               {/* Crop box cutout */}
               <div
                 style={{
-                  width: `${CROP_BOX_WIDTH}px`,
-                  height: `${CROP_BOX_HEIGHT}px`,
+                  width: `${cropBoxWidth}px`,
+                  height: `${cropBoxHeight}px`,
                 }}
                 className="border-2 border-dashed border-emerald-500 rounded-md relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]"
               >

@@ -474,7 +474,6 @@ export default function Home() {
         className="fixed top-0 left-0 h-1 bg-gradient-to-r from-brand-500 via-brand-400 to-blue-500 z-[60] transition-all duration-100"
         style={{ width: `${scrollProgress}%` }}
       />
-
       {/* Floating CTA WhatsApp & Back-To-Top */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
         <a
@@ -501,7 +500,6 @@ export default function Home() {
           )}
         </AnimatePresence>
       </div>
-
       {/* Sticky Bottom CTA for Mobile */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-background/95 border-t border-border dark:border-border p-3 z-45 flex gap-2 backdrop-blur-md">
         <Button
@@ -516,159 +514,98 @@ export default function Home() {
           </Button>
         </Link>
       </div>
-
       {/* ================================================================
           1. HERO SECTION
-      ================================================================ */}
-      <section className="relative bg-background text-white overflow-hidden border-b border-border pt-24 pb-28 md:pt-32 md:pb-36 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:32px_32px]">
-        {/* Ambient Glow Orbs */}
-        <div className="absolute inset-0 z-0 select-none pointer-events-none">
-          <div className="absolute top-[-10%] right-[-10%] w-[50%] aspect-square rounded-full bg-gradient-to-br from-brand-500/10 to-blue-500/10 blur-3xl opacity-70 animate-pulse" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[60%] aspect-square rounded-full bg-gradient-to-tr from-indigo-500/5 to-brand-500/5 blur-3xl opacity-70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-slate-950" />
+      ================================================================ */}{" "}
+      <section className="relative bg-[#f0f6f6] text-slate-900 overflow-hidden border-b border-slate-100 pt-16 pb-20 md:pt-24 md:pb-28">
+        {/* Subtle grid background */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000002_1px,transparent_1px),linear-gradient(to_bottom,#00000002_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none select-none z-0" />
+
+        {/* Big, clear family background image aligned to bottom */}
+        <div className="absolute -right-0  top-0 bottom-0 pointer-events-none select-none hidden lg:block w-[100%] z-0">
+          <img
+            src="/images/hero1.png"
+            alt="Mediyaz Happy Family Background"
+            className="w-full h-full object-cover object-left-bottom mix-blend-multiply"
+          />
         </div>
 
-        <div className="container mx-auto px-4 relative z-10">
+        <div className="container mx-auto px-10 lg:px-4 xl:px-15 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             {/* Left Content Column */}
-            <div className="lg:col-span-7 space-y-6 text-left">
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 text-xs font-semibold"
-              >
-                <Dna className="w-3.5 h-3.5 animate-pulse" />
-                <span>
-                  India's Premier Cryogenic ART Donor Registry & Clinic
-                </span>
-              </motion.div>
-
+            <div className="lg:col-span-7 xl:col-span-6 space-y-8 text-left">
+              {/* Heading */}
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7 }}
-                className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] text-white"
+                transition={{ duration: 0.6 }}
+                className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] text-slate-900"
               >
-                Pioneering{" "}
-                <span className="bg-gradient-to-r from-brand-400 via-emerald-350 to-blue-400 bg-clip-text text-transparent">
-                  Sperm & Egg
-                </span>{" "}
-                <br />
-                Donor Programs
+                The premier <br />
+                sperm & egg bank
               </motion.h1>
 
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.1 }}
-                className="text-muted-foreground text-sm sm:text-base max-w-xl leading-relaxed"
-              >
-                Providing highly-screened, legally-compliant sperm and egg donor
-                matchings for intended parents. Backed by expert cryobiologists,
-                state-of-the-art cold-chain logistics, and complete patient
-                confidentiality.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.7, delay: 0.2 }}
-                className="flex flex-col sm:flex-row items-center gap-4 pt-4"
-              >
-                <Link href="/recipient" className="w-full sm:w-auto">
-                  <Button
-                    size="lg"
-                    className="w-full bg-brand-500 hover:bg-brand-400 text-foreground font-bold text-sm h-12 px-8 rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-500/10 cursor-pointer"
+              {/* Two Option Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+                {/* Card 1: Aspiring Parent */}
+                <Link href="/recipient" className="block w-full group">
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    className="rounded-3xl border border-slate-200/60 bg-white p-6 text-center shadow-md shadow-slate-105/50 hover:border-[#ff6f61]/40 hover:shadow-lg hover:shadow-rose-500/5 transition-all flex flex-col items-center justify-center min-h-[290px] cursor-pointer"
                   >
-                    Find a Donor <ChevronRight className="w-4 h-4" />
-                  </Button>
+                    <h3 className="text-lg font-bold text-slate-800 leading-snug group-hover:text-[#ff6f61] transition-colors">
+                      I am an <br /> aspiring parent
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-2 max-w-[200px] leading-relaxed">
+                      Find and select highly screened sperm and egg donors to
+                      build your family.
+                    </p>
+                    <div className="w-20 h-20 rounded-full overflow-hidden my-3 border-2 border-slate-100 shadow-inner group-hover:border-[#ff6f61]/20 transition-colors">
+                      <img
+                        src="/images/hero_bg.png"
+                        alt="Aspiring Parent Preview"
+                        className="w-full h-full object-cover scale-110"
+                      />
+                    </div>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 group-hover:text-[#ff6f61] transition-colors">
+                      Get Started →
+                    </span>
+                  </motion.div>
                 </Link>
-                <Button
+
+                {/* Card 2: Donor */}
+                <div
                   onClick={scrollToForm}
-                  size="lg"
-                  className="w-full sm:w-auto bg-white hover:bg-muted text-foreground font-bold text-sm h-12 px-8 rounded-[10px] transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  className="block w-full group cursor-pointer"
                 >
-                  Become a Donor <ArrowRight className="w-4 h-4" />
-                </Button>
-                <Link href="/contact" className="w-full sm:w-auto">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="w-full text-white border-slate-700 hover:bg-foreground font-bold text-sm h-12 px-8 rounded-[10px] flex items-center justify-center cursor-pointer"
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    className="rounded-3xl border border-slate-200/60 bg-white p-6 text-center shadow-md shadow-slate-105/50 hover:border-[#2f4f57]/40 hover:shadow-lg hover:shadow-teal-500/5 transition-all flex flex-col items-center justify-center min-h-[290px]"
                   >
-                    Contact Our Experts
-                  </Button>
-                </Link>
-              </motion.div>
-
-              {/* Trust Indicators */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="grid grid-cols-3 gap-6 pt-10 border-t border-border text-left"
-              >
-                <div>
-                  <div className="text-2xl md:text-3xl font-extrabold text-brand-400">
-                    15+
-                  </div>
-                  <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-1">
-                    Years Experience
-                  </div>
-                </div>
-                <div>
-                  <div className="text-2xl md:text-3xl font-extrabold text-brand-400">
-                    4,800+
-                  </div>
-                  <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-1">
-                    Donor Matches
-                  </div>
-                </div>
-                <div>
-                  <div className="text-2xl md:text-3xl font-extrabold text-brand-400">
-                    18+
-                  </div>
-                  <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mt-1">
-                    Expert Specialists
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Right Side Hero Image Container */}
-            <div className="lg:col-span-5 hidden lg:block relative">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                className="relative aspect-square w-full rounded-[10px] overflow-hidden border border-border shadow-2xl"
-              >
-                {/* Visual overlay gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent z-10" />
-                <img
-                  src="/images/hero_bg.png"
-                  alt="Mediyaz Premium Cryogenic ART Laboratory"
-                  className="w-full h-full object-cover"
-                />
-
-                {/* Floating clinical authentication badge */}
-                <div className="absolute bottom-6 left-6 right-6 z-20 p-4 rounded-[10px] bg-background/80 backdrop-blur-md border border-border flex items-center gap-3 text-left">
-                  <ShieldCheck className="w-5 h-5 text-brand-400 shrink-0" />
-                  <div>
-                    <div className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                      Accredited ART Bank
+                    <h3 className="text-lg font-bold text-slate-800 leading-snug group-hover:text-[#2f4f57] transition-colors">
+                      I want to be <br /> a donor
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-2 max-w-[200px] leading-relaxed">
+                      Apply to become a donor, help families realize dreams, and
+                      get compensated.
+                    </p>
+                    <div className="w-20 h-20 rounded-full overflow-hidden my-3 border-2 border-slate-100 shadow-inner group-hover:border-[#2f4f57]/20 transition-colors">
+                      <img
+                        src="/images/hero.png"
+                        alt="Donor Application Preview"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      ISMS ISO 27001 & ICMR Registered Bank
-                    </div>
-                  </div>
+                    <span className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 group-hover:text-[#2f4f57] transition-colors">
+                      Get Started →
+                    </span>
+                  </motion.div>
                 </div>
-              </motion.div>
+              </div>
             </div>
           </div>
         </div>
       </section>
-
       {/* ================================================================
           2. TRUST BAR
       ================================================================ */}
@@ -696,7 +633,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           3. WHY CHOOSE US
       ================================================================ */}
@@ -742,7 +678,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           4. DONOR PROGRAMS (Sperm & Egg core showcase)
       ================================================================ */}
@@ -925,7 +860,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           5. HOW IT WORKS
       ================================================================ */}
@@ -1018,7 +952,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           6. MEET OUR SPECIALISTS
       ================================================================ */}
@@ -1086,7 +1019,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           7. PARTNER CLINICS & HOSPITALS (Responsive Carousel)
       ================================================================ */}
@@ -1130,7 +1062,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           8. STATISTICS SECTION (Animated Counters)
       ================================================================ */}
@@ -1180,7 +1111,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           9. ADDITIONAL FERTILITY SERVICES (Secondary Cap)
       ================================================================ */}
@@ -1248,7 +1178,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           10. SUCCESS STORIES (Testimonials & Lightbox)
       ================================================================ */}
@@ -1356,7 +1285,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           11. FREQUENTLY ASKED QUESTIONS
       ================================================================ */}
@@ -1418,7 +1346,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
       {/* ================================================================
           12. HIGH-CONVERTING INLINE INQUIRY FORM SECTION
       ================================================================ */}
@@ -1907,7 +1834,6 @@ export default function Home() {
           </Card>
         </div>
       </section>
-
       {/* ================================================================
           13. FINAL CTA
       ================================================================ */}
@@ -1948,7 +1874,6 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
-
       {/* ================================================================
           LIGHTBOX MODAL (Success Stories Gallery)
       ================================================================ */}

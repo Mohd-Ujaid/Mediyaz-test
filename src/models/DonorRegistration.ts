@@ -13,6 +13,8 @@ export interface IDonorFileRef {
 export interface IDonorRegistration extends Document {
   registrationId: string;
   donorType: "sperm" | "egg";
+  registrationSource: "online_inquiry" | "walk_in" | "admin_created";
+  createdByEmployee?: string; // employeeId of staff who created this registration
   status: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "SUSPENDED";
   currentStep: number;
 
@@ -25,7 +27,6 @@ export interface IDonorRegistration extends Document {
     age?: number;
     maritalStatus: string;
     bloodGroup: string;
-    nationality: string;
     education: string;
     occupation: string;
     height: string;
@@ -35,6 +36,12 @@ export interface IDonorRegistration extends Document {
     complexion?: string;
     aadhaarNumber: string;
     panNumber?: string;
+    spouseName?: string;
+    religion?: string;
+    monthlyIncome?: string;
+    spouseEducation?: string;
+    spouseOccupation?: string;
+    hobby?: string;
   };
 
   contactInfo: {
@@ -43,6 +50,7 @@ export interface IDonorRegistration extends Document {
     emailAddress: string;
     currentAddress: string;
     permanentAddress: string;
+    country?: string;
     state: string;
     district: string;
     city: string;
@@ -80,6 +88,41 @@ export interface IDonorRegistration extends Document {
     ivfHistory?: string;
     ovarianReserve?: string;
     hormonalTestDetails?: string;
+    numberOfDeliveries?: string;
+    numberOfAbortions?: string;
+    obstetricHistory?: string;
+    otherPointsOfNote?: string;
+    contraceptiveHistory?: string;
+    bloodTransfusionHistory?: string;
+    substanceAbuseHistory?: string;
+  };
+
+  investigations?: {
+    hb?: string;
+    totalRbc?: string;
+    totalWbc?: string;
+    differentialWbc?: string;
+    plateletCount?: string;
+    peripheralSmear?: string;
+    randomBloodSugar?: string;
+    bloodUreaSerumCreatinine?: string;
+    sgpt?: string;
+    routineUrine?: string;
+    hbsagStatus?: string;
+    hepatitisCStatus?: string;
+    hivStatus?: string;
+    hemoglobinA2?: string;
+    otherSpecificTest?: string;
+    vdrl?: string;
+  };
+
+  physicalExamination?: {
+    pulse?: string;
+    bloodPressure?: string;
+    temperature?: string;
+    respiratorySystem?: string;
+    cardiovascularSystem?: string;
+    perAbdominal?: string;
   };
 
   labReports: {
@@ -167,6 +210,12 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
   {
     registrationId: { type: String, required: true, unique: true },
     donorType: { type: String, enum: ["sperm", "egg"], required: true },
+    registrationSource: {
+      type: String,
+      enum: ["online_inquiry", "walk_in", "admin_created"],
+      default: "walk_in",
+    },
+    createdByEmployee: { type: String, default: null },
     status: {
       type: String,
       enum: ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "SUSPENDED"],
@@ -183,7 +232,6 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
       age: { type: Number },
       maritalStatus: { type: String, default: "" },
       bloodGroup: { type: String, default: "" },
-      nationality: { type: String, default: "" },
       education: { type: String, default: "" },
       occupation: { type: String, default: "" },
       height: { type: String, default: "" },
@@ -193,6 +241,12 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
       complexion: { type: String, default: "" },
       aadhaarNumber: { type: String, default: "" },
       panNumber: { type: String, default: "" },
+      spouseName: { type: String, default: "" },
+      religion: { type: String, default: "" },
+      monthlyIncome: { type: String, default: "" },
+      spouseEducation: { type: String, default: "" },
+      spouseOccupation: { type: String, default: "" },
+      hobby: { type: String, default: "" },
     },
 
     contactInfo: {
@@ -201,6 +255,7 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
       emailAddress: { type: String, default: "" },
       currentAddress: { type: String, default: "" },
       permanentAddress: { type: String, default: "" },
+      country: { type: String, default: "India" },
       state: { type: String, default: "" },
       district: { type: String, default: "" },
       city: { type: String, default: "" },
@@ -236,6 +291,41 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
       ivfHistory: { type: String, default: "" },
       ovarianReserve: { type: String, default: "" },
       hormonalTestDetails: { type: String, default: "" },
+      numberOfDeliveries: { type: String, default: "" },
+      numberOfAbortions: { type: String, default: "" },
+      obstetricHistory: { type: String, default: "" },
+      otherPointsOfNote: { type: String, default: "" },
+      contraceptiveHistory: { type: String, default: "" },
+      bloodTransfusionHistory: { type: String, default: "" },
+      substanceAbuseHistory: { type: String, default: "" },
+    },
+
+    investigations: {
+      hb: { type: String, default: "" },
+      totalRbc: { type: String, default: "" },
+      totalWbc: { type: String, default: "" },
+      differentialWbc: { type: String, default: "" },
+      plateletCount: { type: String, default: "" },
+      peripheralSmear: { type: String, default: "" },
+      randomBloodSugar: { type: String, default: "" },
+      bloodUreaSerumCreatinine: { type: String, default: "" },
+      sgpt: { type: String, default: "" },
+      routineUrine: { type: String, default: "" },
+      hbsagStatus: { type: String, default: "" },
+      hepatitisCStatus: { type: String, default: "" },
+      hivStatus: { type: String, default: "" },
+      hemoglobinA2: { type: String, default: "" },
+      otherSpecificTest: { type: String, default: "" },
+      vdrl: { type: String, default: "" },
+    },
+
+    physicalExamination: {
+      pulse: { type: String, default: "" },
+      bloodPressure: { type: String, default: "" },
+      temperature: { type: String, default: "" },
+      respiratorySystem: { type: String, default: "" },
+      cardiovascularSystem: { type: String, default: "" },
+      perAbdominal: { type: String, default: "" },
     },
 
     labReports: {

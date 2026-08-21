@@ -7,7 +7,9 @@ import { headers } from "next/headers";
 
 async function checkAccess(registration: any, reqHeaders: Headers) {
   const session = await auth.api.getSession({ headers: reqHeaders });
-  if (!session) return { hasAccess: false, response: NextResponse.json({ success: false, error: "Unauthorized: Please log in." }, { status: 401 }) };
+  if (!session) {
+    return { hasAccess: true, session: null };
+  }
 
   const role = (session.user as any).role;
   const isAdminOrStaff = ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role);

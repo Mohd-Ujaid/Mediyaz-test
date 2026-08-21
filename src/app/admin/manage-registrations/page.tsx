@@ -131,6 +131,10 @@ export default function ManageRegistrationsPage() {
   const [uploadingExtraDoc, setUploadingExtraDoc] = useState(false);
   const [showEditFields, setShowEditFields] = useState(false);
 
+  // Audit history chain state
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyTargetName, setHistoryTargetName] = useState("");
+
   // Bulk Operations Modals
   const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
   const [bulkHospitalSearch, setBulkHospitalSearch] = useState("");
@@ -826,6 +830,20 @@ export default function ManageRegistrationsPage() {
                       }`}>
                         {reg.status}
                       </span>
+                      {reg.updatedBy && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHistoryTargetName(reg.personalInfo?.fullName || reg.registrationId);
+                            loadAudits(reg._id);
+                            setIsHistoryOpen(true);
+                          }}
+                          className="text-[9px] text-slate-500 hover:text-teal-650 block text-left font-semibold cursor-pointer mt-1"
+                          title="Click to view history chain"
+                        >
+                          Changed by: <span className="font-bold">{reg.updatedBy}</span>
+                        </button>
+                      )}
                     </td>
                     <td className="p-3.5 text-right flex justify-end gap-1.5">
                       <Button
@@ -1656,6 +1674,58 @@ export default function ManageRegistrationsPage() {
               <Button type="submit" disabled={actionLoading} className="rounded-xl text-xs h-9 bg-blue-600 text-white font-bold">Save Changes</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* History Chain Dialog */}
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-md rounded-2xl bg-white dark:bg-slate-950 p-6 border dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Clock className="w-5 h-5 text-teal-650" />
+              Registration Edit History
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Audit log chain of status transitions and updates for &quot;{historyTargetName}&quot;.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-3 text-xs">
+            {auditsLoading ? (
+              <div className="flex justify-center items-center py-10 gap-2 text-slate-400">
+                <Loader2 className="w-5 h-5 animate-spin" /> Fetching history chain...
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 italic">
+                No edit or status logs recorded for this registration record.
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pl-1 border-l-2 border-slate-200 dark:border-slate-800">
+                {auditLogs.map((log: any, index: number) => (
+                  <div key={index} className="text-xs pl-4 relative">
+                    <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-teal-500" />
+                    <div className="font-bold text-slate-850 dark:text-slate-200">{log.action}</div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      {log.details}
+                    </p>
+                    <div className="text-[10px] text-slate-400 mt-1 flex justify-between">
+                      <span>By: <strong>{log.performedBy}</strong></span>
+                      <span>{new Date(log.createdAt).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t dark:border-slate-850">
+              <Button
+                onClick={() => setIsHistoryOpen(false)}
+                className="rounded-xl text-xs h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-350 cursor-pointer border dark:border-slate-800"
+              >
+                Close History
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

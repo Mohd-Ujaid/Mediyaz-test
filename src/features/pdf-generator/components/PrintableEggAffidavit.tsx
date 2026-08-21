@@ -78,7 +78,7 @@ const EggAffidavit = ({ consent, donor, documents }: any) => {
 
         <Text style={styles.intro}>
           I, {donorData?.name}, W/O {donorData?.husbandName}, House No.
-          {donorData?.houseNo}, {donorData?.address}, Delhi –{" "}
+          {donorData?.houseNo}, {donorData?.address}, {donorData?.city ? `${donorData.city}, ` : ""}{donorData?.state ? `${donorData.state}, ` : ""}{donorData?.country ? `${donorData.country} ` : ""}–{" "}
           {donorData?.pincode}, Aadhaar No. {donorData?.aadhaar}, date of birth{" "}
           {donorData?.dob} and Mobile No. {donorData?.mobile}, solemnly affirm
           and depose as under:

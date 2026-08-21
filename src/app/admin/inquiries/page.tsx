@@ -66,6 +66,10 @@ export default function AdminInquiriesPage() {
   const [adminNotes, setAdminNotes] = useState("");
   const [consultationTime, setConsultationTime] = useState("");
 
+  // Read-only history dialog
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyInquiry, setHistoryInquiry] = useState<any | null>(null);
+
   async function loadInquiries() {
     setLoading(true);
     try {
@@ -156,7 +160,6 @@ export default function AdminInquiriesPage() {
       if (data.success) {
         toast.success("Successfully converted inquiry to donor registration draft!");
         loadInquiries();
-        router.push(`/donor/register?id=${data.registrationId}&prefilled=true`);
       } else {
         toast.error(data.error || "Conversion failed.");
       }
@@ -324,10 +327,25 @@ export default function AdminInquiriesPage() {
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusBadge(inq.status)}`}>
-                          {inq.status}
-                        </span>
+                      <td className="py-3 px-4 space-y-1">
+                        <div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusBadge(inq.status)}`}>
+                            {inq.status}
+                          </span>
+                        </div>
+                        {inq.statusHistory && inq.statusHistory.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHistoryInquiry(inq);
+                              setIsHistoryOpen(true);
+                            }}
+                            className="text-[9px] text-slate-500 hover:text-teal-650 block text-left font-semibold cursor-pointer"
+                            title="Click to view history chain"
+                          >
+                            Changed by: <span className="font-bold">{inq.statusHistory[inq.statusHistory.length - 1].updatedBy || "System"}</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Registration ID Link */}
@@ -560,6 +578,31 @@ export default function AdminInquiriesPage() {
               />
             </div>
 
+            {/* Status History Logs (Chain of changes) */}
+            {selectedInquiry && selectedInquiry.statusHistory && selectedInquiry.statusHistory.length > 0 && (
+              <div className="space-y-1.5 border-t dark:border-slate-800 pt-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Workflow Status History Chain</span>
+                <div className="space-y-3 max-h-36 overflow-y-auto pl-1 border-l-2 border-slate-200 dark:border-slate-800">
+                  {selectedInquiry.statusHistory.map((hist: any, index: number) => (
+                    <div key={index} className="text-[10px] pl-3 relative">
+                      <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-teal-500" />
+                      <div className="font-bold text-slate-800 dark:text-slate-200">{hist.status}</div>
+                      <div className="text-[9px] text-slate-500">
+                        {new Date(hist.updatedAt).toLocaleString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })} by <span className="font-semibold text-slate-700 dark:text-slate-350">{hist.updatedBy || "System"}</span>
+                      </div>
+                      {hist.notes && <div className="text-slate-500 italic mt-0.5 leading-relaxed">{hist.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Buttons */}
             <div className="flex items-center justify-end gap-2 border-t dark:border-slate-800 pt-4">
               <Button
@@ -580,6 +623,56 @@ export default function AdminInquiriesPage() {
               </Button>
             </div>
 
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Read-Only Status History Chain Dialog */}
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-md rounded-2xl bg-white dark:bg-slate-950 p-6 border dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Clock className="w-5 h-5 text-teal-650" />
+              Inquiry Status History Chain
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Audit log chain of status changes and employee updates for &quot;{historyInquiry?.fullName}&quot;.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-3 text-xs">
+            {historyInquiry?.statusHistory && historyInquiry.statusHistory.length > 0 ? (
+              <div className="space-y-3 max-h-[350px] overflow-y-auto pl-1 border-l-2 border-slate-200 dark:border-slate-800">
+                {historyInquiry.statusHistory.map((hist: any, index: number) => (
+                  <div key={index} className="text-xs pl-4 relative">
+                    <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-teal-500" />
+                    <div className="font-bold text-slate-850 dark:text-slate-200">{hist.status}</div>
+                    {hist.notes && (
+                      <p className="text-[11px] text-slate-650 dark:text-slate-400 mt-0.5 leading-relaxed italic">
+                        &quot;{hist.notes}&quot;
+                      </p>
+                    )}
+                    <div className="text-[10px] text-slate-400 mt-1 flex justify-between">
+                      <span>Changed by: <strong>{hist.updatedBy || "System"}</strong></span>
+                      <span>{new Date(hist.updatedAt).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 text-slate-400 italic">
+                No workflow status history records found.
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t dark:border-slate-850">
+              <Button
+                onClick={() => setIsHistoryOpen(false)}
+                className="rounded-xl text-xs h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-350 cursor-pointer border dark:border-slate-800"
+              >
+                Close History
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

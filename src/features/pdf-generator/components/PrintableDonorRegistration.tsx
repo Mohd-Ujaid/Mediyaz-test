@@ -372,6 +372,10 @@ const PrintableDonorRegistration = ({
     documents = {},
     donorType,
     registrationId,
+    spermDonorInfo = {},
+    eggDonorInfo = {},
+    investigations = {},
+    physicalExamination = {},
   } = mergedRegistration || {};
 
 
@@ -387,6 +391,16 @@ const PrintableDonorRegistration = ({
   const month = dateObj.toLocaleString("default", { month: "long" });
   const year = dateObj.getFullYear();
   const numericMonth = String(dateObj.getMonth() + 1).padStart(2, "0");
+
+  const formatAddress = (addr = "", city = "", state = "", country = "", pin = "") => {
+    if (!addr) return "";
+    const parts = [addr];
+    if (city) parts.push(city);
+    if (state) parts.push(state);
+    if (country) parts.push(country);
+    if (pin) parts.push(pin);
+    return parts.join(", ");
+  };
 
   // const renderHeader = () => (
   //     <View
@@ -596,7 +610,7 @@ const PrintableDonorRegistration = ({
 
           <Text style={styles.text}>
             I, Mr {DField(personalInfo.fullName)} age {DField(personalInfo.age)}{" "}
-            years, R/o {DField(contactInfo.currentAddress)}; having Aadhar Card
+            years, R/o {DField(formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode))}; having Aadhar Card
             No. {DField(personalInfo.aadhaarNumber)} and date of birth{" "}
             {DField(personalInfo.dateOfBirth)}, is willing to donate my Sperm to
             needy couple/woman and agree to abide by following terms.
@@ -604,7 +618,7 @@ const PrintableDonorRegistration = ({
 
           <Text style={styles.htext}>
             मैं, {DField(personalInfo.fullName)}, आयु {DField(personalInfo.age)}{" "}
-            वर्ष, निवासी मकान संख्या, {DField(contactInfo.currentAddress)}; आधार
+            वर्ष, निवासी मकान संख्या, {DField(formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode))}; आधार
             कार्ड संख्या {DField(personalInfo.aadhaarNumber)} और जन्म तिथि{" "}
             {DField(personalInfo.dateOfBirth)} है। ज़रूरतमंद कपल/महिला को अपना
             स्पर्म डोनेट करने को तैयार हूँ और नीचे दी गई शर्तों को मानने के लिए
@@ -732,7 +746,7 @@ const PrintableDonorRegistration = ({
           <Text style={styles.text}>
             <Text style={styles.bold}>Second Part</Text> being Mr.{" "}
             {DField(personalInfo.fullName)} age {DField(personalInfo.age)}{" "}
-            years, R/o {DField(contactInfo.currentAddress)}; having Aadhar Card
+            years, R/o {DField(formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode))}; having Aadhar Card
             No. {DField(personalInfo.aadhaarNumber)} and date of birth{" "}
             {DField(personalInfo.dateOfBirth)}, herein referred to as the Donor.
           </Text>
@@ -926,7 +940,7 @@ const PrintableDonorRegistration = ({
           <Text style={styles.text}>
             I, Mr. <Text style={styles.bold}>{personalInfo.fullName}</Text>{" "}
             Address, House No.{" "}
-            <Text style={styles.bold}>{contactInfo.currentAddress}</Text> Mobile
+            <Text style={styles.bold}>{formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode)}</Text> Mobile
             number. <Text style={styles.bold}>{contactInfo.mobileNumber}</Text>{" "}
             AADHAR card number.{" "}
             <Text style={styles.bold}>{personalInfo.aadhaarNumber}</Text>{" "}
@@ -1079,7 +1093,7 @@ const PrintableDonorRegistration = ({
               <View style={styles.row}>
                 <Text style={styles.c1}>Donor Name</Text>
                 <Text style={[styles.c2, styles.bold]}>
-                  {personalInfo.name}
+                  {personalInfo.fullName}
                 </Text>
                 <Text style={[styles.c3, styles.centerBold]}>HISTORY:</Text>
                 <Text style={styles.c4}></Text>
@@ -1087,48 +1101,48 @@ const PrintableDonorRegistration = ({
 
               <View style={styles.row}>
                 <Text style={styles.c1}>Donor ID</Text>
-                <Text style={[styles.c2, styles.bold]}>{personalInfo.id}</Text>
+                <Text style={[styles.c2, styles.bold]}>{registrationId}</Text>
                 <Text style={styles.c3}>8. Blood group and Rh status</Text>
-                <Text style={styles.c4}>B Positive</Text>
+                <Text style={styles.c4}>{personalInfo.bloodGroup}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>
                   1. Identification number{"\n"}(Donor)
                 </Text>
-                <Text style={styles.c2}>{personalInfo.aadhar}</Text>
+                <Text style={styles.c2}>{personalInfo.aadhaarNumber}</Text>
                 <Text style={styles.c3}>
                   9. Human immunodeficiency virus{"\n"}HIV Type I & II
                 </Text>
-                <Text style={styles.c4}>Negative</Text>
+                <Text style={styles.c4}>{investigations.hivStatus || "Negative"}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>2. Age / Date of birth</Text>
-                <Text style={styles.c2}>{personalInfo.dob}</Text>
+                <Text style={styles.c2}>{personalInfo.dateOfBirth}</Text>
                 <Text style={styles.c3}>10. Hepatitis B Virus status</Text>
-                <Text style={styles.c4}>Negative</Text>
+                <Text style={styles.c4}>{investigations.hbsagStatus || "Negative"}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>3. Marital status</Text>
                 <Text style={styles.c2}>{personalInfo.maritalStatus}</Text>
                 <Text style={styles.c3}>11. Hepatitis C Virus status</Text>
-                <Text style={styles.c4}>Negative</Text>
+                <Text style={styles.c4}>{investigations.hepatitisCStatus || "Negative"}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>4. Education of donor</Text>
                 <Text style={styles.c2}>{personalInfo.education}</Text>
                 <Text style={styles.c3}>12. VDRL</Text>
-                <Text style={styles.c4}>Negative</Text>
+                <Text style={styles.c4}>{investigations.vdrl || "Negative"}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>5. Occupation of donor</Text>
                 <Text style={styles.c2}>{personalInfo.occupation}</Text>
                 <Text style={styles.c3}>13. Medical history</Text>
-                <Text style={styles.c4}>No</Text>
+                <Text style={styles.c4}>{medicalInfo.medicalHistory || "No"}</Text>
               </View>
 
               <View style={styles.row}>
@@ -1137,16 +1151,16 @@ const PrintableDonorRegistration = ({
                 <Text style={styles.c3}>
                   14. History of any abnormality in a{"\n"}child of the donor
                 </Text>
-                <Text style={styles.c4}>No</Text>
+                <Text style={styles.c4}>{medicalInfo.geneticDisorders || "No"}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>7. Nationality</Text>
-                <Text style={styles.c2}>{personalInfo.nationality}</Text>
+                <Text style={styles.c2}>Indian</Text>
                 <Text style={styles.c3}>
                   15. Family history from the medical{"\n"}point of view
                 </Text>
-                <Text style={styles.c4}>No</Text>
+                <Text style={styles.c4}>{medicalInfo.familyMedicalHistory || "No"}</Text>
               </View>
             </View>
 
@@ -1161,7 +1175,7 @@ const PrintableDonorRegistration = ({
                   {personalInfo.height}
                 </Text>
                 <Text style={styles.c3}>19. Colour of hair</Text>
-                <Text style={[styles.c4, styles.bold]}>Black</Text>
+                <Text style={[styles.c4, styles.bold]}>{personalInfo.hairColor || "Black"}</Text>
               </View>
 
               <View style={styles.row}>
@@ -1170,14 +1184,14 @@ const PrintableDonorRegistration = ({
                   {personalInfo.weight}
                 </Text>
                 <Text style={styles.c3}>20. Colour of eyes</Text>
-                <Text style={[styles.c4, styles.bold]}>Black</Text>
+                <Text style={[styles.c4, styles.bold]}>{personalInfo.eyeColor || "Black"}</Text>
               </View>
 
               <View style={styles.row}>
                 <Text style={styles.c1}>18. Colour of skin</Text>
-                <Text style={[styles.c2, styles.bold]}>FAIR</Text>
+                <Text style={[styles.c2, styles.bold]}>{personalInfo.complexion || "Fair"}</Text>
                 <Text style={styles.c3}>21. Hobby</Text>
-                <Text style={[styles.c4, styles.bold]}>Book{"\n"}Reading</Text>
+                <Text style={[styles.c4, styles.bold]}>{personalInfo.hobby || "None"}</Text>
               </View>
             </View>
 
@@ -1236,6 +1250,77 @@ const PrintableDonorRegistration = ({
             <Text style={styles.footer}>
               *This is not Valid for Medico-legal purpose.
             </Text>
+          </Page>
+
+          {/* SPERM - PAGE 4b: CLINICAL INVESTIGATIONS */}
+          <Page size="A4" style={styles.page}>
+            <Text style={styles.title}>CLINICAL INVESTIGATIONS & PHYSICAL EXAM</Text>
+
+            <Text style={{ fontSize: 10, fontFamily: "Times-Bold", marginBottom: 5 }}>
+              LABORATORY DIAGNOSTICS:
+            </Text>
+            <View style={styles.table}>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Hb (Hemoglobin)</Text>
+                <Text style={styles.c2}>{investigations.hb}</Text>
+                <Text style={styles.c3}>Total RBC Count</Text>
+                <Text style={styles.c4}>{investigations.totalRbc}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Total WBC Count</Text>
+                <Text style={styles.c2}>{investigations.totalWbc}</Text>
+                <Text style={styles.c3}>Differential WBC</Text>
+                <Text style={styles.c4}>{investigations.differentialWbc}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Platelet Count</Text>
+                <Text style={styles.c2}>{investigations.plateletCount}</Text>
+                <Text style={styles.c3}>Peripheral Smear</Text>
+                <Text style={styles.c4}>{investigations.peripheralSmear}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Random Blood Sugar</Text>
+                <Text style={styles.c2}>{investigations.randomBloodSugar}</Text>
+                <Text style={styles.c3}>Blood Urea/Creatinine</Text>
+                <Text style={styles.c4}>{investigations.bloodUreaSerumCreatinine}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>SGPT</Text>
+                <Text style={styles.c2}>{investigations.sgpt}</Text>
+                <Text style={styles.c3}>Routine Urine Exam</Text>
+                <Text style={styles.c4}>{investigations.routineUrine}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Hemoglobin A2</Text>
+                <Text style={styles.c2}>{investigations.hemoglobinA2}</Text>
+                <Text style={styles.c3}>Other Specific Tests</Text>
+                <Text style={styles.c4}>{investigations.otherSpecificTest}</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 10, fontFamily: "Times-Bold", marginTop: 15, marginBottom: 5 }}>
+              DETAILED PHYSICAL EXAMINATION:
+            </Text>
+            <View style={styles.table}>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Pulse</Text>
+                <Text style={styles.c2}>{physicalExamination.pulse}</Text>
+                <Text style={styles.c3}>Blood Pressure</Text>
+                <Text style={styles.c4}>{physicalExamination.bloodPressure}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Temperature</Text>
+                <Text style={styles.c2}>{physicalExamination.temperature}</Text>
+                <Text style={styles.c3}>Respiratory System</Text>
+                <Text style={styles.c4}>{physicalExamination.respiratorySystem}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.c1}>Cardiovascular System</Text>
+                <Text style={styles.c2}>{physicalExamination.cardiovascularSystem}</Text>
+                <Text style={styles.c3}>Per Abdominal</Text>
+                <Text style={styles.c4}>{physicalExamination.perAbdominal}</Text>
+              </View>
+            </View>
           </Page>
 
           <Page size="A4" style={styles.page}>

@@ -102,6 +102,8 @@ export default function AdminDashboard() {
         return <FileText className="w-4 h-4 text-orange-500" />;
       case "referral":
         return <Gift className="w-4 h-4 text-teal-500" />;
+      case "audit":
+        return <UserCheck className="w-4 h-4 text-emerald-500" />;
       default:
         return <MessageSquare className="w-4 h-4 text-teal-500" />;
     }
@@ -433,7 +435,11 @@ export default function AdminDashboard() {
                           </div>
                           <p className="text-muted-foreground text-xs truncate">{act.details}</p>
                           <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-md mt-1 border ${
-                            act.status === "PENDING" || act.status === "Pending" ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800" : "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
+                            act.status === "PENDING" || act.status === "Pending" 
+                              ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800" 
+                              : act.type === "audit"
+                              ? "bg-teal-105 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:border-teal-800"
+                              : "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800"
                           }`}>
                             {act.status}
                           </span>

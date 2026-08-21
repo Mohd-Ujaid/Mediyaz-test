@@ -17,16 +17,40 @@ export async function GET(req: Request) {
     await connectToDatabase();
     
     const { searchParams } = new URL(req.url);
+    const search = searchParams.get("search") || "";
     const entityId = searchParams.get("entityId") || "";
     const entityType = searchParams.get("entityType") || "";
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "100"); // Allow fetching full chain at once
+    const skip = (page - 1) * limit;
 
     const query: any = {};
     if (entityId) query.entityId = entityId;
     if (entityType) query.entityType = entityType;
+    if (search) {
+      query.$or = [
+        { action: { $regex: search, $options: "i" } },
+        { performedBy: { $regex: search, $options: "i" } },
+        { details: { $regex: search, $options: "i" } }
+      ];
+    }
 
-    const logs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(100);
+    const total = await AuditLog.countDocuments(query);
+    const logs = await AuditLog.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    return NextResponse.json({ success: true, logs });
+    return NextResponse.json({ 
+      success: true, 
+      logs,
+      pagination: {
+        total,
+        pages: Math.ceil(total / limit),
+        current: page,
+        limit
+      }
+    });
   } catch (error: any) {
     console.error("Fetch audit logs error:", error);
     return NextResponse.json(
