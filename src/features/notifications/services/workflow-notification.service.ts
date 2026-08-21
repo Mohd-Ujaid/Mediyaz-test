@@ -66,12 +66,37 @@ Message: "${payload.message}"
   return { success: true, timestamp: new Date() };
 }
 
+import { auth } from "@/server/auth";
+import { headers } from "next/headers";
+
 export async function triggerWorkflowNotifications(
   event: NotificationPayload["event"],
   name: string,
   contact: string,
   additionalInfo: Record<string, string> = {}
 ) {
+  // Check if internal admin/employee trigger
+  let isInternalTrigger = false;
+  try {
+    const reqHeaders = await headers();
+    if (reqHeaders) {
+      const session = await auth.api.getSession({ headers: reqHeaders });
+      if (session && session.user) {
+        const role = (session.user as any).role || "";
+        if (["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+          isInternalTrigger = true;
+        }
+      }
+    }
+  } catch (e) {
+    // Suppress headers() call error outside of request contexts
+  }
+
+  if (isInternalTrigger) {
+    console.log(`[NOTIFICATION BYPASSED] internal admin/employee trigger detected. Event: ${event}`);
+    return;
+  }
+
   const email = contact.includes("@") ? contact : (additionalInfo.email || "");
   const phone = !contact.includes("@") ? contact : (additionalInfo.phone || additionalInfo.mobileNumber || "");
 

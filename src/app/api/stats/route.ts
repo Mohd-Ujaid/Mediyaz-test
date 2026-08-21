@@ -8,6 +8,7 @@ import { Donor } from "@/models/Donor";
 import { Treatment } from "@/models/Treatment";
 import { ContactMessage } from "@/models/ContactMessage";
 import { Review } from "@/models/Review";
+import { AuditLog } from "@/models/AuditLog";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 
@@ -178,6 +179,17 @@ export async function GET() {
         details: `${ref.referrerName} referred ${ref.referredDonorName}`,
         status: ref.rewardStatus,
         timestamp: ref.createdAt
+      });
+    });
+
+    const lastAuditLogs = await AuditLog.find().sort({ createdAt: -1 }).limit(5).catch(() => []);
+    lastAuditLogs.forEach((log: any) => {
+      recentActivities.push({
+        type: "audit",
+        title: log.action,
+        details: `${log.details || ""} (by ${log.performedBy})`,
+        status: log.newValue || "Updated",
+        timestamp: log.createdAt
       });
     });
 

@@ -3,6 +3,44 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+// ── Session helpers ──────────────────────────────────────────────────────────
+const SESSION_KEY = "mediyaz_donor_otp_session";
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+interface OtpSession {
+  registrationId: string;
+  aadhaar: string;
+  phone: string;
+  expiresAt: number;
+}
+
+function getOtpSession(): OtpSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session: OtpSession = JSON.parse(raw);
+    if (Date.now() > session.expiresAt) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function setOtpSession(data: Omit<OtpSession, "expiresAt">) {
+  try {
+    const session: OtpSession = { ...data, expiresAt: Date.now() + SESSION_TTL_MS };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {}
+}
+
+function clearOtpSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+}
+// ─────────────────────────────────────────────────────────────────────────────
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,6 +73,7 @@ import {
   getRegistrationAction,
   updateRegistrationStepAction,
   submitRegistrationAction,
+  createDraftRegistrationAction,
 } from "../actions/donor-registration.actions";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -84,9 +123,17 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [isOtpVerified, setIsOtpVerified] = useState(false);
-  const [aadhaarInput, setAadhaarInput] = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
+  // Restore OTP verified state from sessionStorage (survives page refresh, expires after 1 hour)
+  const [isOtpVerified, setIsOtpVerified] = useState<boolean>(() => {
+    const session = getOtpSession();
+    return session !== null;
+  });
+  // 'existing' = donor has a Registration ID (online inquiry done)
+  // 'walkin'   = donor walks in directly, no prior Registration ID
+  const [verificationMode, setVerificationMode] = useState<"existing" | "walkin">("existing");
+  const [registrationIdInput, setRegistrationIdInput] = useState<string>(() => getOtpSession()?.registrationId ?? draftId ?? "");
+  const [aadhaarInput, setAadhaarInput] = useState<string>(() => getOtpSession()?.aadhaar ?? "");
+  const [phoneInput, setPhoneInput] = useState<string>(() => getOtpSession()?.phone ?? "");
   const [otpInput, setOtpInput] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -111,6 +158,10 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
   }, [resendCountdown]);
 
   const handleSendOtp = async () => {
+    if (verificationMode === "existing" && !registrationIdInput.trim()) {
+      setOtpError("Please enter your Registration ID.");
+      return;
+    }
     setOtpLoading(true);
     setOtpError("");
     try {
@@ -121,13 +172,13 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
           action: "send",
           phone: phoneInput,
           aadhaar: aadhaarInput,
-          registrationId: registrationId || draftId
+          registrationId: verificationMode === "existing" ? registrationIdInput.trim() : undefined
         })
       });
       const data = await res.json();
       if (res.ok) {
         setOtpSent(true);
-        setResendCountdown(30); // 30-second throttle for resending OTP
+        setResendCountdown(30);
         toast.success("Verification OTP sent to your phone number!");
       } else {
         setOtpError(data.error || "Failed to send OTP.");
@@ -148,18 +199,44 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
       const res = await fetch("/api/donor-registration/otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "verify",
-          phone: phoneInput,
-          otp: otpInput
-        })
+        body: JSON.stringify({ action: "verify", phone: phoneInput, otp: otpInput })
       });
       const data = await res.json();
       if (res.ok) {
         toast.success("OTP verified successfully!");
-        store.updatePersonalInfo({ aadhaarNumber: aadhaarInput.replace(/[^0-9]/g, "") });
-        store.updateContactInfo({ mobileNumber: phoneInput.replace(/[^0-9+]/g, "") });
-        setIsOtpVerified(true);
+
+        if (verificationMode === "existing") {
+          // Load existing registration by Registration ID
+          const regId = registrationIdInput.trim();
+          const loadRes = (await getRegistrationAction(regId)) as any;
+          if (loadRes.success && loadRes.registration) {
+            loadFromServer(loadRes.registration);
+            setRegistrationId(regId);
+            setOtpSession({ registrationId: regId, aadhaar: aadhaarInput, phone: phoneInput });
+            setIsOtpVerified(true);
+          } else {
+            setOtpError("Registration ID not found. Please check and try again.");
+            toast.error("Registration ID not found.");
+          }
+        } else {
+          // Walk-in: create a new draft registration
+          const draftRes = await createDraftRegistrationAction(donorType, {
+            personalInfo: { aadhaarNumber: aadhaarInput.replace(/[^0-9]/g, "") },
+            contactInfo: { mobileNumber: phoneInput.replace(/[^0-9+]/g, "") }
+          });
+          if (draftRes.success && "registration" in draftRes) {
+            loadFromServer(draftRes.registration);
+            const regId = draftRes.registrationId;
+            setRegistrationId(regId);
+            setOtpSession({ registrationId: regId, aadhaar: aadhaarInput, phone: phoneInput });
+            setIsOtpVerified(true);
+            toast.success(`Registration started! Your ID: ${regId}`);
+          } else {
+            const errMsg = "error" in draftRes ? draftRes.error : "Failed to create registration.";
+            setOtpError(errMsg);
+            toast.error(errMsg);
+          }
+        }
       } else {
         setOtpError(data.error || "OTP verification failed.");
         toast.error(data.error || "OTP verification failed.");
@@ -179,17 +256,26 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
 
     async function fetchDraft() {
       if (!draftId) {
-        setIsBlocked(true);
-        setBlockReason("Prospective donors must contact the clinic and undergo pre-screening before starting registration. Direct registration is disabled.");
+        // Guest mode: do not block, show the security verification screen
+        setIsBlocked(false);
+        setIsLoading(false);
         return;
       }
 
-      // Load existing draft
+      // Load existing draft if draftId is in URL
       try {
         setIsLoading(true);
         const data = (await getRegistrationAction(draftId)) as any;
         if (data.success && data.registration) {
           loadFromServer(data.registration);
+          // Persist session keyed to this draftId (reuses aadhaar/phone from sessionStorage if present)
+          const existingSession = getOtpSession();
+          setOtpSession({
+            registrationId: draftId,
+            aadhaar: existingSession?.aadhaar ?? data.registration.personalInfo?.aadhaarNumber ?? "",
+            phone: existingSession?.phone ?? data.registration.contactInfo?.mobileNumber ?? "",
+          });
+          setIsOtpVerified(true); // Bypass OTP verification if valid draftId is in URL
           toast.success("Draft loaded successfully.");
         } else {
           setIsBlocked(true);
@@ -492,115 +578,190 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
   }
 
   if (!isOtpVerified) {
+    const isExisting = verificationMode === "existing";
+    const canSendOtp = isExisting
+      ? registrationIdInput.trim().length >= 8 && aadhaarInput.length === 12 && phoneInput.length >= 10
+      : aadhaarInput.length === 12 && phoneInput.length >= 10;
+
     return (
       <div className="container mx-auto px-4 py-12 max-w-md">
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-8 shadow-xl space-y-6">
-          <div className="text-center space-y-3">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xl overflow-hidden">
+
+          {/* Header */}
+          <div className="text-center space-y-2 px-8 pt-8 pb-6">
             <div className="mx-auto w-12 h-12 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-sm">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Donor Security Verification
+              {donorType === "egg" ? "Egg Donor" : "Sperm Donor"} Registration
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Verify your Aadhaar number and phone number before starting the clinical registration form.
+              How are you registering today?
             </p>
           </div>
 
-          {otpError && (
-            <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-250 rounded-xl leading-relaxed">
-              {otpError}
-            </div>
-          )}
+          {/* Mode tabs */}
+          <div className="grid grid-cols-2 border-t border-b border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => { setVerificationMode("existing"); setOtpSent(false); setOtpInput(""); setOtpError(""); }}
+              className={`py-3 text-xs font-bold transition-colors cursor-pointer ${
+                isExisting
+                  ? "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-b-2 border-teal-500"
+                  : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900"
+              }`}
+            >
+              I have a Registration ID
+            </button>
+            <button
+              type="button"
+              onClick={() => { setVerificationMode("walkin"); setOtpSent(false); setOtpInput(""); setOtpError(""); }}
+              className={`py-3 text-xs font-bold transition-colors cursor-pointer border-l border-slate-100 dark:border-slate-800 ${
+                !isExisting
+                  ? "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-b-2 border-teal-500"
+                  : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900"
+              }`}
+            >
+              Walk-in / New Donor
+            </button>
+          </div>
 
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-650 dark:text-slate-400">12-Digit Aadhaar Number</label>
-              <input
-                type="text"
-                placeholder="e.g. 123456789012"
-                maxLength={12}
-                disabled={otpSent || otpLoading}
-                value={aadhaarInput}
-                onChange={(e) => setAadhaarInput(e.target.value.replace(/[^0-9]/g, ""))}
-                className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
-              />
+          <div className="px-8 py-6 space-y-5">
+
+            {/* Mode description */}
+            <div className={`rounded-xl p-3 text-[11px] leading-relaxed ${
+              isExisting
+                ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900"
+                : "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-100 dark:border-amber-900"
+            }`}>
+              {isExisting
+                ? "You filled an inquiry form online and received a Registration ID from the clinic. Enter it below to continue."
+                : "You are registering directly at the clinic without a prior inquiry form. A new Registration ID will be assigned to you after verification."
+              }
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-650 dark:text-slate-400">Mobile Phone Number</label>
-              <input
-                type="text"
-                placeholder="e.g. 9876543210"
-                maxLength={13}
-                disabled={otpSent || otpLoading}
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value.replace(/[^0-9+]/g, ""))}
-                className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
-              />
-            </div>
+            {otpError && (
+              <div className="p-3 text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl leading-relaxed">
+                {otpError}
+              </div>
+            )}
 
-            {otpSent && (
-              <div className="space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <label className="text-xs font-bold text-slate-650 dark:text-slate-400">6-Digit Verification OTP</label>
+            <div className="space-y-4">
+
+              {/* Registration ID — only shown in 'existing' mode */}
+              {isExisting && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Registration ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MED-SD-2026-12345678"
+                    disabled={otpSent || otpLoading}
+                    value={registrationIdInput}
+                    onChange={(e) => setRegistrationIdInput(e.target.value.trim().toUpperCase())}
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
+                  />
+                </div>
+              )}
+
+              {/* Aadhaar */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">12-Digit Aadhaar Number</label>
                 <input
                   type="text"
-                  placeholder="e.g. 123456"
-                  maxLength={6}
-                  disabled={otpLoading}
-                  value={otpInput}
-                  onChange={(e) => setOtpInput(e.target.value.replace(/[^0-9]/g, ""))}
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs font-mono tracking-widest text-center text-lg focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
+                  placeholder="e.g. 123456789012"
+                  maxLength={12}
+                  disabled={otpSent || otpLoading}
+                  value={aadhaarInput}
+                  onChange={(e) => setAadhaarInput(e.target.value.replace(/[^0-9]/g, ""))}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
                 />
               </div>
-            )}
 
-            {!otpSent ? (
-              <Button
-                type="button"
-                onClick={handleSendOtp}
-                disabled={otpLoading || aadhaarInput.length !== 12 || phoneInput.length < 10}
-                className="w-full rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs h-10 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {otpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : "Verify & Send OTP"}
-              </Button>
-            ) : (
-              <div className="space-y-4">
+              {/* Phone */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Mobile Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 9876543210"
+                  maxLength={13}
+                  disabled={otpSent || otpLoading}
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value.replace(/[^0-9+]/g, ""))}
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* OTP */}
+              {otpSent && (
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">6-Digit OTP sent to your phone</label>
+                  <input
+                    type="text"
+                    placeholder="Enter OTP"
+                    maxLength={6}
+                    disabled={otpLoading}
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-base font-mono tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-slate-900 dark:text-white"
+                  />
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {!otpSent ? (
                 <Button
                   type="button"
-                  onClick={handleVerifyOtp}
-                  disabled={otpLoading || otpInput.length !== 6}
+                  onClick={handleSendOtp}
+                  disabled={otpLoading || !canSendOtp}
                   className="w-full rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs h-10 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  {otpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</> : "Confirm OTP & Proceed"}
+                  {otpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : "Send OTP & Verify"}
                 </Button>
-                
-                <div className="flex items-center justify-between px-1">
-                  <button
+              ) : (
+                <div className="space-y-3">
+                  <Button
                     type="button"
-                    onClick={() => { setOtpSent(false); setOtpInput(""); }}
-                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
+                    onClick={handleVerifyOtp}
+                    disabled={otpLoading || otpInput.length !== 6}
+                    className="w-full rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs h-10 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    Change Details
-                  </button>
-                  
-                  {resendCountdown > 0 ? (
-                    <span className="text-[11px] font-semibold text-slate-400">
-                      Resend OTP in {resendCountdown}s
-                    </span>
-                  ) : (
+                    {otpLoading
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> {isExisting ? "Loading..." : "Creating..."}</>
+                      : isExisting ? "Confirm OTP & Continue" : "Confirm OTP & Start Registration"
+                    }
+                  </Button>
+
+                  <div className="flex items-center justify-between px-1">
                     <button
                       type="button"
-                      onClick={handleSendOtp}
-                      disabled={otpLoading}
-                      className="text-[11px] font-semibold text-teal-650 hover:text-teal-500 hover:underline cursor-pointer disabled:text-slate-400"
+                      onClick={() => { setOtpSent(false); setOtpInput(""); setOtpError(""); }}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
                     >
-                      Resend OTP
+                      ← Change Details
                     </button>
-                  )}
+                    {resendCountdown > 0 ? (
+                      <span className="text-[11px] font-semibold text-slate-400">Resend in {resendCountdown}s</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        disabled={otpLoading}
+                        className="text-[11px] font-semibold text-teal-600 hover:underline cursor-pointer disabled:text-slate-400"
+                      >
+                        Resend OTP
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+
+            <p className="text-center text-[10px] text-slate-400 leading-relaxed pt-2 border-t border-slate-100 dark:border-slate-800">
+              {isExisting
+                ? "Registration ID is provided by clinic staff after inquiry form review."
+                : "Walk-in registrations are processed on-site. Please have your Aadhaar card ready."
+              }
+            </p>
           </div>
         </div>
       </div>
@@ -610,7 +771,26 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex flex-col gap-6">
-        
+
+        {/* Verified session info strip */}
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 text-xs">
+          <div className="flex items-center gap-1.5 text-teal-700 dark:text-teal-400 font-bold shrink-0">
+            <ShieldCheck className="w-4 h-4" /> Session Verified
+          </div>
+          <div className="flex flex-wrap gap-4 ml-2 font-mono text-slate-700 dark:text-slate-300">
+            {registrationId && (
+              <span><span className="font-sans text-slate-400 mr-1">ID:</span>{registrationId}</span>
+            )}
+            {aadhaarInput && (
+              <span><span className="font-sans text-slate-400 mr-1">Aadhaar:</span>XXXX-XXXX-{aadhaarInput.slice(-4)}</span>
+            )}
+            {phoneInput && (
+              <span><span className="font-sans text-slate-400 mr-1">Mobile:</span>XXXXXX{phoneInput.slice(-4)}</span>
+            )}
+          </div>
+          <span className="ml-auto text-[10px] text-slate-400">Session valid 1 hour · refreshing is safe</span>
+        </div>
+
         {/* Progress Tracker */}
         <Card className="rounded-[10px] border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-6 shadow-sm">
           <StepProgress
@@ -630,9 +810,6 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
                   <CardTitle className="text-xl font-bold text-slate-900 dark:text-white">
                     {derivedType === "egg" ? "Egg Donor Registration" : "Sperm Donor Registration"}
                   </CardTitle>
-                  <CardDescription className="text-xs">
-                    Registration ID: <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{registrationId || "Initializing..."}</span>
-                  </CardDescription>
                 </>
               ) : (
                 <>

@@ -94,216 +94,64 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 w-full transition-all duration-300",
-        isScrolled
-          ? "bg-background/95 backdrop-blur-md border-b shadow-sm"
-          : "bg-background border-b border-transparent",
+        "sticky top-0 z-50 w-full transition-all duration-300 bg-[#f0f6f6]",
+        isScrolled ? "bg-transparent" : "bg-[#f0f6f6]",
       )}
     >
-      {/* Top Notice Bar */}
-      <div className="bg-foreground text-background text-[11px] py-1.5 px-4 font-medium hidden sm:block">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
-            <span>
-              CAP & CLIA Accredited Laboratory • FDA Registered Facility
-            </span>
-          </div>
-          <div className="flex items-center gap-6 text-muted">
-            <a
-              href={`tel:${siteConfig.contact.phone}`}
-              className="hover:text-brand-300 transition-colors flex items-center gap-1"
-            >
-              <Phone className="w-3 h-3 text-brand-400" />{" "}
-              {siteConfig.contact.phone}
-            </a>
-            <Link
-              href="/contact"
-              className="hover:text-brand-300 transition-colors"
-            >
-              Global Support Desk
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 h-20 flex items-center justify-between">
+      <div className="container mx-auto pb-4  pt-10 h-20 flex items-center justify-around">
         {/* Brand Logo Driven by siteConfig */}
-        <Link href="/" className="flex items-center gap-3 group shrink-0">
+        <Link
+          href="/"
+          className="flex items-center gap-3 group shrink-0 top-20"
+        >
           <Image
             src="/images/logo.webp"
             alt="Mediyaz Art Bank"
-            width={160}
-            height={48}
-            className="h-12 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+            width={320}
+            height={100}
+            className="h-18 w-auto object-contain transition-transform group-hover:scale-[1.2]"
             priority
           />
         </Link>
 
         {/* Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-2 font-medium text-sm text-foreground">
+        <nav className="hidden lg:flex items-center gap-2 font-semibold text-sm text-foreground">
           <Link
-            href="/"
+            href="/recipient"
             className={cn(
               "px-3.5 py-2 rounded-xl transition-colors hover:bg-muted",
-              pathname === "/" &&
-                "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
+              pathname === "/recipient" &&
+                "text-brand-650 font-bold bg-brand-500/10",
             )}
           >
-            Home
-          </Link>{" "}
-          {/* Become a Donor Dropdown */}
-          <div
-            className="relative"
-            onMouseEnter={() => setBecomeDonorMenuOpen(true)}
-            onMouseLeave={() => setBecomeDonorMenuOpen(false)}
-          >
-            <Link
-              href="/donor"
-              className={cn(
-                "px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1 hover:bg-muted",
-                becomeDonorMenuOpen &&
-                  "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
-              )}
-            >
-              Become a Donor{" "}
-              <ChevronDown
-                className={cn(
-                  "w-4 h-4 transition-transform",
-                  becomeDonorMenuOpen && "rotate-180",
-                )}
-              />
-            </Link>
-
-            <AnimatePresence>
-              {becomeDonorMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute left-0 top-full pt-2 w-[280px] z-50"
-                >
-                  <div className="bg-background rounded-2xl shadow-2xl border p-3 space-y-1">
-                    <Link
-                      href="/donor?type=sperm"
-                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-muted transition-colors group"
-                    >
-                      <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                        <Dna className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                          Sperm Donor Program
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">
-                          Explore sperm donation options & parameters
-                        </div>
-                      </div>
-                    </Link>
-                    <Link
-                      href="/donor?type=egg"
-                      className="flex items-start gap-3 p-3 rounded-xl hover:bg-muted transition-colors group"
-                    >
-                      <div className="p-2 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:bg-rose-500 group-hover:text-white transition-colors">
-                        <Dna className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-foreground group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
-                          Egg Donor Program
-                        </div>
-                        <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">
-                          Explore oocyte donation & procedures
-                        </div>
-                      </div>
-                    </Link>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          <div
-            className="relative"
-            onMouseEnter={() => setMegaMenuOpen(true)}
-            onMouseLeave={() => setMegaMenuOpen(false)}
-          >
-            <Link
-              href="/services"
-              className={cn(
-                "px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1 hover:bg-muted",
-                pathname.startsWith("/services") &&
-                  "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
-              )}
-            >
-              Fertility Services{" "}
-              <ChevronDown
-                className={cn(
-                  "w-4 h-4 transition-transform",
-                  megaMenuOpen && "rotate-180",
-                )}
-              />
-            </Link>
-
-            <AnimatePresence>
-              {megaMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute left-0 top-full pt-2 w-[600px] z-50"
-                >
-                  <div className="bg-background rounded-2xl shadow-2xl border p-5 grid grid-cols-2 gap-3">
-                    {servicesList.map((service, idx) => (
-                      <Link
-                        key={idx}
-                        href={service.href}
-                        className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-muted transition-colors group"
-                      >
-                        <div className="p-2 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 group-hover:bg-brand-500 group-hover:text-white transition-colors">
-                          <service.icon className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-foreground group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-                            {service.title}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">
-                            {service.description}
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+            Aspiring Parents
+          </Link>
           <Link
-            href="/doctors"
+            href="/donor"
             className={cn(
               "px-3.5 py-2 rounded-xl transition-colors hover:bg-muted",
-              pathname.startsWith("/doctors") &&
-                "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
+              pathname === "/donor" &&
+                "text-brand-650 font-bold bg-brand-500/10",
             )}
           >
-            Doctors
+            Donors
           </Link>
           <Link
             href="/clinics"
             className={cn(
               "px-3.5 py-2 rounded-xl transition-colors hover:bg-muted",
-              pathname.startsWith("/clinics") &&
-                "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
+              pathname === "/clinics" &&
+                "text-brand-650 font-bold bg-brand-500/10",
             )}
           >
-            Clinics & Hospitals
+            Clinics
           </Link>
           <Link
             href="/about"
             className={cn(
               "px-3.5 py-2 rounded-xl transition-colors hover:bg-muted",
               pathname === "/about" &&
-                "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
+                "text-brand-650 font-bold bg-brand-500/10",
             )}
           >
             About Us
@@ -313,22 +161,51 @@ export function Navbar() {
             className={cn(
               "px-3.5 py-2 rounded-xl transition-colors hover:bg-muted",
               pathname === "/contact" &&
-                "text-brand-600 dark:text-brand-400 font-bold bg-brand-500/10",
+                "text-brand-650 font-bold bg-brand-500/10",
             )}
           >
-            Contact
+            Contact Us
+          </Link>
+          <Link
+            href="/blog"
+            className={cn(
+              "px-3.5 py-2 rounded-xl transition-colors hover:bg-muted",
+              pathname === "/blog" &&
+                "text-brand-650 font-bold bg-brand-500/10",
+            )}
+          >
+            Blog
           </Link>
         </nav>
 
-        <div className="hidden lg:flex items-center gap-3">
-          <Link href="/appointments/book">
-            <Button
-              variant="secondary"
-              className="gap-1.5 shadow-md hover:shadow-lg font-bold"
-            >
-              <Calendar className="w-3.5 h-3.5" /> Book Consultation
+        {/* Top Right Action Buttons */}
+        <div className="hidden lg:flex items-center gap-2.5">
+          <Link href="/recipient">
+            <Button className="bg-[#ff6f61] hover:bg-[#e65c50] text-white font-bold text-xs h-9 px-5 rounded-full transition-colors cursor-pointer shadow-sm">
+              Find A Donor
             </Button>
           </Link>
+          <Link href="/donor/register">
+            <Button className="bg-[#2f4f57] hover:bg-[#21373d] text-white font-bold text-xs h-9 px-5 rounded-full transition-colors cursor-pointer shadow-sm">
+              Donor Application
+            </Button>
+          </Link>
+          {session ? (
+            <Link href="/dashboard">
+              <Button
+                variant="outline"
+                className="border border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 font-bold text-xs h-9 px-5 rounded-full cursor-pointer"
+              >
+                Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/login">
+              <Button className="bg-[#8e8e93] hover:bg-[#7a7a7f] text-white font-bold text-xs h-9 px-5 rounded-full transition-colors cursor-pointer shadow-sm">
+                Sign in
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Mobile Hamburger Trigger */}
@@ -374,11 +251,27 @@ export function Navbar() {
                 <Dna className="w-4 h-4 text-blue-500" /> Sperm Donor Program
               </Link>
               <Link
+                href="/donor/register?type=sperm"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2.5 px-3 pl-8 rounded-lg hover:bg-muted flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <FileText className="w-3.5 h-3.5 text-teal-500" /> Sperm
+                Registration Form
+              </Link>
+              <Link
                 href="/donor?type=egg"
                 onClick={() => setMobileMenuOpen(false)}
                 className="py-2.5 px-3 pl-6 rounded-lg hover:bg-muted flex items-center gap-2"
               >
                 <Egg className="w-4 h-4 text-rose-500" /> Egg Donor Program
+              </Link>
+              <Link
+                href="/donor/register?type=egg"
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2.5 px-3 pl-8 rounded-lg hover:bg-muted flex items-center gap-2 text-xs text-muted-foreground"
+              >
+                <FileText className="w-3.5 h-3.5 text-pink-500" /> Egg
+                Registration Form
               </Link>
               <Link
                 href="/services"

@@ -6,6 +6,12 @@ export interface IContactMessage extends Document {
   message: string;
   status: "PENDING" | "REPLIED" | "COMPLETED";
   adminNotes?: string;
+  replies?: {
+    sender: "User" | "Admin";
+    senderName?: string;
+    message: string;
+    createdAt: Date;
+  }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,8 +23,19 @@ const ContactMessageSchema = new Schema<IContactMessage>(
     message: { type: String, required: true },
     status: { type: String, enum: ["PENDING", "REPLIED", "COMPLETED"], default: "PENDING" },
     adminNotes: { type: String, default: "" },
+    replies: [
+      {
+        sender: { type: String, enum: ["User", "Admin"], default: "User" },
+        senderName: { type: String },
+        message: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   { timestamps: true }
 );
 
-export const ContactMessage = mongoose.models?.ContactMessage || mongoose.model<IContactMessage>("ContactMessage", ContactMessageSchema);
+if (mongoose.models && (mongoose.models as any).ContactMessage) {
+  delete (mongoose.models as any).ContactMessage;
+}
+export const ContactMessage = mongoose.model<IContactMessage>("ContactMessage", ContactMessageSchema);

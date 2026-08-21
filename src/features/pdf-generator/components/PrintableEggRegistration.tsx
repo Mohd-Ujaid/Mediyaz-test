@@ -312,6 +312,10 @@ const PrintableEggRegistration = ({
     documents = {},
     donorType,
     registrationId,
+    spermDonorInfo = {},
+    eggDonorInfo = {},
+    investigations = {},
+    physicalExamination = {},
   } = mergedRegistration || {};
 
   const isSperm = donorType === "sperm" || !donorType;
@@ -324,6 +328,16 @@ const PrintableEggRegistration = ({
   const month = dateObj.toLocaleString("default", { month: "long" });
   const year = dateObj.getFullYear();
   const numericMonth = String(dateObj.getMonth() + 1).padStart(2, "0");
+
+  const formatAddress = (addr = "", city = "", state = "", country = "", pin = "") => {
+    if (!addr) return "";
+    const parts = [addr];
+    if (city) parts.push(city);
+    if (state) parts.push(state);
+    if (country) parts.push(country);
+    if (pin) parts.push(pin);
+    return parts.join(", ");
+  };
 
   // FIX: Using regular functions instead of React components for inline elements
   // This prevents react-pdf's layout engine from flattening the document text.
@@ -418,7 +432,7 @@ const PrintableEggRegistration = ({
         <Text style={[styles.text, { marginTop: 10 }]}>
           I, {DField(personalInfo.fullName)} W/O{" "}
           {DField(personalInfo.spouseName || "______________")}, House no.{" "}
-          {DField(contactInfo.currentAddress)} and Aadhar No{" "}
+          {DField(formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode))} and Aadhar No{" "}
           {DField(personalInfo.aadhaarNumber)} date of birth{" "}
           {DField(personalInfo.dateOfBirth)} and Mobile no{" "}
           {DField(contactInfo.mobileNumber)}, is willing to donate my oocyte to
@@ -514,7 +528,7 @@ const PrintableEggRegistration = ({
           <Text style={styles.bold}>Second Part</Text> I{" "}
           {DField(personalInfo.fullName)} W/O{" "}
           {DField(personalInfo.spouseName || "______________")}, House no.{" "}
-          {DField(contactInfo.currentAddress)} and Aadhar No{" "}
+          {DField(formatAddress(contactInfo.currentAddress, contactInfo.city, contactInfo.state, contactInfo.country, contactInfo.pincode))} and Aadhar No{" "}
           {DField(personalInfo.aadhaarNumber)} date of birth{" "}
           {DField(personalInfo.dateOfBirth)} and Mobile no{" "}
           {DField(contactInfo.mobileNumber)}, herein referred to as the Donor.
@@ -609,7 +623,7 @@ const PrintableEggRegistration = ({
       <Page size="A4" style={styles.densePage}>
         <Text style={styles.denseTitle}>INFORMATION FORM FOR OOCYTE DONOR</Text>
 
-        <Text style={styles.sectionTitle}>BASIC INFORMATION:</Text>
+        <Text style={styles.sectionTitle}>BASIC INFORMATION & HISTORY:</Text>
 
         {/* Main Table */}
         <View style={styles.denseTable}>
@@ -626,17 +640,15 @@ const PrintableEggRegistration = ({
             <Text style={styles.cellLabel}>Donor ID</Text>
             <Text style={styles.cellValue}>{registrationId}</Text>
             <Text style={styles.cellLabel}>9. Obstetric History</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.obstetricHistory || "No"}</Text>
           </View>
 
           {/* Row 3 */}
           <View style={styles.denseRow}>
-            <Text style={styles.cellLabel}>
-              1. Identification number (Donor)
-            </Text>
+            <Text style={styles.cellLabel}>1. Identification number (Donor)</Text>
             <Text style={styles.cellValue}>{personalInfo.aadhaarNumber}</Text>
             <Text style={styles.cellLabel}>a. Number of deliveries</Text>
-            <Text style={styles.cellValue}>01</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.numberOfDeliveries || "0"}</Text>
           </View>
 
           {/* Row 4 */}
@@ -644,7 +656,7 @@ const PrintableEggRegistration = ({
             <Text style={styles.cellLabel}>2. Age / Date of birth</Text>
             <Text style={styles.cellValue}>{personalInfo.dateOfBirth}</Text>
             <Text style={styles.cellLabel}>b. Number of abortions</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.numberOfAbortions || "0"}</Text>
           </View>
 
           {/* Row 5 */}
@@ -652,7 +664,7 @@ const PrintableEggRegistration = ({
             <Text style={styles.cellLabel}>3. Marital status</Text>
             <Text style={styles.cellValue}>{personalInfo.maritalStatus}</Text>
             <Text style={styles.cellLabel}>c. Other points of note</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.otherPointsOfNote || "No"}</Text>
           </View>
 
           {/* Row 6 */}
@@ -660,15 +672,15 @@ const PrintableEggRegistration = ({
             <Text style={styles.cellLabel}>4. Education of donor</Text>
             <Text style={styles.cellValue}>{personalInfo.education}</Text>
             <Text style={styles.cellLabel}>10. Menstrual history</Text>
-            <Text style={styles.cellValue}>Regular</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.menstrualCycleDetails || "Regular"}</Text>
           </View>
 
           {/* Row 7 */}
           <View style={styles.denseRow}>
             <Text style={styles.cellLabel}>5. Education of spouse</Text>
-            <Text style={styles.cellValue}>{personalInfo.spouseEducation}</Text>
+            <Text style={styles.cellValue}>{personalInfo.spouseEducation || "N/A"}</Text>
             <Text style={styles.cellLabel}>11. History of contraceptives</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.contraceptiveHistory || "No"}</Text>
           </View>
 
           {/* Row 8 */}
@@ -676,45 +688,39 @@ const PrintableEggRegistration = ({
             <Text style={styles.cellLabel}>6. Occupation of donor</Text>
             <Text style={styles.cellValue}>{personalInfo.occupation}</Text>
             <Text style={styles.cellLabel}>12. Medical history</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{medicalInfo.medicalHistory || "No"}</Text>
           </View>
 
           {/* Row 9 */}
           <View style={styles.denseRow}>
             <Text style={styles.cellLabel}>7. Occupation of spouse</Text>
-            <Text style={styles.cellValue}>
-              {personalInfo.spouseOccupation}
-            </Text>
-            <Text style={styles.cellLabel}>13. Family history</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{personalInfo.spouseOccupation || "N/A"}</Text>
+            <Text style={styles.cellLabel}>13. Family history (medical)</Text>
+            <Text style={styles.cellValue}>{medicalInfo.familyMedicalHistory || "No"}</Text>
           </View>
 
           {/* Row 10 */}
           <View style={styles.denseRow}>
             <Text style={styles.cellLabel}>6. Monthly income</Text>
-            <Text style={styles.cellValue}>{personalInfo.monthlyIncome}</Text>
-            <Text style={styles.cellLabel}>
-              14. History of any abnormality in a child of the donor
-            </Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{personalInfo.monthlyIncome || "N/A"}</Text>
+            <Text style={styles.cellLabel}>14. Abnormality in a child</Text>
+            <Text style={styles.cellValue}>{medicalInfo.geneticDisorders || "No"}</Text>
           </View>
 
           {/* Row 11 */}
           <View style={styles.denseRow}>
             <Text style={styles.cellLabel}>7. Religion</Text>
             <Text style={styles.cellValue}>{personalInfo.religion}</Text>
-            <Text style={styles.cellLabel}>
-              15. History of blood transfusion
-            </Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellLabel}>15. History of blood transfusion</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.bloodTransfusionHistory || "No"}</Text>
           </View>
 
           {/* Row 12 */}
           <View style={styles.denseRow}>
             <Text style={styles.cellLabel}>8. Nationality</Text>
-            <Text style={styles.cellValue}>{personalInfo.nationality}</Text>
+            <Text style={styles.cellValue}>Indian</Text>
             <Text style={styles.cellLabel}>16. History of substance abuse</Text>
-            <Text style={styles.cellValue}>No</Text>
+            <Text style={styles.cellValue}>{eggDonorInfo.substanceAbuseHistory || "No"}</Text>
           </View>
         </View>
 
@@ -724,21 +730,21 @@ const PrintableEggRegistration = ({
         <View style={styles.denseTable}>
           <View style={styles.denseRow}>
             <Text style={styles.featureCell}>17. Height</Text>
-            <Text style={styles.featureCell}></Text>
+            <Text style={styles.featureCell}>{personalInfo.height}</Text>
             <Text style={styles.featureCell}>20. Colour of hair</Text>
-            <Text style={styles.featureCell}></Text>
+            <Text style={styles.featureCell}>{personalInfo.hairColor}</Text>
           </View>
 
           <View style={styles.denseRow}>
             <Text style={styles.featureCell}>18. Weight</Text>
-            <Text style={styles.featureCell}></Text>
+            <Text style={styles.featureCell}>{personalInfo.weight}</Text>
             <Text style={styles.featureCell}>21. Colour of eyes</Text>
-            <Text style={styles.featureCell}></Text>
+            <Text style={styles.featureCell}>{personalInfo.eyeColor}</Text>
           </View>
 
           <View style={styles.denseRow}>
             <Text style={styles.featureCell}>19. Colour of skin</Text>
-            <Text style={styles.featureCell}></Text>
+            <Text style={styles.featureCell}>{personalInfo.complexion}</Text>
             <Text style={styles.featureCell}></Text>
             <Text style={styles.featureCell}></Text>
           </View>
@@ -750,23 +756,86 @@ const PrintableEggRegistration = ({
         </Text>
 
         <View style={styles.denseTable}>
-          {/* Continue exactly like the image for rows 22-32 */}
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>22. Blood group and Rh status</Text>
+            <Text style={styles.cellValue}>{personalInfo.bloodGroup}</Text>
+            <Text style={styles.cellLabel}>25. Blood urea / Serum creatinine</Text>
+            <Text style={styles.cellValue}>{investigations.bloodUreaSerumCreatinine}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>23. Complete blood picture - Hb</Text>
+            <Text style={styles.cellValue}>{investigations.hb}</Text>
+            <Text style={styles.cellLabel}>26. SGPT</Text>
+            <Text style={styles.cellValue}>{investigations.sgpt}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>b. Total RBC count</Text>
+            <Text style={styles.cellValue}>{investigations.totalRbc}</Text>
+            <Text style={styles.cellLabel}>27. Routine urine examination</Text>
+            <Text style={styles.cellValue}>{investigations.routineUrine}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>c. Total WBC count</Text>
+            <Text style={styles.cellValue}>{investigations.totalWbc}</Text>
+            <Text style={styles.cellLabel}>28. HBsAg status</Text>
+            <Text style={styles.cellValue}>{investigations.hbsagStatus}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>d. Differential WBC count</Text>
+            <Text style={styles.cellValue}>{investigations.differentialWbc}</Text>
+            <Text style={styles.cellLabel}>29. Hepatitis C status</Text>
+            <Text style={styles.cellValue}>{investigations.hepatitisCStatus}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>e. Platelet count</Text>
+            <Text style={styles.cellValue}>{investigations.plateletCount}</Text>
+            <Text style={styles.cellLabel}>30. HIV status (with dates)</Text>
+            <Text style={styles.cellValue}>{investigations.hivStatus}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>f. Peripheral smear</Text>
+            <Text style={styles.cellValue}>{investigations.peripheralSmear}</Text>
+            <Text style={styles.cellLabel}>31. Hemoglobin A2 status</Text>
+            <Text style={styles.cellValue}>{investigations.hemoglobinA2}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>24. Random blood sugar</Text>
+            <Text style={styles.cellValue}>{investigations.randomBloodSugar}</Text>
+            <Text style={styles.cellLabel}>32. Any other specific test</Text>
+            <Text style={styles.cellValue}>{investigations.otherSpecificTest}</Text>
+          </View>
         </View>
 
         {/* DETAILED PHYSICAL EXAMINATION */}
         <Text style={styles.sectionTitle}>DETAILED PHYSICAL EXAMINATION:</Text>
 
-        <View style={styles.denseTable}>{/* Continue rows 33-38 */}</View>
+        <View style={styles.denseTable}>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>33. Pulse</Text>
+            <Text style={styles.cellValue}>{physicalExamination.pulse}</Text>
+            <Text style={styles.cellLabel}>36. Respiratory system</Text>
+            <Text style={styles.cellValue}>{physicalExamination.respiratorySystem}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>34. Blood pressure</Text>
+            <Text style={styles.cellValue}>{physicalExamination.bloodPressure}</Text>
+            <Text style={styles.cellLabel}>37. Cardiovascular system</Text>
+            <Text style={styles.cellValue}>{physicalExamination.cardiovascularSystem}</Text>
+          </View>
+          <View style={styles.denseRow}>
+            <Text style={styles.cellLabel}>35. Temperature</Text>
+            <Text style={styles.cellValue}>{physicalExamination.temperature}</Text>
+            <Text style={styles.cellLabel}>38. Per abdominal examination</Text>
+            <Text style={styles.cellValue}>{physicalExamination.perAbdominal}</Text>
+          </View>
+        </View>
 
         <Text style={styles.footer}>Footnotes:</Text>
-
         <Text style={styles.note}>
           (1) To be carried out within 15 days prior to oocyte donation
         </Text>
-
         <Text style={styles.note}>
-          (2) Any additional test carried out on the basis of the history and
-          examination of donor
+          (2) Any additional test carried out on the basis of the history and examination of donor
         </Text>
       </Page>
 
@@ -917,7 +986,21 @@ const PrintableEggRegistration = ({
         </View>
       </Page>
 
-      <EggAffidavit donor={consent} documents={documents} />
+      <EggAffidavit 
+        consent={consent}
+        donor={{
+          name: personalInfo.fullName,
+          husbandName: personalInfo.spouseName,
+          houseNo: "", 
+          address: contactInfo.currentAddress,
+          pincode: contactInfo.pincode,
+          aadhaar: personalInfo.aadhaarNumber,
+          dob: personalInfo.dateOfBirth,
+          mobile: contactInfo.mobileNumber,
+          verificationDate: `${day} ${month} ${year}`,
+        }} 
+        documents={documents} 
+      />
 
       {attachments?.includes("stamp") && (
         <Page size="A4" style={styles.page}>

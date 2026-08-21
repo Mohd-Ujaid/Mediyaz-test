@@ -12,20 +12,24 @@ import type {
   Consent,
   FileRef,
   ReferralInfo,
+  Investigations,
+  PhysicalExamination,
 } from "@/features/donor-registration/validations/donor-registration";
 
 // Default empty states
 const defaultPersonalInfo: PersonalInfo = {
   fullName: "", fatherName: "", motherName: "", gender: "Male",
   dateOfBirth: "", maritalStatus: "Single", bloodGroup: "O+",
-  nationality: "Indian", education: "", occupation: "",
+  education: "", occupation: "",
   height: "", weight: "", eyeColor: "", hairColor: "", complexion: "",
-  aadhaarNumber: "", panNumber: "",
+  aadhaarNumber: "", panNumber: "", spouseName: "",
+  religion: "", monthlyIncome: "", spouseEducation: "", spouseOccupation: "",
+  hobby: "",
 };
 
 const defaultContactInfo: ContactInfo = {
   mobileNumber: "", alternateMobile: "", emailAddress: "",
-  currentAddress: "", permanentAddress: "", state: "", district: "",
+  currentAddress: "", permanentAddress: "", country: "India", state: "", district: "",
   city: "", pincode: "",
 };
 
@@ -46,6 +50,22 @@ const defaultEggDonorInfo: EggDonorInfo = {
   menstrualCycleDetails: "", pregnancyHistory: "",
   previousEggDonation: "No", ivfHistory: "", ovarianReserve: "",
   hormonalTestDetails: "",
+  numberOfDeliveries: "", numberOfAbortions: "", obstetricHistory: "",
+  otherPointsOfNote: "", contraceptiveHistory: "", bloodTransfusionHistory: "",
+  substanceAbuseHistory: "",
+};
+
+const defaultInvestigations: Investigations = {
+  hb: "", totalRbc: "", totalWbc: "", differentialWbc: "",
+  plateletCount: "", peripheralSmear: "", randomBloodSugar: "",
+  bloodUreaSerumCreatinine: "", sgpt: "", routineUrine: "",
+  hbsagStatus: "", hepatitisCStatus: "", hivStatus: "",
+  hemoglobinA2: "", otherSpecificTest: "", vdrl: "",
+};
+
+const defaultPhysicalExamination: PhysicalExamination = {
+  pulse: "", bloodPressure: "", temperature: "",
+  respiratorySystem: "", cardiovascularSystem: "", perAbdominal: "",
 };
 
 const defaultLabReports: LabReports = {
@@ -109,6 +129,8 @@ export interface DonorFormState {
   bankDetails: BankDetails;
   consent: Consent;
   referral: ReferralInfo;
+  investigations: Investigations;
+  physicalExamination: PhysicalExamination;
 
   // Completed steps tracking
   completedSteps: Set<number>;
@@ -129,6 +151,8 @@ export interface DonorFormState {
   updateBankDetails: (data: Partial<BankDetails>) => void;
   updateConsent: (data: Partial<Consent>) => void;
   updateReferral: (data: Partial<ReferralInfo>) => void;
+  updateInvestigations: (data: Partial<Investigations>) => void;
+  updatePhysicalExamination: (data: Partial<PhysicalExamination>) => void;
   markStepCompleted: (step: number) => void;
   setIsSubmitting: (v: boolean) => void;
   setIsSaving: (v: boolean) => void;
@@ -159,6 +183,8 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
   bankDetails: { ...defaultBankDetails },
   consent: { ...defaultConsent },
   referral: { ...defaultReferralInfo },
+  investigations: { ...defaultInvestigations },
+  physicalExamination: { ...defaultPhysicalExamination },
   completedSteps: new Set<number>(),
 
   setDonorType: (type) => set({ donorType: type }),
@@ -191,6 +217,10 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
     set((s) => ({ consent: { ...s.consent, ...data } })),
   updateReferral: (data) =>
     set((s) => ({ referral: { ...s.referral, ...data } })),
+  updateInvestigations: (data) =>
+    set((s) => ({ investigations: { ...s.investigations, ...data } })),
+  updatePhysicalExamination: (data) =>
+    set((s) => ({ physicalExamination: { ...s.physicalExamination, ...data } })),
 
   markStepCompleted: (step) =>
     set((s) => {
@@ -232,6 +262,8 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
       bankDetails: { ...defaultBankDetails, ...data.bankDetails },
       consent: { ...defaultConsent, ...data.consent },
       referral: { ...defaultReferralInfo, ...data.referral },
+      investigations: { ...defaultInvestigations, ...data.investigations },
+      physicalExamination: { ...defaultPhysicalExamination, ...data.physicalExamination },
     });
   },
 
@@ -254,6 +286,8 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
       bankDetails: { ...defaultBankDetails },
       consent: { ...defaultConsent },
       referral: { ...defaultReferralInfo },
+      investigations: { ...defaultInvestigations },
+      physicalExamination: { ...defaultPhysicalExamination },
       completedSteps: new Set<number>(),
     }),
 
@@ -303,6 +337,8 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
       bankDetails: s.bankDetails,
       consent: s.consent,
       referral: s.referral,
+      investigations: s.investigations,
+      physicalExamination: s.physicalExamination,
     };
   },
 }));

@@ -4,6 +4,7 @@ import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import {
   createDraftRegistration,
+  createAdminRegistration,
   getRegistrationById,
   updateRegistrationStep,
   submitRegistration,
@@ -111,6 +112,27 @@ export async function patchAdminRegistrationFieldsAction(id: string, updateObj: 
     const session = await getSession();
     const result = await patchAdminRegistrationFields(id, updateObj, session);
     return { success: true, registration: result };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createAdminRegistrationAction(body: {
+  donorType: string;
+  fullName: string;
+  aadhaarNumber: string;
+  mobileNumber: string;
+  dateOfBirth?: string;
+  gender?: string;
+  bloodGroup?: string;
+  registrationSource?: "walk_in" | "admin_created";
+  createdByEmployee?: string;
+  adminNotes?: string;
+}) {
+  try {
+    const session = await getSession();
+    const result = await createAdminRegistration(body, session);
+    return { success: true, ...result };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

@@ -23,13 +23,49 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-const STATES = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", 
-  "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", 
-  "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", 
-  "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", 
-  "Uttar Pradesh", "Uttarakhand", "West Bengal", "Delhi"
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", 
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", 
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", 
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Delhi", "Jammu and Kashmir", "Chandigarh", "Puducherry"
 ];
+
+const STATE_CITIES: Record<string, string[]> = {
+  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati", "Kurnool", "Rajahmundry", "Other"],
+  "Arunachal Pradesh": ["Itanagar", "Tawang", "Ziro", "Pasighat", "Other"],
+  "Assam": ["Guwahati", "Dibrugarh", "Silchar", "Jorhat", "Tezpur", "Nagaon", "Other"],
+  "Bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Purnia", "Darbhanga", "Bihar Sharif", "Other"],
+  "Chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Rajnandgaon", "Jagdalpur", "Other"],
+  "Goa": ["Panaji", "Margao", "Vasco da Gama", "Mapusa", "Other"],
+  "Gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar", "Gandhinagar", "Junagadh", "Other"],
+  "Haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Yamunanagar", "Rohtak", "Hisar", "Karnal", "Other"],
+  "Himachal Pradesh": ["Shimla", "Dharamshala", "Solan", "Mandi", "Hamirpur", "Other"],
+  "Jharkhand": ["Ranchi", "Jamshedpur", "Dhanbad", "Bokaro Steel City", "Deoghar", "Hazaribagh", "Other"],
+  "Karnataka": ["Bengaluru", "Mysuru", "Hubballi-Dharwad", "Mangaluru", "Belagavi", "Davangere", "Ballari", "Kalaburagi", "Other"],
+  "Kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam", "Alappuzha", "Palakkad", "Other"],
+  "Madhya Pradesh": ["Indore", "Bhopal", "Jabalpur", "Gwalior", "Ujjain", "Sagar", "Dewas", "Ratlam", "Other"],
+  "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Thane", "Nashik", "Aurangabad", "Solapur", "Amravati", "Navi Mumbai", "Kolhapur", "Other"],
+  "Manipur": ["Imphal", "Churachandpur", "Thoubal", "Other"],
+  "Meghalaya": ["Shillong", "Tura", "Jowai", "Other"],
+  "Mizoram": ["Aizawl", "Lunglei", "Champhai", "Other"],
+  "Nagaland": ["Kohima", "Dimapur", "Mokokchung", "Other"],
+  "Odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Sambalpur", "Puri", "Balasore", "Other"],
+  "Punjab": ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali", "Pathankot", "Other"],
+  "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Bikaner", "Ajmer", "Bhilwara", "Alwar", "Other"],
+  "Sikkim": ["Gangtok", "Namchi", "Geyzing", "Other"],
+  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tirunelveli", "Tiruppur", "Vellore", "Erode", "Other"],
+  "Telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Ramagundam", "Other"],
+  "Tripura": ["Agartala", "Dharmanagar", "Udaipur", "Other"],
+  "Uttar Pradesh": ["Lucknow", "Kanpur", "Ghaziabad", "Agra", "Meerut", "Varanasi", "Prayagraj", "Noida", "Other"],
+  "Uttarakhand": ["Dehradun", "Haridwar", "Haldwani", "Roorkee", "Other"],
+  "West Bengal": ["Kolkata", "Howrah", "Darjeeling", "Siliguri", "Asansol", "Durgapur", "Other"],
+  "Delhi": ["New Delhi", "Dwarka", "Rohini", "Saket", "Vasant Kunj", "Karol Bagh", "Connaught Place", "Other"],
+  "Jammu and Kashmir": ["Srinagar", "Jammu", "Anantnag", "Other"],
+  "Chandigarh": ["Chandigarh", "Other"],
+  "Puducherry": ["Puducherry", "Karaikal", "Other"]
+};
 
 function calculateAge(dob: string): number | undefined {
   if (!dob) return undefined;
@@ -66,6 +102,11 @@ export default function DonorQueryForm() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [customCity, setCustomCity] = useState(() => {
+    const val = form.city || "";
+    const stateVal = form.state || "";
+    return stateVal !== "" && val !== "" && !(STATE_CITIES[stateVal] || []).includes(val);
+  });
 
   const validate = (): boolean => {
     const tempErrors: Record<string, string> = {};
@@ -456,16 +497,42 @@ export default function DonorQueryForm() {
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">City <span className="text-red-500">*</span></label>
                     <div className="relative">
-                      <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                      <Input
-                        placeholder="Your City"
-                        value={form.city}
-                        onChange={(e) => handleChange("city", e.target.value)}
-                        className={`pl-10 rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950 ${
-                          errors.city ? "border-red-500 focus-visible:ring-red-500" : ""
+                      <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <select
+                        value={customCity ? "Other" : (form.city || "")}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "Other") {
+                            setCustomCity(true);
+                            handleChange("city", "");
+                          } else {
+                            setCustomCity(false);
+                            handleChange("city", val);
+                          }
+                        }}
+                        className={`pl-10 w-full h-9 px-3 rounded-[10px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 ${
+                          errors.city ? "border-red-500 focus:ring-red-500" : ""
                         }`}
-                      />
+                      >
+                        <option value="">Select City</option>
+                        {(STATE_CITIES[form.state] || []).filter(c => c !== "Other").map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="Other">Other</option>
+                      </select>
                     </div>
+                    {customCity && (
+                      <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <Input
+                          placeholder="Enter Custom City Name"
+                          value={form.city}
+                          onChange={(e) => handleChange("city", e.target.value)}
+                          className={`pl-10 rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950 ${
+                            errors.city ? "border-red-500 focus-visible:ring-red-500" : ""
+                          }`}
+                        />
+                      </div>
+                    )}
                     {errors.city && (
                       <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.city}</p>
                     )}
@@ -476,10 +543,14 @@ export default function DonorQueryForm() {
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">State <span className="text-red-500">*</span></label>
                     <select
                       value={form.state}
-                      onChange={(e) => handleChange("state", e.target.value)}
+                      onChange={(e) => {
+                        handleChange("state", e.target.value);
+                        handleChange("city", "");
+                        setCustomCity(false);
+                      }}
                       className="w-full h-9 px-3 rounded-[10px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
                     >
-                      {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>

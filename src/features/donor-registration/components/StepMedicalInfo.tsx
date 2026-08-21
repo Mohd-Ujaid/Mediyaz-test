@@ -2,6 +2,7 @@
 "use client";
 
 import { useDonorFormStore } from "../store";
+import { useState } from "react";
 
 const RADIO_OPTIONS = {
   diabetes: ["Yes", "No", "Pre-Diabetic"],
@@ -11,39 +12,28 @@ const RADIO_OPTIONS = {
   drugUse: ["Never", "Former", "Current"],
 };
 
-function RadioGroup({ label, name, value, options, error, onChange }: {
-  label: string; name: string; value: string; options: string[];
-  error?: string;
-  onChange: (val: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{label} <span className="text-red-500">*</span></label>
-      <div className="flex flex-wrap gap-2">
-        {options.map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onChange(opt)}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              value === opt
-                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                : error
-                  ? "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-red-500 hover:border-red-600 ring-1 ring-red-500/10"
-                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-blue-300"
-            }`}
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
-      {error && <p className="text-[10px] text-red-500 mt-0.5">{error}</p>}
-    </div>
-  );
-}
-
 export function StepMedicalInfo({ errors }: { errors?: Record<string, string> }) {
   const { medicalInfo, updateMedicalInfo } = useDonorFormStore();
+  const [showTextarea, setShowTextarea] = useState<Record<string, boolean>>(() => {
+    return {
+      medicalHistory: !!medicalInfo.medicalHistory,
+      familyMedicalHistory: !!medicalInfo.familyMedicalHistory,
+      previousSurgeries: !!medicalInfo.previousSurgeries,
+      allergies: !!medicalInfo.allergies,
+      currentMedications: !!medicalInfo.currentMedications,
+      geneticDisorders: !!medicalInfo.geneticDisorders,
+      psychologicalHistory: !!medicalInfo.psychologicalHistory,
+      infectiousDiseases: !!medicalInfo.infectiousDiseases,
+      fertilityHistory: !!medicalInfo.fertilityHistory,
+    };
+  });
+
+  const handleToggle = (key: string, show: boolean) => {
+    setShowTextarea((prev) => ({ ...prev, [key]: show }));
+    if (!show) {
+      updateMedicalInfo({ [key]: "" });
+    }
+  };
 
   const getTextAreaClassName = (fieldKey: string, baseStyle = "w-full px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500") => {
     const hasError = errors?.[`medicalInfo.${fieldKey}`];
@@ -51,6 +41,14 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
       return `${baseStyle} border-red-500 focus:ring-red-500 focus:border-red-500 ring-1 ring-red-500/20`;
     }
     return `${baseStyle} border-slate-200 dark:border-slate-700`;
+  };
+
+  const getSelectClassName = (fieldKey: string, baseStyle = "w-full h-9 px-3 rounded-[10px] border bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500") => {
+    const hasError = errors?.[`medicalInfo.${fieldKey}`];
+    if (hasError) {
+      return `${baseStyle} border-red-500 focus:ring-red-500 focus:border-red-500 ring-1 ring-red-500/20`;
+    }
+    return `${baseStyle} border-slate-200 dark:border-slate-800`;
   };
 
   const renderError = (fieldKey: string) => {
@@ -67,7 +65,7 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
       </div>
 
       {/* Text Fields */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {[
           { key: "medicalHistory", label: "Medical History", placeholder: "Any chronic conditions, past illnesses..." },
           { key: "familyMedicalHistory", label: "Family Medical History", placeholder: "Hereditary conditions in family..." },
@@ -79,29 +77,77 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
           { key: "infectiousDiseases", label: "Infectious Diseases", placeholder: "HIV, Hepatitis, TB, STDs..." },
           { key: "fertilityHistory", label: "Fertility History", placeholder: "Previous fertility treatments, pregnancies..." },
         ].map(({ key, label, placeholder }) => (
-          <div key={key} className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{label}</label>
-            <textarea
-              placeholder={placeholder}
-              value={(medicalInfo as any)[key] || ""}
-              onChange={(e) => updateMedicalInfo({ [key]: e.target.value })}
-              rows={2}
-              className={getTextAreaClassName(key)}
-            />
-            {renderError(key)}
+          <div key={key} className="space-y-2 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{label}</label>
+              <select
+                value={showTextarea[key] ? "Yes" : "No"}
+                onChange={(e) => handleToggle(key, e.target.value === "Yes")}
+                className="w-24 h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+              >
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            {showTextarea[key] && (
+              <div className="pt-1.5 animate-fadeIn">
+                <textarea
+                  placeholder={placeholder}
+                  value={(medicalInfo as any)[key] || ""}
+                  onChange={(e) => updateMedicalInfo({ [key]: e.target.value })}
+                  rows={2}
+                  className={getTextAreaClassName(key)}
+                />
+                {renderError(key)}
+              </div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Radio Groups */}
+      {/* Select Dropdowns */}
       <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5">
         <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Lifestyle & Health Screening</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <RadioGroup label="Diabetes" name="diabetes" value={medicalInfo.diabetes} options={RADIO_OPTIONS.diabetes} error={errors?.["medicalInfo.diabetes"]} onChange={(v) => updateMedicalInfo({ diabetes: v as any })} />
-          <RadioGroup label="Hypertension" name="hypertension" value={medicalInfo.hypertension} options={RADIO_OPTIONS.hypertension} error={errors?.["medicalInfo.hypertension"]} onChange={(v) => updateMedicalInfo({ hypertension: v as any })} />
-          <RadioGroup label="Smoking Status" name="smokingStatus" value={medicalInfo.smokingStatus} options={RADIO_OPTIONS.smokingStatus} error={errors?.["medicalInfo.smokingStatus"]} onChange={(v) => updateMedicalInfo({ smokingStatus: v as any })} />
-          <RadioGroup label="Alcohol Consumption" name="alcoholConsumption" value={medicalInfo.alcoholConsumption} options={RADIO_OPTIONS.alcoholConsumption} error={errors?.["medicalInfo.alcoholConsumption"]} onChange={(v) => updateMedicalInfo({ alcoholConsumption: v as any })} />
-          <RadioGroup label="Drug Use" name="drugUse" value={medicalInfo.drugUse} options={RADIO_OPTIONS.drugUse} error={errors?.["medicalInfo.drugUse"]} onChange={(v) => updateMedicalInfo({ drugUse: v as any })} />
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Diabetes <span className="text-red-500">*</span></label>
+            <select value={medicalInfo.diabetes} onChange={(e) => updateMedicalInfo({ diabetes: e.target.value as any })} className={getSelectClassName("diabetes")}>
+              {RADIO_OPTIONS.diabetes.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            {errors?.["medicalInfo.diabetes"] && <p className="text-[10px] text-red-500 mt-0.5">{errors["medicalInfo.diabetes"]}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Hypertension <span className="text-red-500">*</span></label>
+            <select value={medicalInfo.hypertension} onChange={(e) => updateMedicalInfo({ hypertension: e.target.value as any })} className={getSelectClassName("hypertension")}>
+              {RADIO_OPTIONS.hypertension.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            {errors?.["medicalInfo.hypertension"] && <p className="text-[10px] text-red-500 mt-0.5">{errors["medicalInfo.hypertension"]}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Smoking Status <span className="text-red-500">*</span></label>
+            <select value={medicalInfo.smokingStatus} onChange={(e) => updateMedicalInfo({ smokingStatus: e.target.value as any })} className={getSelectClassName("smokingStatus")}>
+              {RADIO_OPTIONS.smokingStatus.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            {errors?.["medicalInfo.smokingStatus"] && <p className="text-[10px] text-red-500 mt-0.5">{errors["medicalInfo.smokingStatus"]}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Alcohol Consumption <span className="text-red-500">*</span></label>
+            <select value={medicalInfo.alcoholConsumption} onChange={(e) => updateMedicalInfo({ alcoholConsumption: e.target.value as any })} className={getSelectClassName("alcoholConsumption")}>
+              {RADIO_OPTIONS.alcoholConsumption.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            {errors?.["medicalInfo.alcoholConsumption"] && <p className="text-[10px] text-red-500 mt-0.5">{errors["medicalInfo.alcoholConsumption"]}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Drug Use <span className="text-red-500">*</span></label>
+            <select value={medicalInfo.drugUse} onChange={(e) => updateMedicalInfo({ drugUse: e.target.value as any })} className={getSelectClassName("drugUse")}>
+              {RADIO_OPTIONS.drugUse.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            {errors?.["medicalInfo.drugUse"] && <p className="text-[10px] text-red-500 mt-0.5">{errors["medicalInfo.drugUse"]}</p>}
+          </div>
         </div>
       </div>
     </div>

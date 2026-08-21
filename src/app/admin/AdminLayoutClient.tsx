@@ -7,7 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, Calendar, Briefcase, Heart, MessageSquare, 
   Activity, Settings, LogOut, FileText, Gift, Dna, ShieldCheck, 
-  Building2, HeartHandshake, ChevronUp, User2, ChevronsUpDown
+  Building2, HeartHandshake, ChevronUp, User2, ChevronsUpDown,
+  Clock
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 
@@ -57,6 +58,7 @@ const sidebarLinks = [
     items: [
       { href: "/donor-requests", label: "Donor Requests", icon: HeartHandshake, requiredPermission: "VIEW_DONOR_REQUESTS" },
       { href: "/inquiries", label: "Inquiries", icon: FileText, requiredPermission: "VIEW_INQUIRIES" },
+      { href: "/contact-messages", label: "Contact Messages", icon: MessageSquare, requiredPermission: "VIEW_INQUIRIES" },
       { href: "/donor-registrations", label: "Registrations", icon: Heart, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/donor-requirements", label: "Requirements", icon: Dna, requiredPermission: "VIEW_REQUIREMENTS" },
     ]
@@ -72,6 +74,7 @@ const sidebarLinks = [
       { href: "/reviews", label: "Reviews", icon: MessageSquare, requiredPermission: "VIEW_FEEDBACK" },
       { href: "/blog", label: "CMS Manager", icon: FileText, requiredPermission: "MANAGE_BLOG" },
       { href: "/employees", label: "Staff", icon: Activity, requiredPermission: "MANAGE_STAFF" },
+      { href: "/audit-logs", label: "Activity Logs", icon: Clock, requiredPermission: "VIEW_REPORTS" },
     ]
   }
 ];

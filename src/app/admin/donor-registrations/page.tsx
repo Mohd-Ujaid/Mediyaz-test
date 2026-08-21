@@ -38,7 +38,15 @@ import { CustomPagination } from "@/components/ui/custom-pagination";
 import {
   getAdminRegistrationsAction,
   updateAdminRegistrationStatusAction,
+  createAdminRegistrationAction,
 } from "@/features/donor-registration/actions/donor-registration.actions";
+
+// Source badge helper
+const SOURCE_BADGE: Record<string, { label: string; className: string }> = {
+  online_inquiry: { label: "🌐 Online", className: "bg-blue-50 text-blue-600 border border-blue-100" },
+  walk_in:        { label: "🏥 Walk-in", className: "bg-amber-50 text-amber-700 border border-amber-100" },
+  admin_created:  { label: "👤 Admin", className: "bg-violet-50 text-violet-700 border border-violet-100" },
+};
 
 const DOCUMENTS_CONFIG = [
   { key: "passportPhoto", label: "Photo", accept: ".png,.jpg,.jpeg,.webp", folder: "profile-images" },
@@ -68,10 +76,53 @@ export default function AdminDonorRegistrationsPage() {
   const [adminNotes, setAdminNotes] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Audit Logs History Chain State
+  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyTargetId, setHistoryTargetId] = useState("");
+  const [historyTargetName, setHistoryTargetName] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // Edit fields modal
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
   const [editTab, setEditTab] = useState<"details" | "documents" | "labReports">("details");
+
+  // Create walk-in registration modal
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    donorType: "sperm" as "sperm" | "egg",
+    fullName: "",
+    aadhaarNumber: "",
+    mobileNumber: "",
+    dateOfBirth: "",
+    gender: "",
+    bloodGroup: "",
+    registrationSource: "walk_in" as "walk_in" | "admin_created",
+    adminNotes: "",
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createdRegId, setCreatedRegId] = useState<string | null>(null);
+
+  const loadHistoryLogs = async (id: string, name: string) => {
+    setHistoryTargetId(id);
+    setHistoryTargetName(name);
+    setHistoryLoading(true);
+    setIsHistoryOpen(true);
+    try {
+      const res = await fetch(`/api/audit-logs?entityId=${id}&entityType=DonorRegistration`);
+      const data = await res.json();
+      if (data.success) {
+        setHistoryLogs(data.logs || []);
+      } else {
+        toast.error(data.error || "Failed to load history.");
+      }
+    } catch (err) {
+      toast.error("Error fetching registration history logs.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const exportToExcel = () => {
     if (registrations.length === 0) {
@@ -308,11 +359,30 @@ export default function AdminDonorRegistrationsPage() {
       return;
     }
 
-    // Open each document in a new tab for easy viewing/downloading
     urls.forEach((url) => {
       window.open(url, "_blank");
     });
     toast.success(`Opening ${urls.length} document links for download.`);
+  };
+
+  const handleCreateRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreatedRegId(null);
+    try {
+      const result = await createAdminRegistrationAction(createForm) as any;
+      if (result.success) {
+        setCreatedRegId(result.registrationId);
+        toast.success(`Registration created: ${result.registrationId}`);
+        loadRegistrations();
+      } else {
+        toast.error(result.error || "Failed to create registration.");
+      }
+    } catch {
+      toast.error("Network error creating registration.");
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
   return (
@@ -329,6 +399,12 @@ export default function AdminDonorRegistrationsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            onClick={() => { setCreateForm({ donorType: "sperm", fullName: "", aadhaarNumber: "", mobileNumber: "", dateOfBirth: "", gender: "", bloodGroup: "", registrationSource: "walk_in", adminNotes: "" }); setCreatedRegId(null); setIsCreateOpen(true); }}
+            className="rounded-xl text-xs gap-1 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold"
+          >
+            + New Walk-in Registration
+          </Button>
           <Button onClick={exportToExcel} variant="outline" className="rounded-xl text-xs gap-1 border-slate-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/40">
             <Download className="w-3.5 h-3.5" /> Export Excel
           </Button>
@@ -396,6 +472,7 @@ export default function AdminDonorRegistrationsPage() {
                   <th className="p-3.5">Registration ID</th>
                   <th className="p-3.5">Full Name</th>
                   <th className="p-3.5">Type</th>
+                  <th className="p-3.5">Source</th>
                   <th className="p-3.5">Blood</th>
                   <th className="p-3.5">Contact Details</th>
                   <th className="p-3.5">Submitted Date</th>
@@ -420,6 +497,16 @@ export default function AdminDonorRegistrationsPage() {
                       </span>
                     </td>
                     <td className="p-3.5">
+                      {(() => {
+                        const src = SOURCE_BADGE[reg.registrationSource] || SOURCE_BADGE["walk_in"];
+                        return (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${src.className}`}>
+                            {src.label}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="p-3.5">
                       <span className="font-bold text-red-500">{reg.personalInfo?.bloodGroup || "—"}</span>
                     </td>
                     <td className="p-3.5">
@@ -440,6 +527,16 @@ export default function AdminDonorRegistrationsPage() {
                       }`}>
                         {reg.status}
                       </span>
+                      {reg.updatedBy && (
+                        <button
+                          type="button"
+                          onClick={() => loadHistoryLogs(reg._id, reg.personalInfo?.fullName || reg.registrationId)}
+                          className="text-[9px] text-slate-500 hover:text-blue-600 block text-left font-semibold cursor-pointer mt-1"
+                          title="Click to view history chain"
+                        >
+                          Changed by: <span className="font-bold">{reg.updatedBy}</span>
+                        </button>
+                      )}
                     </td>
                     <td className="p-3.5 text-right flex justify-end gap-1.5">
                       <Button 
@@ -890,6 +987,59 @@ export default function AdminDonorRegistrationsPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {/* History Chain Dialog */}
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-md rounded-2xl bg-white dark:bg-slate-950 p-6 border dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Clock className="w-5 h-5 text-blue-600" />
+              Registration Edit History
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Audit log chain of status transitions and updates for &quot;{historyTargetName}&quot;.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-3 text-xs">
+            {historyLoading ? (
+              <div className="flex justify-center items-center py-10 gap-2 text-slate-400">
+                <Loader2 className="w-5 h-5 animate-spin" /> Fetching history chain...
+              </div>
+            ) : historyLogs.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 italic">
+                No edit or status logs recorded for this registration record.
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[350px] overflow-y-auto pl-1 border-l-2 border-slate-200 dark:border-slate-800">
+                {historyLogs.map((log: any, index: number) => (
+                  <div key={index} className="text-xs pl-4 relative">
+                    <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-blue-600" />
+                    <div className="font-bold text-slate-850 dark:text-slate-200">{log.action}</div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      {log.details}
+                    </p>
+                    <div className="text-[10px] text-slate-400 mt-1 flex justify-between">
+                      <span>By: <strong>{log.performedBy}</strong></span>
+                      <span>{new Date(log.createdAt).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t dark:border-slate-850">
+              <Button
+                onClick={() => setIsHistoryOpen(false)}
+                className="rounded-xl text-xs h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-350 cursor-pointer border dark:border-slate-800"
+              >
+                Close History
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Existing Edit dialog ends here */}
 
     </div>
   );

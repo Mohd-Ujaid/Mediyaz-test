@@ -12,7 +12,6 @@ export const personalInfoSchema = z.object({
   age: z.number().min(18, "Must be at least 18 years old").max(50, "Must be under 50").optional(),
   maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed"], { message: "Marital status is required" }),
   bloodGroup: z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"], { message: "Blood group is required" }),
-  nationality: z.string().min(2, "Nationality is required"),
   education: z.string().min(1, "Education is required"),
   occupation: z.string().min(1, "Occupation is required"),
   height: z.string().min(1, "Height is required"),
@@ -22,6 +21,12 @@ export const personalInfoSchema = z.object({
   complexion: z.string().optional(),
   aadhaarNumber: z.string().regex(/^\d{12}$/, "Aadhaar must be a 12-digit number"),
   panNumber: z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "Invalid PAN format").optional().or(z.literal("")),
+  spouseName: z.string().optional().or(z.literal("")),
+  religion: z.string().optional().or(z.literal("")),
+  monthlyIncome: z.string().optional().or(z.literal("")),
+  spouseEducation: z.string().optional().or(z.literal("")),
+  spouseOccupation: z.string().optional().or(z.literal("")),
+  hobby: z.string().optional().or(z.literal("")),
 });
 
 // ============================================================
@@ -33,10 +38,11 @@ export const contactInfoSchema = z.object({
   emailAddress: z.string().email("Invalid email address"),
   currentAddress: z.string().min(5, "Current address is required"),
   permanentAddress: z.string().min(5, "Permanent address is required"),
+  country: z.string().min(2, "Country is required").default("India"),
   state: z.string().min(2, "State is required"),
   district: z.string().min(2, "District is required"),
   city: z.string().min(2, "City is required"),
-  pincode: z.string().regex(/^\d{6}$/, "Pincode must be 6 digits"),
+  pincode: z.string().min(3, "Pincode is required"),
 });
 
 // ============================================================
@@ -64,7 +70,7 @@ export const medicalInfoSchema = z.object({
 // ============================================================
 export const spermDonorInfoSchema = z.object({
   semenAnalysis: z.string().optional(),
-  previousDonationHistory: z.enum(["Yes", "No"]),
+  previousDonationHistory: z.enum(["Yes", "No"]).optional().or(z.literal("")),
   numberOfDonations: z.string().optional(),
   lastDonationDate: z.string().optional(),
   abstinencePeriod: z.string().optional(),
@@ -73,10 +79,45 @@ export const spermDonorInfoSchema = z.object({
 export const eggDonorInfoSchema = z.object({
   menstrualCycleDetails: z.string().optional(),
   pregnancyHistory: z.string().optional(),
-  previousEggDonation: z.enum(["Yes", "No"]),
+  previousEggDonation: z.enum(["Yes", "No"]).optional().or(z.literal("")),
   ivfHistory: z.string().optional(),
   ovarianReserve: z.string().optional(),
   hormonalTestDetails: z.string().optional(),
+  numberOfDeliveries: z.string().optional().or(z.literal("")),
+  numberOfAbortions: z.string().optional().or(z.literal("")),
+  obstetricHistory: z.string().optional().or(z.literal("")),
+  otherPointsOfNote: z.string().optional().or(z.literal("")),
+  contraceptiveHistory: z.string().optional().or(z.literal("")),
+  bloodTransfusionHistory: z.string().optional().or(z.literal("")),
+  substanceAbuseHistory: z.string().optional().or(z.literal("")),
+});
+
+export const investigationsSchema = z.object({
+  hb: z.string().optional().or(z.literal("")),
+  totalRbc: z.string().optional().or(z.literal("")),
+  totalWbc: z.string().optional().or(z.literal("")),
+  differentialWbc: z.string().optional().or(z.literal("")),
+  plateletCount: z.string().optional().or(z.literal("")),
+  peripheralSmear: z.string().optional().or(z.literal("")),
+  randomBloodSugar: z.string().optional().or(z.literal("")),
+  bloodUreaSerumCreatinine: z.string().optional().or(z.literal("")),
+  sgpt: z.string().optional().or(z.literal("")),
+  routineUrine: z.string().optional().or(z.literal("")),
+  hbsagStatus: z.string().optional().or(z.literal("")),
+  hepatitisCStatus: z.string().optional().or(z.literal("")),
+  hivStatus: z.string().optional().or(z.literal("")),
+  hemoglobinA2: z.string().optional().or(z.literal("")),
+  otherSpecificTest: z.string().optional().or(z.literal("")),
+  vdrl: z.string().optional().or(z.literal("")),
+});
+
+export const physicalExaminationSchema = z.object({
+  pulse: z.string().optional().or(z.literal("")),
+  bloodPressure: z.string().optional().or(z.literal("")),
+  temperature: z.string().optional().or(z.literal("")),
+  respiratorySystem: z.string().optional().or(z.literal("")),
+  cardiovascularSystem: z.string().optional().or(z.literal("")),
+  perAbdominal: z.string().optional().or(z.literal("")),
 });
 
 // ============================================================
@@ -129,10 +170,10 @@ export const documentsSchema = z.object({
 // STEP 7 — EMERGENCY CONTACT
 // ============================================================
 export const emergencyContactSchema = z.object({
-  contactPersonName: z.string().min(2, "Contact person name is required"),
-  relationship: z.string().min(2, "Relationship is required"),
-  phoneNumber: z.string().min(10, "Phone number is required"),
-  address: z.string().min(5, "Address is required"),
+  contactPersonName: z.string().optional().or(z.literal("")),
+  relationship: z.string().optional().or(z.literal("")),
+  phoneNumber: z.string().optional().or(z.literal("")),
+  address: z.string().optional().or(z.literal("")),
 });
 
 // ============================================================
@@ -186,6 +227,8 @@ export const donorRegistrationSchema = z.object({
   bankDetails: bankDetailsSchema.optional(),
   consent: consentSchema,
   referral: referralSchema.optional(),
+  investigations: investigationsSchema.optional(),
+  physicalExamination: physicalExaminationSchema.optional(),
 });
 
 // ============================================================
@@ -202,6 +245,8 @@ export type EmergencyContact = z.infer<typeof emergencyContactSchema>;
 export type BankDetails = z.infer<typeof bankDetailsSchema>;
 export type Consent = z.infer<typeof consentSchema>;
 export type ReferralInfo = z.infer<typeof referralSchema>;
+export type Investigations = z.infer<typeof investigationsSchema>;
+export type PhysicalExamination = z.infer<typeof physicalExaminationSchema>;
 export type DonorRegistration = z.infer<typeof donorRegistrationSchema>;
 
 // File reference type
