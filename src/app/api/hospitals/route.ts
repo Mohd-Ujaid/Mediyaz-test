@@ -17,8 +17,13 @@ export async function GET(req: Request) {
     const role = (session.user as any).role;
     const permissions = (session.user as any).permissions || [];
     const isFullAdmin = ["ADMIN", "SUPER_ADMIN"].includes(role);
+    const canViewRegistrations =
+      isFullAdmin ||
+      permissions.includes("VIEW_REGISTRATIONS") ||
+      permissions.includes("VIEW_REG_CHECKS") ||
+      ["STAFF", "DOCTOR"].includes(role);
 
-    if (!isFullAdmin && !permissions.includes("VIEW_HOSPITALS")) {
+    if (!isFullAdmin && !permissions.includes("VIEW_HOSPITALS") && !canViewRegistrations) {
       return NextResponse.json({ success: false, error: "Forbidden. Access Denied." }, { status: 403 });
     }
 
@@ -30,7 +35,7 @@ export async function GET(req: Request) {
     const state = searchParams.get("state") || "";
     const status = searchParams.get("status") || "";
     const hospitalType = searchParams.get("type") || "";
-    const organ = searchParams.get("organ") || "";
+    // const organ = searchParams.get("organ") || "";
     
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "100");
@@ -44,16 +49,18 @@ export async function GET(req: Request) {
       query.status = { $ne: "ARCHIVED" };
     }
 
-    if (city) query.city = { $regex: city, $options: "i" };
-    if (state) query.state = { $regex: state, $options: "i" };
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    if (city) query.city = { $regex: escapeRegex(city), $options: "i" };
+    if (state) query.state = { $regex: escapeRegex(state), $options: "i" };
     if (hospitalType) query.hospitalType = hospitalType;
-    if (organ) query.organTypesSupported = organ;
+    // if (organ) query.organTypesSupported = organ;
 
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { code: { $regex: search, $options: "i" } },
-        { contactPerson: { $regex: search, $options: "i" } },
+        { name: { $regex: safeSearch, $options: "i" } },
+        { code: { $regex: safeSearch, $options: "i" } },
+        { contactPerson: { $regex: safeSearch, $options: "i" } },
       ];
     }
 
@@ -63,17 +70,21 @@ export async function GET(req: Request) {
       .skip((page - 1) * limit)
       .limit(limit);
 
-    // RBAC Sanitization: Omit pricing fields if the user is not ADMIN or SUPER_ADMIN
+    // RBAC Sanitization: Allow registration review staff to access clinic deal prices
+    const canSeeDealPrices = isFullAdmin || canViewRegistrations;
     const hospitals = rawHospitals.map(h => {
       const obj: any = h.toObject();
-      if (!isFullAdmin) {
+      if (!canSeeDealPrices) {
         delete obj.donorDealPrice;
+        delete obj.profiledonorDealPrice;
+        delete obj.currency;
+      }
+      if (!isFullAdmin) {
         delete obj.serviceCharge;
         delete obj.processingFee;
         delete obj.registrationFee;
         delete obj.commission;
         delete obj.additionalCharges;
-        delete obj.currency;
         delete obj.pricingHistory;
       }
       return obj;
@@ -113,11 +124,11 @@ export async function POST(req: Request) {
     const {
       name,
       shortName,
-      code,
+      // code,
       registrationNumber,
-      licenseNumber,
+      // licenseNumber,
       gstNumber,
-      panNumber,
+      // panNumber,
       contactPerson,
       email,
       mobileNumber,
@@ -131,21 +142,22 @@ export async function POST(req: Request) {
       pincode,
       hospitalType,
       specializations,
-      organTypesSupported,
-      icuAvailability,
-      transplantLicenseNumber,
+      // organTypesSupported,
+      // icuAvailability,
+      // transplantLicenseNumber,
       donorDealPrice = 0,
-      serviceCharge = 0,
-      processingFee = 0,
-      registrationFee = 0,
-      commission = 0,
-      additionalCharges = 0,
+      profiledonorDealPrice = 0,
+      // serviceCharge = 0,
+      // processingFee = 0,
+      // registrationFee = 0,
+      // commission = 0,
+      // additionalCharges = 0,
       currency = "INR",
       status = "ACTIVE"
     } = body;
 
     // Validate inputs
-    if (!name || !shortName || !code || !registrationNumber || !licenseNumber || !contactPerson || !email || !mobileNumber || !addressLine1 || !city || !state || !pincode || !hospitalType || !transplantLicenseNumber) {
+    if (!name || !shortName|| !registrationNumber || !contactPerson || !email || !mobileNumber || !addressLine1 || !city || !state || !pincode || !hospitalType) {
       return NextResponse.json(
         { success: false, error: "All required basic, contact, address, medical, and status configuration fields must be provided." },
         { status: 400 }
@@ -158,11 +170,7 @@ export async function POST(req: Request) {
     // Set pricing history log initial snapshot
     const initialPricingLog = {
       donorDealPrice,
-      serviceCharge,
-      processingFee,
-      registrationFee,
-      commission,
-      additionalCharges,
+      profiledonorDealPrice,
       currency,
       changedBy: session.user.name || session.user.email,
       changedAt: new Date()
@@ -173,11 +181,8 @@ export async function POST(req: Request) {
       address,
       contactInfo,
       shortName,
-      code,
       registrationNumber,
-      licenseNumber,
       gstNumber,
-      panNumber,
       contactPerson,
       email,
       mobileNumber,
@@ -191,15 +196,8 @@ export async function POST(req: Request) {
       pincode,
       hospitalType,
       specializations: specializations || [],
-      organTypesSupported: organTypesSupported || [],
-      icuAvailability: !!icuAvailability,
-      transplantLicenseNumber,
       donorDealPrice,
-      serviceCharge,
-      processingFee,
-      registrationFee,
-      commission,
-      additionalCharges,
+      profiledonorDealPrice,
       currency,
       status,
       pricingHistory: [initialPricingLog]

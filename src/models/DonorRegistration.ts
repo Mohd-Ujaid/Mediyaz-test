@@ -12,10 +12,11 @@ export interface IDonorFileRef {
 
 export interface IDonorRegistration extends Document {
   registrationId: string;
+  donorId?: string;
   donorType: "sperm" | "egg";
   registrationSource: "online_inquiry" | "walk_in" | "admin_created";
   createdByEmployee?: string; // employeeId of staff who created this registration
-  status: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "SUSPENDED";
+  status: "DRAFT" | "NEW" | "SUBMITTED" | "UNDER_REVIEW" | "DOCUMENTS_VERIFIED" | "AFFIDAVIT_UPLOADED" | "APPROVED" | "WAITING_FORM13" | "FILE_COMPLETED" | "REJECTED" | "SUSPENDED" | "COMPLETED" | "CANCELLED";
   currentStep: number;
 
   personalInfo: {
@@ -126,8 +127,10 @@ export interface IDonorRegistration extends Document {
   };
 
   labReports: {
-    viralMarkers?: IDonorFileRef[];
+    viralMarkers?: IDonorFileRef[] | IDonorFileRef;
+    viralMarkersReport?: IDonorFileRef;
     bloodReport?: IDonorFileRef;
+    insurance?: IDonorFileRef;
     otherReports?: IDonorFileRef[];
   };
 
@@ -136,8 +139,14 @@ export interface IDonorRegistration extends Document {
     aadhaarFront?: IDonorFileRef;
     aadhaarBack?: IDonorFileRef;
     signature?: IDonorFileRef;
+    insurance?: IDonorFileRef;
+    form13?: IDonorFileRef;
+    affidavit?: IDonorFileRef;
+    extraAttachment?: IDonorFileRef;
     otherDocument?: IDonorFileRef;
   };
+  form13?: IDonorFileRef;
+  affidavit?: IDonorFileRef;
 
   emergencyContact: {
     contactPersonName: string;
@@ -146,12 +155,12 @@ export interface IDonorRegistration extends Document {
     address: string;
   };
 
-  bankDetails: {
-    accountHolderName: string;
-    bankName: string;
-    branch: string;
-    ifscCode: string;
-    accountNumber: string;
+  bankDetails?: {
+    accountHolderName?: string;
+    bankName?: string;
+    branch?: string;
+    ifscCode?: string;
+    accountNumber?: string;
     upiId?: string;
   };
 
@@ -176,6 +185,50 @@ export interface IDonorRegistration extends Document {
     otherSourceDetails?: string;
   };
 
+  agentCode?: string;
+  agentId?: mongoose.Types.ObjectId;
+  agentPayout?: {
+    amount: number;
+    status: "PENDING" | "UNPAID" | "ELIGIBLE" | "APPROVED" | "PAID" | "CANCELLED";
+    paidAt?: Date;
+    paymentReference?: string;
+    notes?: string;
+  };
+
+  clinicDeal?: {
+    donorCategory: "normal" | "profile";
+    hospitalDealPrice: number;
+    currency: string;
+    notes?: string;
+    agreedAt?: Date;
+    agreedBy?: string;
+    paymentStatus?: "PENDING" | "PARTIALLY_RECEIVED" | "RECEIVED";
+    isPaymentReceived?: boolean;
+    receivedAmount?: number;
+    receivedAt?: Date | null;
+    paymentReference?: string;
+  };
+
+  donorDeal?: {
+    donorCategory: "normal" | "profile";
+    compensationAmount: number;
+    paymentMethod: "bank_transfer" | "upi" | "cheque" | "cash";
+    paymentTerms: string;
+    paymentStatus: "PENDING" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
+    advanceAmount?: number;
+    balanceAmount?: number;
+    paymentReference?: string;
+    notes?: string;
+    agreedAt?: Date;
+    agreedBy?: string;
+    paidAt?: Date | null;
+    paidBy?: string | null;
+  };
+
+  isDonorPaid?: boolean;
+  paidAt?: Date | null;
+  paidBy?: string | null;
+
   assignedHospital?: mongoose.Types.ObjectId;
   assignedBy?: string;
   assignedAt?: Date;
@@ -190,8 +243,15 @@ export interface IDonorRegistration extends Document {
   }[];
 
   adminNotes?: string;
+  pickupDate?: string;
+  recruitmentDate?: string;
+  supplyDate?: string;
+  fileNumber?: string;
   reviewedBy?: string;
   reviewedAt?: Date;
+  certificateIssued?: boolean;
+  certificateIssuedAt?: Date | null;
+  certificateIssuedBy?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -209,6 +269,7 @@ const fileRefSubSchema = {
 const DonorRegistrationSchema = new Schema<IDonorRegistration>(
   {
     registrationId: { type: String, required: true, unique: true },
+    donorId: { type: String, default: "" },
     donorType: { type: String, enum: ["sperm", "egg"], required: true },
     registrationSource: {
       type: String,
@@ -218,7 +279,21 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
     createdByEmployee: { type: String, default: null },
     status: {
       type: String,
-      enum: ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "SUSPENDED"],
+      enum: [
+        "DRAFT",
+        "NEW",
+        "SUBMITTED",
+        "UNDER_REVIEW",
+        "DOCUMENTS_VERIFIED",
+        "AFFIDAVIT_UPLOADED",
+        "APPROVED",
+        "WAITING_FORM13",
+        "FILE_COMPLETED",
+        "REJECTED",
+        "SUSPENDED",
+        "COMPLETED",
+        "CANCELLED",
+      ],
       default: "DRAFT",
     },
     currentStep: { type: Number, default: 1 },
@@ -329,8 +404,10 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
     },
 
     labReports: {
-      viralMarkers: [fileRefSubSchema],
+      viralMarkers: { type: Schema.Types.Mixed },
+      viralMarkersReport: fileRefSubSchema,
       bloodReport: fileRefSubSchema,
+      insurance: fileRefSubSchema,
       otherReports: [fileRefSubSchema],
     },
 
@@ -339,23 +416,20 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
       aadhaarFront: fileRefSubSchema,
       aadhaarBack: fileRefSubSchema,
       signature: fileRefSubSchema,
+      insurance: fileRefSubSchema,
+      form13: fileRefSubSchema,
+      affidavit: fileRefSubSchema,
+      extraAttachment: fileRefSubSchema,
       otherDocument: fileRefSubSchema,
     },
+    form13: fileRefSubSchema,
+    affidavit: fileRefSubSchema,
 
     emergencyContact: {
       contactPersonName: { type: String, default: "" },
       relationship: { type: String, default: "" },
       phoneNumber: { type: String, default: "" },
       address: { type: String, default: "" },
-    },
-
-    bankDetails: {
-      accountHolderName: { type: String, default: "" },
-      bankName: { type: String, default: "" },
-      branch: { type: String, default: "" },
-      ifscCode: { type: String, default: "" },
-      accountNumber: { type: String, default: "" },
-      upiId: { type: String, default: "" },
     },
 
     consent: {
@@ -379,6 +453,20 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
       otherSourceDetails: { type: String, default: "" },
     },
 
+    agentCode: { type: String, uppercase: true, trim: true, default: null, index: true },
+    agentId: { type: Schema.Types.ObjectId, ref: "Agent", default: null, index: true },
+    agentPayout: {
+      amount: { type: Number, default: 0 },
+      status: {
+        type: String,
+        enum: ["PENDING", "UNPAID", "ELIGIBLE", "APPROVED", "PAID", "CANCELLED"],
+        default: "UNPAID"
+      },
+      paidAt: { type: Date, default: null },
+      paymentReference: { type: String, default: "" },
+      notes: { type: String, default: "" }
+    },
+
     assignedHospital: { type: Schema.Types.ObjectId, ref: "Hospital", default: null },
     assignedBy: { type: String, default: null },
     assignedAt: { type: Date, default: null },
@@ -395,16 +483,73 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
     ],
 
     adminNotes: { type: String, default: "" },
+    pickupDate: { type: String, default: "" },
+    recruitmentDate: { type: String, default: "" },
+    supplyDate: { type: String, default: "" },
+    fileNumber: { type: String, default: "" },
     reviewedBy: { type: String },
     reviewedAt: { type: Date },
+
+    clinicDeal: {
+      donorCategory: { type: String, enum: ["normal", "profile"], default: "normal" },
+      hospitalDealPrice: { type: Number, default: 0 },
+      currency: { type: String, default: "INR" },
+      notes: { type: String, default: "" },
+      agreedAt: { type: Date },
+      agreedBy: { type: String },
+      paymentStatus: {
+        type: String,
+        enum: ["PENDING", "PARTIALLY_RECEIVED", "RECEIVED"],
+        default: "PENDING",
+      },
+      isPaymentReceived: { type: Boolean, default: false },
+      receivedAmount: { type: Number, default: 0 },
+      receivedAt: { type: Date, default: null },
+      paymentReference: { type: String, default: "" },
+    },
+
+    donorDeal: {
+      donorCategory: { type: String, enum: ["normal", "profile"], default: "normal" },
+      compensationAmount: { type: Number, default: 0 },
+      paymentMethod: {
+        type: String,
+        enum: ["bank_transfer", "upi", "cheque", "cash"],
+        default: "bank_transfer",
+      },
+      paymentTerms: { type: String, default: "Full on Retrieval" },
+      paymentStatus: {
+        type: String,
+        enum: ["PENDING", "PARTIALLY_PAID", "PAID", "CANCELLED"],
+        default: "PENDING",
+      },
+      advanceAmount: { type: Number, default: 0 },
+      balanceAmount: { type: Number, default: 0 },
+      paymentReference: { type: String, default: "" },
+      notes: { type: String, default: "" },
+      agreedAt: { type: Date },
+      agreedBy: { type: String },
+      paidAt: { type: Date, default: null },
+      paidBy: { type: String, default: null },
+    },
+    isDonorPaid: { type: Boolean, default: false },
+    paidAt: { type: Date, default: null },
+    paidBy: { type: String, default: null },
+    certificateIssued: { type: Boolean, default: false },
+    certificateIssuedAt: { type: Date, default: null },
+    certificateIssuedBy: { type: String, default: null },
   },
-  { timestamps: true }
+  { timestamps: true, strict: false }
 );
 
 // Indexes for high-frequency queries
 DonorRegistrationSchema.index({ "personalInfo.aadhaarNumber": 1 });
 DonorRegistrationSchema.index({ status: 1, donorType: 1 });
 DonorRegistrationSchema.index({ "contactInfo.emailAddress": 1 });
+DonorRegistrationSchema.index({ donorId: 1 });
+
+if (mongoose.models && (mongoose.models as any).DonorRegistration) {
+  delete (mongoose.models as any).DonorRegistration;
+}
 
 export const DonorRegistration =
   mongoose.models?.DonorRegistration ||

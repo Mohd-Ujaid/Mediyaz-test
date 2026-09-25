@@ -347,28 +347,47 @@ async function getFileBuffer(
   req: Request,
 ): Promise<Buffer | null> {
   try {
-    // Local uploads folder
+    // Local uploads folder - prevent path traversal
     if (fileUrl.startsWith("/uploads/")) {
-      const filePath = path.join(
-        process.cwd(),
-        "public",
-        fileUrl.replace(/^\/+/, ""),
-      );
+      const uploadsDir = path.resolve(process.cwd(), "public", "uploads");
+      const relativePart = fileUrl.replace(/^\/+/, "");
+      const resolvedPath = path.resolve(process.cwd(), "public", relativePart);
 
-      if (!fs.existsSync(filePath)) {
-        console.log("File not found:", filePath);
+      if (!resolvedPath.startsWith(uploadsDir)) {
+        console.error("Path traversal attempt blocked:", fileUrl);
         return null;
       }
 
-      return fs.readFileSync(filePath);
+      if (!fs.existsSync(resolvedPath)) {
+        console.log("File not found:", resolvedPath);
+        return null;
+      }
+
+      return fs.readFileSync(resolvedPath);
     }
 
     // Domain / localhost automatic
     const origin = new URL(req.url).origin;
-
     const fullUrl = fileUrl.startsWith("http")
       ? fileUrl
       : `${origin}${fileUrl}`;
+
+    // Validate URL to prevent SSRF
+    const parsed = new URL(fullUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+
+    const hostname = parsed.hostname.toLowerCase();
+    const isSameOrigin = parsed.origin.toLowerCase() === origin.toLowerCase();
+    const isImageKit = hostname === "ik.imagekit.io" || hostname.endsWith(".imagekit.io");
+
+    if (!isSameOrigin && !isImageKit) {
+      console.error("Untrusted host for file download blocked:", hostname);
+      return null;
+    }
+
+    if (hostname.startsWith("169.254.") || hostname === "169.254.169.254") {
+      return null;
+    }
 
     const response = await fetch(fullUrl);
 

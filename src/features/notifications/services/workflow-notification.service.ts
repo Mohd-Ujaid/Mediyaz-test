@@ -110,7 +110,7 @@ export async function triggerWorkflowNotifications(
         if (phone || additionalInfo.phone) {
           const p = phone || additionalInfo.phone;
           await sendTwilioWhatsApp(p, `Dear ${name}, thank you for submitting your donor pre-screening query to the Mediyaz registry. Program: ${additionalInfo.interest || "sperm"} donor.`);
-          await sendTwilioSMS(p, `Dear ${name}, your donor inquiry has been received at Mediyaz clinic.`);
+          await sendTwilioSMS(p, `Dear ${name}, your donor inquiry has been received at Mediyaz Art Bank.`);
         }
         // 2. Send Alert Notification to Clinic Admin
         await sendInquiryAdminNotificationEmail({
@@ -172,7 +172,7 @@ export async function triggerWorkflowNotifications(
       case "requirement_submitted":
         if (phone || additionalInfo.phone) {
           const p = phone || additionalInfo.phone;
-          await sendTwilioWhatsApp(p, `Dear ${name}, thank you for submitting your donor matching requirements dossier to Mediyaz ART Bank. Case ID: ${additionalInfo.requirementId || "N/A"}. Our coordinator will contact you shortly.`);
+          await sendTwilioWhatsApp(p, `Dear ${name}, thank you for submitting your donor matching requirements to Mediyaz ART Bank. Case ID: ${additionalInfo.requirementId || "N/A"}. Our coordinator will contact you shortly.`);
           await sendTwilioSMS(p, `Dear ${name}, your donor match requirement has been successfully submitted to Mediyaz ART Bank.`);
         }
         break;
@@ -181,7 +181,7 @@ export async function triggerWorkflowNotifications(
         if (email) {
           await sendEmail({
             to: email,
-            subject: "Referral Approved - Mediyaz Fertility Clinic",
+            subject: "Referral Approved - Mediyaz Art Bank",
             html: `<p style="font-family: sans-serif; font-size: 14px;">Hello ${name}, the referral reward of ₹${additionalInfo.amount} for referring ${additionalInfo.referredDonor} has been APPROVED!</p>`
           });
         }

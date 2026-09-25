@@ -123,7 +123,8 @@ export async function POST(req: Request) {
     // Register User account via Better Auth for proper password hashing and login capabilities
     let userRecord = await User.findOne({ email: email.toLowerCase() });
     if (!userRecord) {
-      const empPassword = password || "password123";
+      const { randomBytes } = await import("crypto");
+      const empPassword = password || `Emp#${randomBytes(6).toString("hex")}!`;
       
       const reqHeaders = await headers();
       const authResult = await auth.api.signUpEmail({
@@ -213,13 +214,24 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const { employeeId, ...updateFields } = body;
 
-    if (!employeeId) {
-      return NextResponse.json({ success: false, error: "Employee ID is required." }, { status: 400 });
+    const allowedEmployeeKeys = [
+      "name", "phone", "photo", "department", "designation",
+      "qualification", "experienceYears", "salary", "shift", "status"
+    ];
+    if (userRole === "SUPER_ADMIN") {
+      allowedEmployeeKeys.push("permissions");
+    }
+
+    const sanitizedUpdates: any = {};
+    for (const key of allowedEmployeeKeys) {
+      if (updateFields[key] !== undefined) {
+        sanitizedUpdates[key] = updateFields[key];
+      }
     }
 
     const updatedEmployee = await Employee.findOneAndUpdate(
       { employeeId },
-      { $set: updateFields },
+      { $set: sanitizedUpdates },
       { new: true }
     );
 
@@ -230,11 +242,11 @@ export async function PATCH(req: Request) {
     // Sync status, details, and permissions to associated User if linked
     if (updatedEmployee.user) {
       const userUpdate: any = {};
-      if (updateFields.status) {
-        userUpdate.status = updateFields.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
+      if (sanitizedUpdates.status) {
+        userUpdate.status = sanitizedUpdates.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
       }
-      if (updateFields.permissions) {
-        userUpdate.permissions = updateFields.permissions;
+      if (sanitizedUpdates.permissions && userRole === "SUPER_ADMIN") {
+        userUpdate.permissions = sanitizedUpdates.permissions;
       }
       if (Object.keys(userUpdate).length > 0) {
         await User.findByIdAndUpdate(updatedEmployee.user, userUpdate);

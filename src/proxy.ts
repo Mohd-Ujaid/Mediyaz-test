@@ -7,8 +7,8 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", path);
 
-  // Print pages should bypass auth/layout processing
-  const isPrintPage = /^\/admin\/manage-registrations\/[^/]+\/print\/?$/.test(
+  // Print pages should bypass auth/layout processing for embedded iframe printing
+  const isPrintPage = /^\/(admin\/)?manage-registrations\/[^/]+\/print\/?$/.test(
     path,
   );
 
@@ -34,56 +34,42 @@ export async function proxy(request: NextRequest) {
     session = null;
   }
 
-  // const path = request.nextUrl.pathname;
+  const isAuthPage = path === "/login" || path === "/admin";
+  const isPublicApi = path.startsWith("/api/auth");
 
-  const isAdminPath = path.startsWith("/admin");
-  const isAdminLogin = path === "/admin";
-  const isEmployeePath = path.startsWith("/employee");
-  const isEmployeeLogin = path === "/employee";
-  const isUserAuthPath = path === "/login" || path === "/register";
-  const isUserDashboard =
-    path === "/dashboard" || path.startsWith("/dashboard/");
-
-  // 1. Redirect authenticated users away from auth pages (login/register) to their dashboards
-  if (session && isUserAuthPath) {
-    const role = (session.user as any).role;
-    if (["ADMIN", "SUPER_ADMIN"].includes(role)) {
-      return NextResponse.redirect(new URL("/admin/dashboard", request.url));
-    }
-    if (["STAFF", "DOCTOR", "RECEPTIONIST"].includes(role)) {
-      return NextResponse.redirect(new URL("/employee/dashboard", request.url));
-    }
-    if (role === "DONOR") {
-      return NextResponse.redirect(new URL("/donor", request.url));
-    }
-    if (role === "RECIPIENT") {
-      return NextResponse.redirect(new URL("/recipient", request.url));
-    }
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (isPublicApi) {
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
-  // 2. Redirect unauthenticated users away from private user dashboards
-  if (!session && isUserDashboard) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  // 3. Unauthenticated Access Protection for Admin Panel
+  // 1. Unauthenticated Access Protection
   if (!session) {
-    if (isAdminPath && !isAdminLogin) {
-      return NextResponse.redirect(new URL("/admin", request.url));
+    if (path.startsWith("/api/")) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Please log in." },
+        { status: 401 }
+      );
     }
-    if (isEmployeePath && !isEmployeeLogin) {
-      return NextResponse.redirect(new URL("/employee", request.url));
+    if (!isAuthPage) {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
-  // 4. Authenticated Admin Authorization & Global Delete Restrictions
-  const role = (session.user as any).role;
+  // 2. Authenticated Admin Authorization & Global Delete Restrictions
+  const role = (session.user as any)?.role;
+  const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(role);
 
   // Global Permissions: Prevent non-admins from executing DELETE requests anywhere
   if (request.method === "DELETE") {
-    if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    if (!isAdmin) {
       return NextResponse.json(
         {
           success: false,
@@ -94,35 +80,26 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  if (isAdminPath) {
-    if (["STAFF", "DOCTOR", "RECEPTIONIST"].includes(role)) {
-      return NextResponse.redirect(new URL("/employee/dashboard", request.url));
-    }
-    if (!["ADMIN", "SUPER_ADMIN"].includes(role)) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-    if (isAdminLogin) {
-      return NextResponse.redirect(new URL("/admin/dashboard", request.url));
-    }
+  // 3. Non-admin access restriction:
+  // If an employee or customer logs into the Admin panel, they cannot access admin management
+  if (!isAdmin) {
+    return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
   }
 
-  if (isEmployeePath) {
-    if (["ADMIN", "SUPER_ADMIN"].includes(role)) {
-      return NextResponse.redirect(new URL("/admin/dashboard", request.url));
-    }
-    if (!["STAFF", "DOCTOR", "RECEPTIONIST"].includes(role)) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-    if (isEmployeeLogin) {
-      return NextResponse.redirect(new URL("/employee/dashboard", request.url));
-    }
+  // 4. Authenticated Admin on login page redirected to dashboard
+  if (isAuthPage || path === "/") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return NextResponse.next();
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|images|.*\\.).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|icon.png|images|.*\\.).*)",
   ],
 };

@@ -27,11 +27,13 @@ export async function GET(req: Request) {
     const query: any = {};
     if (entityId) query.entityId = entityId;
     if (entityType) query.entityType = entityType;
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { action: { $regex: search, $options: "i" } },
-        { performedBy: { $regex: search, $options: "i" } },
-        { details: { $regex: search, $options: "i" } }
+        { action: { $regex: safeSearch, $options: "i" } },
+        { performedBy: { $regex: safeSearch, $options: "i" } },
+        { details: { $regex: safeSearch, $options: "i" } }
       ];
     }
 
@@ -60,7 +62,7 @@ export async function GET(req: Request) {
   }
 }
 
-// POST — Create a new audit log entry (from client action triggers, e.g. downloads, prints)
+// POST — Create an audit log entry for allowed client actions (e.g. downloads, prints)
 export async function POST(req: Request) {
   try {
     const reqHeaders = await headers();
@@ -79,9 +81,27 @@ export async function POST(req: Request) {
       );
     }
 
+    // Whitelist allowable client-initiated audit actions to prevent forensic log forgery
+    const ALLOWED_CLIENT_ACTIONS = [
+      "PRINT_REGISTRATION",
+      "PRINT_AFFIDAVIT",
+      "DOWNLOAD_DOCUMENT",
+      "VIEW_DOCUMENT",
+      "EXPORT_REPORT",
+      "CLIENT_PRINT",
+    ];
+
+    const normalizedAction = String(action).toUpperCase();
+    if (!ALLOWED_CLIENT_ACTIONS.includes(normalizedAction)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid or unauthorized audit action." },
+        { status: 400 }
+      );
+    }
+
     await createAuditLog(
       req,
-      action,
+      normalizedAction,
       entityType,
       entityId,
       session.user.name || session.user.email,

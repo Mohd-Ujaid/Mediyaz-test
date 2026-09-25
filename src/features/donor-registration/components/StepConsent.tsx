@@ -26,7 +26,7 @@ export function StepConsent({ errors }: { errors?: Record<string, string> }) {
     {
       key: "allowStorage",
       label:
-        "I authorize Mediyaz Fertility Clinic to securely store my personal information, medical records, and identity documents in compliance with applicable data protection regulations.",
+        "I authorize Mediyaz Art Bank to securely store my personal information, medical records, and identity documents in compliance with applicable data protection regulations.",
     },
   ];
 
@@ -111,15 +111,14 @@ export function StepConsent({ errors }: { errors?: Record<string, string> }) {
         </div>
       </div> */}
 
-      {/* Legal Notice */}
-      <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-        <p className="text-[10px] text-blue-700 dark:text-blue-400 leading-relaxed">
+      <div className="p-4 rounded-xl bg-accent border border-border">
+        <p className="text-[10px] text-accent-foreground leading-relaxed">
           <strong>Legal Notice:</strong> By submitting this registration form,
           you acknowledge that all information provided is subject to
           verification. Any false or misleading information may result in
           disqualification from the donor program. Your personal data will be
           handled in accordance with our Privacy Policy and applicable
-          healthcare data protection laws. Mediyaz Fertility Clinic reserves the
+          healthcare data protection laws. Mediyaz Art Bank reserves the
           right to accept or reject any donor application at its sole discretion
           based on medical and genetic screening results.
         </p>

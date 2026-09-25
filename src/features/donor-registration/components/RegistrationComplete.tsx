@@ -106,13 +106,7 @@ export function RegistrationComplete({ id }: RegistrationCompleteProps) {
           </div>
         </div>
 
-        {/* Verification QR Code */}
-        {qrCodeUrl && (
-          <div className="flex flex-col items-center gap-2">
-            <img loading="lazy" src={qrCodeUrl} alt="QR Verification" className="w-36 h-36 object-contain border rounded-xl p-2 bg-white" />
-            <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Registry Verification Code</span>
-          </div>
-        )}
+
 
         {/* Security message */}
         <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 text-left">

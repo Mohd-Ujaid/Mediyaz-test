@@ -32,7 +32,8 @@ export async function GET(req: Request) {
     }
 
     let results: any[] = [];
-    const searchRegex = new RegExp(query, "i");
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    const safeRegex = escapeRegex(query);
 
     if (type === "patient") {
       // Find Recipient populated with User
@@ -42,9 +43,9 @@ export async function GET(req: Request) {
           select: "name email phone",
           match: {
             $or: [
-              { name: { $regex: query, $options: "i" } },
-              { phone: { $regex: query, $options: "i" } },
-              { email: { $regex: query, $options: "i" } },
+              { name: { $regex: safeRegex, $options: "i" } },
+              { phone: { $regex: safeRegex, $options: "i" } },
+              { email: { $regex: safeRegex, $options: "i" } },
             ],
           },
         });
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
       // Find Donor populated with User
       const donors = await Donor.find({
         $or: [
-          { donorId: { $regex: query, $options: "i" } },
+          { donorId: { $regex: safeRegex, $options: "i" } },
         ],
       })
         .populate({
@@ -91,8 +92,8 @@ export async function GET(req: Request) {
       const doctors = await Employee.find({
         designation: "Doctor",
         $or: [
-          { name: { $regex: query, $options: "i" } },
-          { phone: { $regex: query, $options: "i" } },
+          { name: { $regex: safeRegex, $options: "i" } },
+          { phone: { $regex: safeRegex, $options: "i" } },
         ],
       });
 
@@ -108,8 +109,8 @@ export async function GET(req: Request) {
       const staff = await Employee.find({
         designation: { $ne: "Doctor" },
         $or: [
-          { name: { $regex: query, $options: "i" } },
-          { employeeId: { $regex: query, $options: "i" } },
+          { name: { $regex: safeRegex, $options: "i" } },
+          { employeeId: { $regex: safeRegex, $options: "i" } },
         ],
       });
 

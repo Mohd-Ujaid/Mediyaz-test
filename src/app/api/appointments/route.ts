@@ -11,18 +11,29 @@ export async function GET(req: Request) {
   try {
     const reqHeaders = await headers();
     const session = await auth.api.getSession({ headers: reqHeaders });
-    if (!session || !["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR"].includes((session.user as any).role)) {
-      return NextResponse.json({ success: false, error: "Unauthorized. Staff privileges required." }, { status: 401 });
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized. Authentication required." }, { status: 401 });
     }
 
     await connectToDatabase();
+    const userRole = (session.user as any)?.role;
+    const isStaff = ["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(userRole);
+
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const skip = (page - 1) * limit;
 
-    const total = await Appointment.countDocuments();
-    const appointments = await Appointment.find()
+    const query: any = {};
+    if (!isStaff) {
+      query.$or = [
+        { user: session.user.id },
+        { email: session.user.email }
+      ];
+    }
+
+    const total = await Appointment.countDocuments(query);
+    const appointments = await Appointment.find(query)
       .populate("user", "name email phone role status")
       .populate("doctor", "name email avatar")
       .sort({ createdAt: -1 })

@@ -89,6 +89,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       message: "File uploaded to ImageKit Cloud!",
+      url: uploadResponse.url,
+      fileId: uploadResponse.fileId,
       media: mediaRecord,
     });
 

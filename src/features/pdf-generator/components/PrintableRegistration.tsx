@@ -1,8 +1,7 @@
 /* eslint-disable jsx-a11y/alt-text */
 import React from "react";
-import PrintableDonorRegistration from "./PrintableDonorRegistration";
-import PrintableEggRegistration from "./PrintableEggRegistration";
-import { Document, Page, Image } from "@react-pdf/renderer";
+import { PrintableSpermRegistration } from "../sperm";
+import { PrintableEggRegistration } from "../egg";
 
 interface PdfDocumentProps {
   registration: any;
@@ -12,8 +11,13 @@ interface PdfDocumentProps {
   sections?: string[];
   extraDocUrl?: string;
   overrides?: Record<string, any>;
+  affidavitType?: string;
 }
 
+/**
+ * Universal printable multi-section PDF delegator.
+ * Routes to either PrintableSpermRegistration or PrintableEggRegistration based on registration.donorType.
+ */
 function PrintableRegistrationDocument({
   registration,
   qrCodeUrl,
@@ -22,41 +26,26 @@ function PrintableRegistrationDocument({
   sections,
   extraDocUrl,
   overrides,
+  affidavitType,
 }: PdfDocumentProps) {
   const { donorType } = registration || {};
   const isSperm = donorType === "sperm" || !donorType;
 
-  const baseDoc = isSperm ? (
-    <PrintableDonorRegistration
-      registration={registration}
-      qrCodeUrl={qrCodeUrl}
-      withHeader={withHeader}
-      attachments={attachments}
-      sections={sections}
-      overrides={overrides}
-    />
-  ) : (
-    <PrintableEggRegistration
-      registration={registration}
-      qrCodeUrl={qrCodeUrl}
-      withHeader={withHeader}
-      attachments={attachments}
-      sections={sections}
-      overrides={overrides}
-    />
-  );
+  if (isSperm) {
+    return (
+      <PrintableSpermRegistration
+        registration={registration}
+        qrCodeUrl={qrCodeUrl}
+        withHeader={withHeader}
+        attachments={attachments}
+        sections={sections}
+        overrides={overrides}
+        extraDocUrl={extraDocUrl}
+      />
+    );
+  }
 
-  return isSperm ? (
-    <PrintableDonorRegistration
-      registration={registration}
-      qrCodeUrl={qrCodeUrl}
-      withHeader={withHeader}
-      attachments={attachments}
-      sections={sections}
-      overrides={overrides}
-      extraDocUrl={extraDocUrl}
-    />
-  ) : (
+  return (
     <PrintableEggRegistration
       registration={registration}
       qrCodeUrl={qrCodeUrl}
@@ -65,6 +54,7 @@ function PrintableRegistrationDocument({
       sections={sections}
       overrides={overrides}
       extraDocUrl={extraDocUrl}
+      affidavitType={affidavitType}
     />
   );
 }

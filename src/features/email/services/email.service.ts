@@ -80,7 +80,7 @@ export const sendEmail = async ({ to, subject, html }: SendEmailOptions) => {
   // Run the SMTP dispatch in the background
   runInBackground(async () => {
     try {
-      const fromName = "Mediyaz Fertility Clinic";
+      const fromName = "Mediyaz Art Bank";
       const fromEmail = process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || "no-reply@mediyaz.org";
       
       const transporter = getTransporter();
@@ -138,9 +138,9 @@ const buildHtmlWrapper = (title: string, contentHtml: string) => {
                 <tr>
                   <td style="background-color: #f8fafc; padding: 32px; text-align: center; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; line-height: 1.6;">
                     <p style="margin: 0 0 8px 0; font-weight: 650; color: #2f4f57;">Mediyaz Art Bank & Cryogenic Registry</p>
-                    <p style="margin: 0 0 16px 0;">Gali No 4, Okhla Phase III, New Delhi, Delhi 110020, India</p>
+                    <p style="margin: 0 0 16px 0;">336 Gali No. 4, Govindpuri, Kalkaji, South Delhi - 110019, India</p>
                     <p style="margin: 0 0 8px 0;">Need assistance? Contact our clinic support desk:</p>
-                    <p style="margin: 0 0 16px 0; font-weight: bold; color: #2f4f57;">Phone: +1 (800) 555-0199 | Email: contact@mediyaz.org</p>
+                    <p style="margin: 0 0 16px 0; font-weight: bold; color: #2f4f57;">Phone: +91 9667780807 | Email: info@mediyazartbank.com</p>
                     <div style="border-top: 1px solid #e5e7eb; padding-top: 16px; font-size: 10px; color: #9ca3af;">
                       This email contains confidential medical details. If you received this in error, please notify us immediately.
                     </div>
@@ -174,7 +174,7 @@ export const sendWelcomeEmail = async (to: string, name: string) => {
     </div>
     <p style="margin: 0;">
       Warm regards,<br />
-      <strong>The Mediyaz Clinical Registry Team</strong>
+      <strong>The Mediyaz Registry Team</strong>
     </p>
   `;
   return sendEmail({ to, subject: "Welcome to Mediyaz Art Bank", html: buildHtmlWrapper("Welcome to Mediyaz", content) });
@@ -235,14 +235,14 @@ export const sendRegistrationCompletedUserEmail = async (to: string, name: strin
       Dear ${name}, thank you for completing your donor onboarding profile!
     </p>
     <p style="margin: 0 0 16px 0;">
-      Your detailed medical declarations, bank details, and consent logs have been securely submitted under dossier: <strong>${registrationId}</strong>.
+      Your detailed medical declarations, bank details, and consent logs have been securely submitted under reference ID: <strong>${registrationId}</strong>.
     </p>
     <p style="margin: 0 0 24px 0;">
       Our clinical directors will review your file alongside diagnostics logs. We will contact you immediately upon final approval and verification check.
     </p>
     <p style="margin: 0;">
       Warm regards,<br />
-      <strong>Mediyaz Clinical Operations Desk</strong>
+      <strong>Mediyaz Operations Desk</strong>
     </p>
   `;
   return sendEmail({ to, subject: `Mediyaz Donor Profile Onboarding Completed - ${registrationId}`, html: buildHtmlWrapper("Profile Onboarding Completed", content) });
@@ -252,7 +252,7 @@ export const sendRegistrationCompletedUserEmail = async (to: string, name: strin
 export const sendRegistrationCompletedAdminEmail = async (reg: any) => {
   const adminEmail = process.env.SMTP_ADMIN_EMAIL || "admin@mediyaz.org";
   const content = `
-    <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0;">Donor Dossier Completed</h1>
+    <h1 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0;">Donor Registration Completed</h1>
     <p style="margin: 0 0 20px 0;">
       A candidate has completed the multi-step onboarding wizard forms:
     </p>
@@ -265,11 +265,11 @@ export const sendRegistrationCompletedAdminEmail = async (reg: any) => {
     </table>
     <div style="text-align: center; margin-bottom: 20px;">
       <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/admin/donor-registrations" style="background-color: #0f172a; color: #ffffff; font-weight: bold; font-size: 13px; text-decoration: none; padding: 10px 20px; border-radius: 6px; display: inline-block;">
-        Review Dossier File
+        Review Registration File
       </a>
     </div>
   `;
-  return sendEmail({ to: adminEmail, subject: `ALERT: Complete Donor Profile Submitted - ${reg.registrationId}`, html: buildHtmlWrapper("Registration Dossier Completed", content) });
+  return sendEmail({ to: adminEmail, subject: `ALERT: Complete Donor Profile Submitted - ${reg.registrationId}`, html: buildHtmlWrapper("Registration Completed", content) });
 };
 
 // Flow 4: Contact Form Submission Auto-Reply (User)
@@ -277,7 +277,7 @@ export const sendContactFormUserAutoReply = async (to: string, name: string) => 
   const content = `
     <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0;">Message Logged</h1>
     <p style="margin: 0 0 16px 0;">
-      Dear ${name}, thank you for contacting Mediyaz Fertility Clinic.
+      Dear ${name}, thank you for contacting Mediyaz Art Bank.
     </p>
     <p style="margin: 0 0 24px 0;">
       We have successfully received your inquiry details. Our patient desk coordinators will review your submission details and get in touch with you within 24 business hours.
@@ -333,7 +333,7 @@ export const sendAppointmentConfirmationUserEmail = async (to: string, name: str
       <strong>Mediyaz Care Coordination</strong>
     </p>
   `;
-  return sendEmail({ to, subject: "Mediyaz Clinic: Appointment Booking Confirmed", html: buildHtmlWrapper("Appointment Confirmed", content) });
+  return sendEmail({ to, subject: "Mediyaz Art Bank: Appointment Booking Confirmed", html: buildHtmlWrapper("Appointment Confirmed", content) });
 };
 
 // Flow 5: Appointment/Consultation Notification (Admin)
@@ -366,7 +366,7 @@ export const sendConsultationConfirmationUserEmail = async (to: string, name: st
   const content = `
     <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0;">Consultation Booking Received</h1>
     <p style="margin: 0 0 16px 0;">
-      Dear ${name}, thank you for requesting a fertility treatment consultation at Mediyaz.
+      Dear ${name}, thank you for requesting a donor coordination consultation at Mediyaz.
     </p>
     <p style="margin: 0 0 16px 0;">
       Your request has been logged under Reference ID: <strong>${referenceId}</strong>.
@@ -382,7 +382,7 @@ export const sendConsultationConfirmationUserEmail = async (to: string, name: st
     </p>
     <p style="margin: 0;">
       Warm regards,<br />
-      <strong>Mediyaz Clinical Care Desk</strong>
+      <strong>Mediyaz Operations Support Desk</strong>
     </p>
   `;
   return sendEmail({ to, subject: `Mediyaz Consultation Request Received - ${referenceId}`, html: buildHtmlWrapper("Consultation Logged", content) });
@@ -427,7 +427,7 @@ export const sendRegistrationApprovedUserEmail = async (to: string, name: string
     </p>
     <p style="margin: 0;">
       Warm regards,<br />
-      <strong>Mediyaz Clinical Operations Director</strong>
+      <strong>Mediyaz Operations Director</strong>
     </p>
   `;
   return sendEmail({ to, subject: `Mediyaz Donor Profile Approved - ${registrationId}`, html: buildHtmlWrapper("Donor Profile Approved", content) });
@@ -458,7 +458,7 @@ export const sendRegistrationApprovedCodeEmail = async (to: string, name: string
     </div>
     <p style="margin: 0;">
       Warm regards,<br />
-      <strong>Mediyaz Clinical Operations Coordinator</strong>
+      <strong>Mediyaz Operations Coordinator</strong>
     </p>
   `;
   return sendEmail({ to, subject: `Mediyaz Donor Onboarding Approved - ${registrationId}`, html: buildHtmlWrapper("Donor Onboarding Approved", content) });
@@ -472,7 +472,7 @@ export const sendRequirementConfirmationUserEmail = async (to: string, name: str
       Dear ${name}, thank you for submitting your donor matching requirements to the Mediyaz ART Bank registry.
     </p>
     <p style="margin: 0 0 16px 0;">
-      Your dossier ID is <strong>${reqId}</strong>. Our clinical matching coordinator will review your preferences and contact you within 24–48 business hours to discuss suitable options and guide you through the process.
+      Your requirement ID is <strong>${reqId}</strong>. Our clinical matching coordinator will review your preferences and contact you within 24–48 business hours to discuss suitable options and guide you through the process.
     </p>
     <p style="margin: 0 0 24px 0;">
       You can track the status of your matching request at any time by logging into your Patient Portal.
@@ -484,10 +484,10 @@ export const sendRequirementConfirmationUserEmail = async (to: string, name: str
     </div>
     <p style="margin: 0;">
       Warm regards,<br />
-      <strong>Mediyaz Clinical Matching Registry Team</strong>
+      <strong>Mediyaz Matching Registry Team</strong>
     </p>
   `;
-  return sendEmail({ to, subject: `Donor Matching Requirement Dossier Received - ${reqId}`, html: buildHtmlWrapper("Requirement Confirmed", content) });
+  return sendEmail({ to, subject: `Donor Matching Requirement Received - ${reqId}`, html: buildHtmlWrapper("Requirement Confirmed", content) });
 };
 
 // Flow 9: New Requirement Alert (Admin)
@@ -496,21 +496,21 @@ export const sendRequirementNotificationAdminEmail = async (req: any, patientNam
   const content = `
     <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0;">New Donor Requirement Submitted</h1>
     <p style="margin: 0 0 16px 0;">
-      A new donor matching requirement dossier has been registered in the database.
+      A new donor matching requirement has been registered in the database.
     </p>
     <table style="width: 100%; font-size: 13px; margin-bottom: 24px; border-collapse: collapse;">
       <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 8px 0; font-weight: bold;">Patient Name</td><td style="padding: 8px 0;">${patientName}</td></tr>
       <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 8px 0; font-weight: bold;">Patient Email</td><td style="padding: 8px 0;">${patientEmail}</td></tr>
-      <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 8px 0; font-weight: bold;">Dossier ID</td><td style="padding: 8px 0; font-family: monospace;">${req._id}</td></tr>
+      <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 8px 0; font-weight: bold;">Requirement ID</td><td style="padding: 8px 0; font-family: monospace;">${req._id}</td></tr>
       <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 8px 0; font-weight: bold;">Looking For</td><td style="padding: 8px 0; font-weight: bold; text-transform: uppercase;">${req.treatmentRequirement?.lookingFor} Donor</td></tr>
     </table>
     <div style="text-align: center; margin-bottom: 24px;">
       <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/admin/donor-requirements/${req._id}" style="background-color: #2F4F57; color: #ffffff; font-weight: bold; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px; display: inline-block;">
-        Access CRM Dossier
+        Access CRM Record
       </a>
     </div>
   `;
-  return sendEmail({ to, subject: `Alert: New Donor Match Requirement Dossier - ${req._id}`, html: buildHtmlWrapper("Admin CRM Alert", content) });
+  return sendEmail({ to, subject: `Alert: New Donor Match Requirement - ${req._id}`, html: buildHtmlWrapper("Admin CRM Alert", content) });
 };
 
 // Flow 10: Requirement Workflow Status Updated (User)
@@ -518,7 +518,7 @@ export const sendRequirementStatusUpdateEmail = async (to: string, name: string,
   const content = `
     <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 16px 0;">Casework Status Update</h1>
     <p style="margin: 0 0 16px 0;">
-      Dear ${name}, the matching status of your donor requirement dossier (ID: ${reqId}) has been updated.
+      Dear ${name}, the matching status of your donor requirement (ID: ${reqId}) has been updated.
     </p>
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0; text-align: center;">
       <span style="font-size: 12px; font-weight: bold; color: #64748b; text-transform: uppercase; display: block;">New Status:</span>
@@ -535,3 +535,55 @@ export const sendRequirementStatusUpdateEmail = async (to: string, name: string,
   `;
   return sendEmail({ to, subject: `Mediyaz Matching Update: Status set to ${status}`, html: buildHtmlWrapper("Casework Updated", content) });
 };
+
+// Flow 11: Donor Registration Verification OTP Email
+export const sendVerificationOtpEmail = async (to: string, otpCode: string, donorType: string = "Donor") => {
+  const formattedType = donorType.includes("Donor") ? donorType : `${donorType} Donor`;
+  const content = `
+    <div style="text-align: center; margin-bottom: 20px;">
+      <span style="display: inline-block; background-color: #f0fdfa; border: 1px solid #ccfbf1; padding: 5px 14px; border-radius: 9999px; color: #0d9488; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
+        ART Act 2021 Security Verification
+      </span>
+    </div>
+    <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 0 0 12px 0; text-align: center;">Your Verification Code</h1>
+    <p style="margin: 0 0 20px 0; text-align: center; color: #475569; font-size: 14px; line-height: 1.6;">
+      Use the One-Time Password (OTP) below to verify your email address and continue with your <strong>${formattedType} Registration</strong>.
+    </p>
+    <div style="text-align: center; margin: 28px 0;">
+      <div style="display: inline-block; background-color: #f8fafc; border: 2px dashed #285b63; border-radius: 12px; padding: 16px 36px;">
+        <span style="font-family: monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #285b63;">
+          ${otpCode}
+        </span>
+      </div>
+      <p style="margin: 12px 0 0 0; font-size: 12px; color: #64748b;">
+        This code is valid for <strong>10 minutes</strong>. Do not share this OTP with anyone.
+      </p>
+    </div>
+    <div style="background-color: #f1f5f9; border-radius: 8px; padding: 14px; margin: 24px 0 0 0; font-size: 12px; color: #475569; line-height: 1.5;">
+      <strong>Confidentiality Notice:</strong> Under ART Act 2021 regulations, donor identity verification is mandatory. Mediyaz ART Bank personnel will never ask for your OTP over phone calls or messages.
+    </div>
+  `;
+
+  const fromName = "Mediyaz Art Bank";
+  const fromEmail = process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || "no-reply@mediyaz.org";
+
+  try {
+    const transporter = getTransporter();
+    const info = await transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject: `Mediyaz Verification OTP: ${otpCode}`,
+      html: buildHtmlWrapper("Email Verification OTP", content),
+    });
+    console.log(`[OTP EMAIL SUCCESS] Dispatched to ${to}: ${info.messageId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[OTP EMAIL ERROR] Failed to send email to ${to}:`, error);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`\n[DEV OTP DISPATCH FALLBACK] Email: ${to} | OTP: ${otpCode}\n`);
+      return { success: true, simulated: true };
+    }
+    return { success: false, error: "Failed to send OTP to your email address. Please ensure the email is correct." };
+  }
+};
+

@@ -5,9 +5,24 @@ import { triggerWorkflowNotifications } from "@/features/notifications/services/
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // POST — Submit a new inquiry
 export async function POST(req: Request) {
   try {
+    const reqHeaders = await headers();
+    const clientIp = reqHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || reqHeaders.get("x-real-ip") || "127.0.0.1";
+    const { checkRateLimit } = await import("@/lib/rate-limiter");
+    const rateCheck = checkRateLimit(`inquiry_${clientIp}`, 5, 10 * 60 * 1000);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: "Too many inquiry submissions from this connection. Please wait 10 minutes before trying again." },
+        { status: 429 }
+      );
+    }
+
     await connectToDatabase();
     const body = await req.json();
 
@@ -136,12 +151,13 @@ export async function GET(req: Request) {
     if (status) query.status = status;
 
     if (search) {
+      const escapedSearch = escapeRegex(search);
       query.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { emailAddress: { $regex: search, $options: "i" } },
-        { mobileNumber: { $regex: search, $options: "i" } },
-        { city: { $regex: search, $options: "i" } },
-        { state: { $regex: search, $options: "i" } },
+        { fullName: { $regex: escapedSearch, $options: "i" } },
+        { emailAddress: { $regex: escapedSearch, $options: "i" } },
+        { mobileNumber: { $regex: escapedSearch, $options: "i" } },
+        { city: { $regex: escapedSearch, $options: "i" } },
+        { state: { $regex: escapedSearch, $options: "i" } },
       ];
     }
 

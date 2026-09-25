@@ -12,6 +12,7 @@ interface PrintViewerProps {
   sections?: string[];
   extraDocUrl?: string;
   overrides?: Record<string, any>;
+  affidavitType?: string;
 }
 
 export default function PrintViewer({
@@ -21,6 +22,7 @@ export default function PrintViewer({
   sections,
   extraDocUrl,
   overrides,
+  affidavitType,
 }: PrintViewerProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,45 @@ export default function PrintViewer({
   useEffect(() => {
     async function generatePdf() {
       try {
+        const uploadedAffidavitUrl =
+          registration?.documents?.affidavit?.url || registration?.affidavit?.url;
+        const isAffidavitPdf = Boolean(
+          uploadedAffidavitUrl &&
+            (uploadedAffidavitUrl.toLowerCase().includes(".pdf") ||
+              uploadedAffidavitUrl.toLowerCase().startsWith("data:application/pdf"))
+        );
+        const shouldIncludeAffidavit =
+          !sections ||
+          sections.length === 0 ||
+          sections.includes("affidavit") ||
+          sections.includes("egg_affidavit");
+        const shouldPrintUploadedAffidavit =
+          Boolean(uploadedAffidavitUrl) && affidavitType !== "template";
+
+        const isOnlyAffidavit =
+          sections &&
+          sections.length === 1 &&
+          (sections[0] === "affidavit" || sections[0] === "egg_affidavit");
+
+        // Fast path: if ONLY affidavit is selected, and it's an uploaded PDF, and user chose uploaded
+        if (
+          isOnlyAffidavit &&
+          shouldPrintUploadedAffidavit &&
+          isAffidavitPdf &&
+          affidavitType === "uploaded"
+        ) {
+          try {
+            const externalRes = await fetch(uploadedAffidavitUrl);
+            const externalBlob = await externalRes.blob();
+            const finalPdfBlob = new Blob([externalBlob], { type: "application/pdf" });
+            const url = URL.createObjectURL(finalPdfBlob);
+            setPdfUrl(url);
+            return;
+          } catch (directErr) {
+            console.warn("Direct fetch of affidavit PDF failed, falling back to generator:", directErr);
+          }
+        }
+
         const reactPdfBlob = await pdf(
           <PrintableRegistrationDocument
             registration={registration}
@@ -37,16 +78,41 @@ export default function PrintViewer({
             sections={sections}
             extraDocUrl={extraDocUrl}
             overrides={overrides}
+            affidavitType={affidavitType}
           />
         ).toBlob();
 
         let finalBlob = reactPdfBlob;
 
+        // If affidavit was selected, is an uploaded PDF, and not purely template:
+        // merge the uploaded affidavit PDF into the document stream
+        if (shouldIncludeAffidavit && shouldPrintUploadedAffidavit && isAffidavitPdf) {
+          try {
+            const { PDFDocument } = await import("pdf-lib");
+            const basePdfBuf = await finalBlob.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(basePdfBuf);
+
+            const affRes = await fetch(uploadedAffidavitUrl);
+            const affBuf = await affRes.arrayBuffer();
+            const affDoc = await PDFDocument.load(affBuf);
+
+            const copiedPages = await pdfDoc.copyPages(affDoc, affDoc.getPageIndices());
+            copiedPages.forEach((page) => pdfDoc.addPage(page));
+
+            const mergedPdfBytes = await pdfDoc.save();
+            finalBlob = new Blob([mergedPdfBytes as unknown as BlobPart], {
+              type: "application/pdf",
+            });
+          } catch (mergeAffErr) {
+            console.error("Failed to merge uploaded affidavit PDF:", mergeAffErr);
+          }
+        }
+
         // If the extra document is a PDF, we must merge it using pdf-lib
         if (extraDocUrl && extraDocUrl.toLowerCase().endsWith(".pdf")) {
           const { PDFDocument } = await import("pdf-lib");
           
-          const basePdfBuf = await reactPdfBlob.arrayBuffer();
+          const basePdfBuf = await finalBlob.arrayBuffer();
           const pdfDoc = await PDFDocument.load(basePdfBuf);
           
           try {
@@ -80,7 +146,7 @@ export default function PrintViewer({
         URL.revokeObjectURL(pdfUrl);
       }
     };
-  }, [registration, withHeader, attachments, sections, extraDocUrl, overrides]);
+  }, [registration, withHeader, attachments, sections, extraDocUrl, overrides, affidavitType]);
 
   if (error) {
     return (

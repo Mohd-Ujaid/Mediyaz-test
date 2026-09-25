@@ -8,7 +8,10 @@ import { headers } from "next/headers";
 async function checkAccess(registration: any, reqHeaders: Headers) {
   const session = await auth.api.getSession({ headers: reqHeaders });
   if (!session) {
-    return { hasAccess: true, session: null };
+    return {
+      hasAccess: false,
+      response: NextResponse.json({ success: false, error: "Unauthorized: Please log in." }, { status: 401 }),
+    };
   }
 
   const role = (session.user as any).role;
@@ -81,16 +84,23 @@ export async function PATCH(
     // Donor/user-allowed fields (safe for registration owner to update)
     const userAllowedKeys = [
       "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
-      "labReports", "documents", "emergencyContact", "bankDetails",
+      "labReports", "documents", "emergencyContact",
       "consent", "referral", "currentStep",
     ];
 
     // Admin/staff-only fields (must not be settable by the donor themselves)
-    const adminOnlyKeys = ["status", "adminNotes", "reviewedBy", "reviewedAt", "assignedHospital", "assignedBy", "assignedAt", "affiliatedBy", "updatedBy"];
+    const adminOnlyKeys = ["status", "adminNotes", "reviewedBy", "reviewedAt", "assignedHospital", "assignedBy", "assignedAt", "affiliatedBy", "updatedBy", "donorId"];
 
     const session = access.session;
     const userRole = (session?.user as any)?.role;
     const isAdminOrStaff = ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(userRole);
+
+    if (!isAdminOrStaff && registration.status !== "DRAFT") {
+      return NextResponse.json(
+        { success: false, error: "Submitted registrations are locked and cannot be modified." },
+        { status: 400 }
+      );
+    }
 
     const allowedKeys = isAdminOrStaff
       ? [...userAllowedKeys, ...adminOnlyKeys]
@@ -115,6 +125,17 @@ export async function PATCH(
       { $set: update },
       { new: true }
     );
+
+    if (update.donorId || update.status) {
+      const { EggDonorRegistration } = await import("@/models/EggDonorRegistration");
+      const eggSet: any = {};
+      if (update.donorId) eggSet.donorId = update.donorId;
+      if (update.status) eggSet.status = update.status;
+      await EggDonorRegistration.updateOne(
+        { registrationId: id },
+        { $set: eggSet }
+      ).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
@@ -151,10 +172,21 @@ export async function PUT(
     const access = await checkAccess(registration, await headers());
     if (!access.hasAccess) return access.response;
 
+    const session = access.session;
+    const userRole = (session?.user as any)?.role;
+    const isAdminOrStaff = ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(userRole);
+
+    if (!isAdminOrStaff && registration.status !== "DRAFT") {
+      return NextResponse.json(
+        { success: false, error: "Registration is already submitted and locked." },
+        { status: 400 }
+      );
+    }
+
     // Update all fields from body
     const allowedKeys = [
       "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
-      "labReports", "documents", "emergencyContact", "bankDetails", "consent", "referral"
+      "labReports", "documents", "emergencyContact", "consent", "referral"
     ];
 
     for (const key of allowedKeys) {
@@ -294,6 +326,17 @@ export async function DELETE(
 
     const access = await checkAccess(registration, await headers());
     if (!access.hasAccess) return access.response;
+
+    const session = access.session;
+    const userRole = (session?.user as any)?.role;
+    const isAdminOrStaff = ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(userRole);
+
+    if (!isAdminOrStaff && registration.status !== "DRAFT") {
+      return NextResponse.json(
+        { success: false, error: "Submitted registrations are permanent medical records and cannot be deleted." },
+        { status: 400 }
+      );
+    }
 
     const result = await DonorRegistration.deleteOne({ registrationId: id });
 

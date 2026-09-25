@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { DonorInquiry } from "@/models/DonorInquiry";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { triggerWorkflowNotifications } from "@/features/notifications/services/workflow-notification.service";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
@@ -181,8 +182,11 @@ export async function PUT(
 
     const registrationId = generateRegistrationId(inquiry.donationInterest);
 
-    // Create Draft Donor Registration
-    const registration = await DonorRegistration.create({
+    // Create Draft Donor Registration in dedicated collection
+    const isEgg = inquiry.donationInterest === "egg";
+    const TargetModel = isEgg ? EggDonorRegistration : SpermDonorRegistration;
+
+    const registration = await TargetModel.create({
       registrationId,
       donorType: inquiry.donationInterest,
       status: "DRAFT",
@@ -191,12 +195,11 @@ export async function PUT(
         fullName: inquiry.fullName,
         fatherName: "",
         motherName: "",
-        gender: inquiry.gender,
+        gender: isEgg ? "Female" : "Male",
         dateOfBirth: inquiry.dateOfBirth,
         age: inquiry.age,
-        maritalStatus: "Single",
+        maritalStatus: isEgg ? "Married" : "Single",
         bloodGroup: "O+",
-        nationality: "Indian",
         education: "",
         occupation: "",
         height: "",

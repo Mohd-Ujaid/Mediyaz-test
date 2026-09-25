@@ -8,7 +8,7 @@ import { Loader2, Search, Gift } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
-const MARITAL_STATUSES = ["Single", "Married", "Divorced", "Widowed"] as const;
+const MARITAL_STATUSES = ["Married", "Divorced", "Widowed"] as const;
 const GENDERS = ["Male", "Female", "Other"] as const;
 
 const COUNTRIES = ["India", "United States", "United Kingdom", "United Arab Emirates", "Canada", "Australia", "Singapore", "Other"];
@@ -65,6 +65,7 @@ const REFERRAL_SOURCES = [
   "WhatsApp",
   "Advertisement",
   "Walk-in",
+  "Agent / Referral Partner",
   "Existing Patient",
   "Existing Donor",
   "Friend / Family",
@@ -83,10 +84,11 @@ function calculateAge(dob: string): number | undefined {
   return age;
 }
 
-export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }) {
+export function StepPersonalInfo({ errors, donorType: propDonorType }: { errors?: Record<string, string>; donorType?: "sperm" | "egg"; }) {
   const searchParams = useSearchParams();
   const isPrefilled = searchParams.get("prefilled") === "true";
-  const { personalInfo, updatePersonalInfo, contactInfo, updateContactInfo, referral, updateReferral, assignedHospital, setAssignedHospital, donorType } = useDonorFormStore();
+  const store = useDonorFormStore();
+  const { personalInfo, updatePersonalInfo, contactInfo, updateContactInfo, referral, updateReferral, assignedHospital, setAssignedHospital, donorType } = store;
   const [searchQuery, setSearchQuery] = useState("");
   const [customCountry, setCustomCountry] = useState(() => {
     const val = contactInfo.country || "India";
@@ -125,7 +127,31 @@ export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }
     updatePersonalInfo({ dateOfBirth: value, age });
   };
 
+  const effectiveDonorType = propDonorType || donorType;
+  const filteredReferralSources = effectiveDonorType === "egg"
+    ? REFERRAL_SOURCES
+    : REFERRAL_SOURCES.filter((src) => src !== "Agent / Referral Partner");
+
+  useEffect(() => {
+    if (effectiveDonorType !== "egg" && referral?.sourceReferralType === "Agent / Referral Partner") {
+      updateReferral({ sourceReferralType: "Website" as any });
+      store.setAgentCode("");
+    }
+  }, [effectiveDonorType, referral?.sourceReferralType]);
+
+  useEffect(() => {
+    if (!MARITAL_STATUSES.includes(personalInfo.maritalStatus as any)) {
+      updatePersonalInfo({ maritalStatus: "Married" });
+    }
+  }, [personalInfo.maritalStatus]);
+
   const handleSourceChange = (source: string) => {
+    if (effectiveDonorType !== "egg" && source === "Agent / Referral Partner") {
+      source = "Website";
+    }
+    if (source !== "Agent / Referral Partner") {
+      store.setAgentCode("");
+    }
     // Reset specific referral fields first
     updateReferral({
       sourceReferralType: source as any,
@@ -270,18 +296,18 @@ export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }
         </div>
 
         {/* Father Name */}
-        <div className="space-y-1">
+        {/* <div className="space-y-1">
           <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Father&apos;s Name <span className="text-red-500">*</span></label>
           <Input placeholder="Enter father's name" value={personalInfo.fatherName} onChange={(e) => updatePersonalInfo({ fatherName: e.target.value })} className={getFieldClassName("fatherName")} />
           {renderError("fatherName")}
-        </div>
+        </div> */}
 
         {/* Mother Name */}
-        <div className="space-y-1">
+        {/* <div className="space-y-1">
           <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Mother&apos;s Name <span className="text-red-500">*</span></label>
           <Input placeholder="Enter mother's name" value={personalInfo.motherName} onChange={(e) => updatePersonalInfo({ motherName: e.target.value })} className={getFieldClassName("motherName")} />
           {renderError("motherName")}
-        </div>
+        </div> */}
 
         {/* Gender */}
         <div className="space-y-1">
@@ -351,14 +377,14 @@ export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }
         </div>
 
         {/* Husband Name, Education, Occupation (Only for Egg Donors when Married) */}
-        {donorType === "egg" && personalInfo.maritalStatus === "Married" && (
+        {donorType === "egg" && (personalInfo.maritalStatus === "Married" || personalInfo.maritalStatus === "Divorced" || personalInfo.maritalStatus === "Widowed") && (
           <>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Husband&apos;s Name <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
               <Input 
                 placeholder="Enter husband's name" 
-                value={personalInfo.spouseName || ""} 
-                onChange={(e) => updatePersonalInfo({ spouseName: e.target.value })} 
+                value={personalInfo.spouseName || personalInfo.husbandName || ""} 
+                onChange={(e) => updatePersonalInfo({ spouseName: e.target.value, husbandName: e.target.value })} 
                 className={getFieldClassName("spouseName")} 
               />
               {renderError("spouseName")}
@@ -379,8 +405,8 @@ export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Husband&apos;s Occupation <span className="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
               <Input 
                 placeholder="e.g. Job, Business" 
-                value={personalInfo.spouseOccupation || ""} 
-                onChange={(e) => updatePersonalInfo({ spouseOccupation: e.target.value })} 
+                value={personalInfo.spouseOccupation || personalInfo.husbandOccupation || ""} 
+                onChange={(e) => updatePersonalInfo({ spouseOccupation: e.target.value, husbandOccupation: e.target.value })} 
                 className={getFieldClassName("spouseOccupation")} 
               />
               {renderError("spouseOccupation")}
@@ -478,7 +504,7 @@ export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }
 
         {/* Complexion */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Complexion</label>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Skin Colour</label>
           <Input placeholder="Fair / Wheatish / Dark" value={personalInfo.complexion || ""} onChange={(e) => updatePersonalInfo({ complexion: e.target.value })} className={getFieldClassName("complexion")} />
           {renderError("complexion")}
         </div>
@@ -639,269 +665,29 @@ export function StepPersonalInfo({ errors }: { errors?: Record<string, string> }
         </div>
       </div>
 
-      {/* Referral Source System */}
-      <div className="border-t border-slate-100 dark:border-slate-800 pt-6 space-y-4">
-        <div>
-          <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-            <Gift className="w-4 h-4 text-teal-600" /> Referral Information
-          </h4>
-          <p className="text-[11px] text-slate-500">How did you hear about us? Eligible referral types are eligible for financial rewards.</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Dropdown Selector */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">How did you hear about us? <span className="text-red-500">*</span></label>
-            <select
-              value={currentSource}
-              onChange={(e) => handleSourceChange(e.target.value)}
-              className="w-full h-9 px-3 rounded-[10px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-            >
-              {REFERRAL_SOURCES.map((src) => (
-                <option key={src} value={src}>{src}</option>
-              ))}
-            </select>
+      {/* Optional Sourcing Coordinator / Agent Code */}
+      {effectiveDonorType === "egg" && (
+        <div className="border-t border-slate-100 dark:border-slate-800 pt-5 space-y-2">
+          <div>
+            <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+              Agent / Coordinator Code <span className="text-slate-400 font-normal">(Optional)</span>
+            </h4>
+            <p className="text-[11px] text-slate-500">If you are working with an authorized coordinator, enter their code.</p>
           </div>
-
-          {/* Dynamic Fields Conditional on Selection */}
-          
-          {/* 1. Existing Patient Search */}
-          {currentSource === "Existing Patient" && (
-            <div className="space-y-1 relative">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Search Patient (Name / Mobile / ID) <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <Input
-                  placeholder="Type to search patients..."
-                  value={searchQuery || referral.referrerName || ""}
-                  onChange={(e) => handleReferrerSearch(e.target.value, "patient")}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-                {searching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-slate-400" />}
-              </div>
-              
-              {/* Autocomplete Results */}
-              {searchResults.length > 0 && (
-                <div className="absolute z-10 w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[10px] mt-1 shadow-lg max-h-40 overflow-y-auto">
-                  {searchResults.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectReferrer(item, "patient")}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-900 border-b last:border-0 dark:border-slate-800"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {referral.referrerName && (
-                <div className="text-[10px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-md mt-1.5">
-                  Selected Patient: <strong>{referral.referrerName}</strong> (ID: {referral.patientOrDonorId || "N/A"})
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 2. Existing Donor Search */}
-          {currentSource === "Existing Donor" && (
-            <div className="space-y-1 relative">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Search Donor (Name / Donor ID / Mobile) <span className="text-red-500">*</span></label>
-              <div className="relative">
-                <Input
-                  placeholder="Type to search donors..."
-                  value={searchQuery || referral.referrerName || ""}
-                  onChange={(e) => handleReferrerSearch(e.target.value, "donor")}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-                {searching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-slate-400" />}
-              </div>
-
-              {/* Autocomplete Results */}
-              {searchResults.length > 0 && (
-                <div className="absolute z-10 w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[10px] mt-1 shadow-lg max-h-40 overflow-y-auto">
-                  {searchResults.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectReferrer(item, "donor")}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-900 border-b last:border-0 dark:border-slate-800"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {referral.referrerName && (
-                <div className="text-[10px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded-md mt-1.5">
-                  Selected Donor: <strong>{referral.referrerName}</strong> (ID: {referral.patientOrDonorId})
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 3. Friend / Family */}
-          {currentSource === "Friend / Family" && (
-            <div className="space-y-3 col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Referrer Name <span className="text-red-500">*</span></label>
-                <Input
-                  placeholder="Friend/Family member name"
-                  value={referral.referrerName || ""}
-                  onChange={(e) => updateReferral({ referrerName: e.target.value })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Mobile Number <span className="text-red-500">*</span></label>
-                <Input
-                  placeholder="10-digit phone"
-                  value={referral.mobileNumber || ""}
-                  onChange={(e) => updateReferral({ mobileNumber: e.target.value.replace(/\D/g, "").slice(0,10) })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Relationship <span className="text-slate-400">(Optional)</span></label>
-                <Input
-                  placeholder="e.g. Brother, Friend"
-                  value={referral.relationship || ""}
-                  onChange={(e) => updateReferral({ relationship: e.target.value })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 4. Doctor / Clinic */}
-          {currentSource === "Doctor / Clinic" && (
-            <div className="space-y-3 col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3 relative">
-              <div className="space-y-1 relative">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Doctor Search / Name <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <Input
-                    placeholder="Type to search Doctors..."
-                    value={searchQuery || referral.referrerName || ""}
-                    onChange={(e) => handleReferrerSearch(e.target.value, "doctor")}
-                    className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                  />
-                  {searching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-slate-400" />}
-                </div>
-
-                {searchResults.length > 0 && (
-                  <div className="absolute z-10 w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[10px] mt-1 shadow-lg max-h-40 overflow-y-auto">
-                    {searchResults.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => selectReferrer(item, "doctor")}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-900 border-b last:border-0 dark:border-slate-800"
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Clinic Name <span className="text-red-500">*</span></label>
-                <Input
-                  placeholder="Clinic affiliation"
-                  value={referral.clinicName || ""}
-                  onChange={(e) => updateReferral({ clinicName: e.target.value })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Contact Number</label>
-                <Input
-                  placeholder="Doctor/Clinic contact"
-                  value={referral.mobileNumber || ""}
-                  onChange={(e) => updateReferral({ mobileNumber: e.target.value })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 5. Staff Member */}
-          {currentSource === "Staff Member" && (
-            <div className="space-y-3 col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3 relative">
-              <div className="space-y-1 relative">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Staff Search / Name <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <Input
-                    placeholder="Type to search Staff..."
-                    value={searchQuery || referral.referrerName || ""}
-                    onChange={(e) => handleReferrerSearch(e.target.value, "staff")}
-                    className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                  />
-                  {searching && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-slate-400" />}
-                </div>
-
-                {searchResults.length > 0 && (
-                  <div className="absolute z-10 w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-[10px] mt-1 shadow-lg max-h-40 overflow-y-auto">
-                    {searchResults.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => selectReferrer(item, "staff")}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-900 border-b last:border-0 dark:border-slate-800"
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Employee ID <span className="text-red-500">*</span></label>
-                <Input
-                  placeholder="EMP-XXXX"
-                  value={referral.employeeId || referral.patientOrDonorId || ""}
-                  onChange={(e) => updateReferral({ employeeId: e.target.value, patientOrDonorId: e.target.value })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Department</label>
-                <Input
-                  placeholder="e.g. Nursing, Embryology"
-                  value={referral.department || ""}
-                  onChange={(e) => updateReferral({ department: e.target.value })}
-                  className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 6. Other Source Details */}
-          {currentSource === "Other" && (
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Please Specify <span className="text-red-500">*</span></label>
-              <Input
-                placeholder="Enter details of how you heard about us..."
-                value={referral.otherSourceDetails || referral.referrerName || ""}
-                onChange={(e) => updateReferral({ otherSourceDetails: e.target.value, referrerName: e.target.value })}
-                className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950"
-              />
-            </div>
-          )}
-
-          {/* 7. Marketing Channels (Website, Google, Facebook, etc.) */}
-          {!["Existing Patient", "Existing Donor", "Friend / Family", "Doctor / Clinic", "Staff Member", "Other"].includes(currentSource) && (
-            <div className="text-[10px] text-slate-500 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-[10px] col-span-1 md:col-span-2 flex items-center">
-              Source recorded for marketing and traffic analytics: <strong>{currentSource}</strong>. Referral rewards are not applicable for generic marketing sources.
-            </div>
-          )}
-
+          <div className="max-w-xs">
+            <Input
+              placeholder="e.g. AGT-1001"
+              value={store.agentCode || ""}
+              onChange={(e) => {
+                const code = e.target.value.toUpperCase().trim();
+                store.setAgentCode(code);
+                updateReferral({ patientOrDonorId: code, sourceReferralType: "Agent / Referral Partner" });
+              }}
+              className="rounded-[10px] text-xs h-9 bg-white dark:bg-slate-950 font-mono uppercase font-bold text-teal-700"
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

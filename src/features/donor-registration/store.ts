@@ -19,11 +19,11 @@ import type {
 // Default empty states
 const defaultPersonalInfo: PersonalInfo = {
   fullName: "", fatherName: "", motherName: "", gender: "Male",
-  dateOfBirth: "", maritalStatus: "Single", bloodGroup: "O+",
+  dateOfBirth: "", maritalStatus: "Married", bloodGroup: "O+",
   education: "", occupation: "",
   height: "", weight: "", eyeColor: "", hairColor: "", complexion: "",
-  aadhaarNumber: "", panNumber: "", spouseName: "",
-  religion: "", monthlyIncome: "", spouseEducation: "", spouseOccupation: "",
+  aadhaarNumber: "", panNumber: "", spouseName: "", husbandName: "",
+  religion: "", monthlyIncome: "", spouseEducation: "", spouseOccupation: "", husbandOccupation: "",
   hobby: "",
 };
 
@@ -118,6 +118,7 @@ export interface DonorFormState {
   assignedHospital: string | null;
 
   // Step data
+  agentCode: string;
   personalInfo: PersonalInfo;
   contactInfo: ContactInfo;
   medicalInfo: MedicalInfo;
@@ -139,6 +140,7 @@ export interface DonorFormState {
   setDonorType: (type: "sperm" | "egg") => void;
   setCurrentStep: (step: number) => void;
   setRegistrationId: (id: string) => void;
+  setAgentCode: (code: string) => void;
   setAssignedHospital: (id: string | null) => void;
   updatePersonalInfo: (data: Partial<PersonalInfo>) => void;
   updateContactInfo: (data: Partial<ContactInfo>) => void;
@@ -171,6 +173,7 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
   isSaving: false,
   isLoading: false,
   assignedHospital: null,
+  agentCode: "",
 
   personalInfo: { ...defaultPersonalInfo },
   contactInfo: { ...defaultContactInfo },
@@ -190,6 +193,7 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
   setDonorType: (type) => set({ donorType: type }),
   setCurrentStep: (step) => set({ currentStep: step }),
   setRegistrationId: (id) => set({ registrationId: id }),
+  setAgentCode: (code) => set({ agentCode: (code || "").toUpperCase().trim() }),
   setAssignedHospital: (id) => set({ assignedHospital: id }),
   setIsSubmitting: (v) => set({ isSubmitting: v }),
   setIsSaving: (v) => set({ isSaving: v }),
@@ -231,9 +235,11 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
 
   loadFromServer: (data: any) => {
     if (!data) return;
+    const cleanAgent = data.agentCode || (data.referral?.sourceReferralType === "Agent / Referral Partner" ? data.referral?.patientOrDonorId : "") || "";
     set({
       registrationId: data.registrationId || null,
       donorType: data.donorType || "sperm",
+      agentCode: cleanAgent,
       currentStep: data.currentStep || 1,
       assignedHospital: data.assignedHospital || null,
       personalInfo: { ...defaultPersonalInfo, ...data.personalInfo },
@@ -271,6 +277,7 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
     set({
       registrationId: null,
       donorType: "sperm",
+      agentCode: "",
       currentStep: 1,
       isSubmitting: false,
       isSaving: false,
@@ -310,6 +317,7 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
     const s = get();
     return {
       donorType: s.donorType,
+      agentCode: s.agentCode,
       currentStep: s.currentStep,
       assignedHospital: s.assignedHospital,
       personalInfo: s.personalInfo,
@@ -334,7 +342,6 @@ export const useDonorFormStore = create<DonorFormState>((set, get) => ({
       labReports: s.labReports,
       documents: s.documents,
       emergencyContact: s.emergencyContact,
-      bankDetails: s.bankDetails,
       consent: s.consent,
       referral: s.referral,
       investigations: s.investigations,

@@ -5,21 +5,23 @@ import { z } from "zod";
 // ============================================================
 export const personalInfoSchema = z.object({
   fullName: z.string().min(2, "Full name is required"),
-  fatherName: z.string().min(2, "Father's name is required"),
-  motherName: z.string().min(2, "Mother's name is required"),
-  gender: z.enum(["Male", "Female", "Other"], { message: "Gender is required" }),
+  fatherName: z.string().optional().or(z.literal("")),
+  motherName: z.string().optional().or(z.literal("")),
+  husbandName: z.string().optional().or(z.literal("")),
+  husbandOccupation: z.string().optional().or(z.literal("")),
+  gender: z.enum(["Male", "Female", "Other"], { message: "Gender is required" }).or(z.string()),
   dateOfBirth: z.string().min(1, "Date of birth is required"),
-  age: z.number().min(18, "Must be at least 18 years old").max(50, "Must be under 50").optional(),
-  maritalStatus: z.enum(["Single", "Married", "Divorced", "Widowed"], { message: "Marital status is required" }),
-  bloodGroup: z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"], { message: "Blood group is required" }),
-  education: z.string().min(1, "Education is required"),
-  occupation: z.string().min(1, "Occupation is required"),
-  height: z.string().min(1, "Height is required"),
-  weight: z.string().min(1, "Weight is required"),
-  eyeColor: z.string().optional(),
-  hairColor: z.string().optional(),
-  complexion: z.string().optional(),
-  aadhaarNumber: z.string().regex(/^\d{12}$/, "Aadhaar must be a 12-digit number"),
+  age: z.number().optional(),
+  maritalStatus: z.string().min(1, "Marital status is required"),
+  bloodGroup: z.string().min(1, "Blood group is required"),
+  education: z.string().optional().or(z.literal("")),
+  occupation: z.string().optional().or(z.literal("")),
+  height: z.string().optional().or(z.literal("")),
+  weight: z.string().optional().or(z.literal("")),
+  eyeColor: z.string().optional().or(z.literal("")),
+  hairColor: z.string().optional().or(z.literal("")),
+  complexion: z.string().optional().or(z.literal("")),
+  aadhaarNumber: z.string().optional().or(z.literal("")),
   panNumber: z.string().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "Invalid PAN format").optional().or(z.literal("")),
   spouseName: z.string().optional().or(z.literal("")),
   religion: z.string().optional().or(z.literal("")),
@@ -29,40 +31,51 @@ export const personalInfoSchema = z.object({
   hobby: z.string().optional().or(z.literal("")),
 });
 
+export const spermPersonalInfoSchema = personalInfoSchema.extend({
+  gender: z.literal("Male"),
+});
+
+export const eggPersonalInfoSchema = personalInfoSchema.extend({
+  gender: z.literal("Female"),
+  husbandName: z.string().optional().or(z.literal("")),
+  husbandOccupation: z.string().optional().or(z.literal("")),
+});
+
+
 // ============================================================
 // STEP 2 — CONTACT INFORMATION
 // ============================================================
 export const contactInfoSchema = z.object({
   mobileNumber: z.string().min(10, "Mobile number is required"),
-  alternateMobile: z.string().optional(),
-  emailAddress: z.string().email("Invalid email address"),
-  currentAddress: z.string().min(5, "Current address is required"),
-  permanentAddress: z.string().min(5, "Permanent address is required"),
-  country: z.string().min(2, "Country is required").default("India"),
-  state: z.string().min(2, "State is required"),
-  district: z.string().min(2, "District is required"),
-  city: z.string().min(2, "City is required"),
-  pincode: z.string().min(3, "Pincode is required"),
+  alternateMobile: z.string().optional().default(""),
+  emailAddress: z.string().email("Invalid email address").optional().or(z.literal("")).default(""),
+  currentAddress: z.string().optional().default(""),
+  permanentAddress: z.string().optional().default(""),
+  country: z.string().default("India"),
+  state: z.string().default(""),
+  district: z.string().default(""),
+  city: z.string().default(""),
+  pincode: z.string().default(""),
 });
 
 // ============================================================
 // STEP 3 — MEDICAL INFORMATION
 // ============================================================
 export const medicalInfoSchema = z.object({
-  medicalHistory: z.string().optional(),
-  familyMedicalHistory: z.string().optional(),
-  previousSurgeries: z.string().optional(),
-  allergies: z.string().optional(),
-  currentMedications: z.string().optional(),
-  diabetes: z.enum(["Yes", "No", "Pre-Diabetic"], { message: "Select diabetes status" }),
-  hypertension: z.enum(["Yes", "No", "Borderline"], { message: "Select hypertension status" }),
-  smokingStatus: z.enum(["Never", "Former", "Current"], { message: "Select smoking status" }),
-  alcoholConsumption: z.enum(["Never", "Occasional", "Regular"], { message: "Select alcohol status" }),
-  drugUse: z.enum(["Never", "Former", "Current"], { message: "Select drug use status" }),
-  geneticDisorders: z.string().optional(),
-  psychologicalHistory: z.string().optional(),
-  infectiousDiseases: z.string().optional(),
-  fertilityHistory: z.string().optional(),
+  medicalHistory: z.string().optional().or(z.literal("")),
+  familyMedicalHistory: z.string().optional().or(z.literal("")),
+  previousSurgeries: z.string().optional().or(z.literal("")),
+  allergies: z.string().optional().or(z.literal("")),
+  currentMedications: z.string().optional().or(z.literal("")),
+  diabetes: z.string().optional().default("No"),
+  hypertension: z.string().optional().default("No"),
+  smokingStatus: z.string().optional().default("Never"),
+  alcoholConsumption: z.string().optional().default("Never"),
+  drugUse: z.string().optional().default("Never"),
+  geneticDisorders: z.string().optional().or(z.literal("")),
+  psychologicalHistory: z.string().optional().or(z.literal("")),
+  infectiousDiseases: z.string().optional().or(z.literal("")),
+  fertilityHistory: z.string().optional().or(z.literal("")),
 });
 
 // ============================================================
@@ -152,7 +165,7 @@ export const labReportsSchema = z.object({
     fileName: z.string().optional(),
     folder: z.string().optional(),
     size: z.union([z.string(), z.number()]).optional(),
-  })).optional(),
+  })).optional().nullable(),
 });
 
 // ============================================================
@@ -197,7 +210,7 @@ export const consentSchema = z.object({
   consentScreening: z.boolean().refine(v => v === true, "You must consent to medical screening"),
   allowStorage: z.boolean().refine(v => v === true, "You must allow secure storage of records"),
   digitalSignature: z.string().optional().nullable(),
-  signatureDate: z.string().min(1, "Date is required"),
+  signatureDate: z.string().optional().or(z.literal("")).transform(val => val || new Date().toISOString().split("T")[0]),
 });
 
 export const referralSchema = z.object({

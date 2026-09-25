@@ -36,11 +36,30 @@ function PdfPageSheet({
   pageNum,
   title,
   children,
+  inline = false,
 }: {
   pageNum: number;
   title: string;
   children: React.ReactNode;
+  inline?: boolean;
 }) {
+  if (inline) {
+    return (
+      <div className="p-6 md:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10 mb-6 last:mb-0">
+        {/* Document Title */}
+        <div className="pb-3 border-b border-slate-150 dark:border-slate-850 mb-4 text-center">
+          <h4 className="text-sm md:text-base font-extrabold uppercase tracking-wide text-teal-600 dark:text-teal-400">
+            {title}
+          </h4>
+        </div>
+        {/* Page Content */}
+        <div className="space-y-4 text-xs text-slate-700 dark:text-slate-350 leading-relaxed text-justify">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 shadow-xl rounded-xl p-6 md:p-10 max-w-4xl mx-auto space-y-6 font-serif relative overflow-hidden print:border-none print:shadow-none print:p-0 print:break-after-page mb-12 print:mb-0">
       {/* Document Title */}
@@ -60,8 +79,10 @@ function PdfPageSheet({
 
 export function ReviewPage({
   onEditStep,
+  inline = false,
 }: {
   onEditStep: (step: number) => void;
+  inline?: boolean;
 }) {
   const store = useDonorFormStore();
   const {
@@ -77,6 +98,7 @@ export function ReviewPage({
     eggDonorInfo,
     investigations,
     physicalExamination,
+    emergencyContact: ec,
   } = store;
   const p = personalInfo as any;
   const m = medicalInfo as any;
@@ -117,10 +139,10 @@ export function ReviewPage({
   // ============================================================================
   if (derivedType === "egg") {
     return (
-      <div className="space-y-8 pb-12 font-serif">
+      <div className={inline ? "space-y-8" : "space-y-8 pb-12 font-serif"}>
         <div className="space-y-0 print:space-y-0">
           {/* SHEET 1: REGISTRATION FORM FOR OOCYTE DONOR */}
-          <PdfPageSheet pageNum={1} title="REGISTRATION FORM FOR OOCYTE DONOR">
+          <PdfPageSheet pageNum={1} title="REGISTRATION FORM FOR OOCYTE DONOR" inline={inline}>
             <div className="space-y-4 text-justify mt-4">
               <p>
                 I, <DynamicField value={p.fullName} /> W/O{" "}
@@ -301,6 +323,7 @@ export function ReviewPage({
           <PdfPageSheet
             pageNum={2}
             title="Contract between the ART bank and the Oocyte Donor"
+            inline={inline}
           >
             <div className="space-y-4 text-justify">
               <p>
@@ -492,6 +515,122 @@ export function ReviewPage({
               </div>
             </div>
           </PdfPageSheet>
+
+          {/* SHEET 3: BASIC INFORMATION */}
+          <PdfPageSheet pageNum={3} title="Basic Onboarding Information" inline={inline}>
+            <div className="space-y-6 text-slate-800 dark:text-slate-200">
+              {/* Grid for Personal Details */}
+              <div className="space-y-2">
+                <h5 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
+                  Personal Details
+                </h5>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Full Name:</span>
+                    <span className="font-bold">{p.fullName || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Father's Name:</span>
+                    <span className="font-bold">{p.fatherName || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Mother's Name:</span>
+                    <span className="font-bold">{p.motherName || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Gender:</span>
+                    <span className="font-bold capitalize">{p.gender || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Date of Birth:</span>
+                    <span className="font-bold">{p.dateOfBirth || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Age:</span>
+                    <span className="font-bold">{p.age || "—"} years</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Marital Status:</span>
+                    <span className="font-bold">{p.maritalStatus || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Nationality:</span>
+                    <span className="font-bold">{p.nationality || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Aadhaar Number:</span>
+                    <span className="font-bold tracking-wider">{p.aadhaarNumber || "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid for Contact Details */}
+              <div className="space-y-2">
+                <h5 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
+                  Contact Details
+                </h5>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Mobile Number:</span>
+                    <span className="font-bold">{c.mobileNumber || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Alternate Mobile:</span>
+                    <span className="font-bold">{c.alternateMobile || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Email Address:</span>
+                    <span className="font-bold">{c.emailAddress || "—"}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-slate-400 dark:text-slate-500 block">Current Address:</span>
+                    <span className="font-bold">
+                      {formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode) || "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Permanent Address:</span>
+                    <span className="font-bold">
+                      {formatAddress(c.permanentAddress, c.city, c.state, c.country, c.pincode) || "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid for Physical Characteristics */}
+              <div className="space-y-2">
+                <h5 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
+                  Physical Characteristics & Traits
+                </h5>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Height:</span>
+                    <span className="font-bold">{p.height || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Weight:</span>
+                    <span className="font-bold">{p.weight || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Blood Group:</span>
+                    <span className="font-bold">{p.bloodGroup || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Eye Color:</span>
+                    <span className="font-bold">{p.eyeColor || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Hair Color:</span>
+                    <span className="font-bold">{p.hairColor || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 dark:text-slate-500 block">Complexion:</span>
+                    <span className="font-bold">{p.complexion || "—"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </PdfPageSheet>
         </div>
       </div>
     );
@@ -501,10 +640,10 @@ export function ReviewPage({
   // SPERM DONOR DOCUMENTS (Fallback / Default)
   // ============================================================================
   return (
-    <div className="space-y-8 pb-12 font-serif">
+    <div className={inline ? "space-y-8" : "space-y-8 pb-12 font-serif"}>
       <div className="space-y-0 print:space-y-0">
         {/* SHEET 1: REGISTRATION FORM */}
-        <PdfPageSheet pageNum={1} title="REGISTRATION FORM For SPERM DONOR">
+        <PdfPageSheet pageNum={1} title="REGISTRATION FORM For SPERM DONOR" inline={inline}>
           <div className="space-y-4 text-justify">
             <p>
               I, Mr <DynamicField value={p.fullName} /> age{" "}
@@ -675,6 +814,7 @@ export function ReviewPage({
         <PdfPageSheet
           pageNum={2}
           title="Contract between the ART bank and the Semen Donor"
+          inline={inline}
         >
           <div className="space-y-4 text-justify">
             <p>
@@ -799,7 +939,7 @@ export function ReviewPage({
         </PdfPageSheet>
 
         {/* SHEET 3: FORM 15 SPERM */}
-        <PdfPageSheet pageNum={3} title="FORM 15">
+        <PdfPageSheet pageNum={3} title="FORM 15" inline={inline}>
           <div className="space-y-6 text-justify">
             <div className="text-center space-y-1">
               <p className="text-sm">[See rule 13 (2) (ii)]</p>
@@ -916,6 +1056,122 @@ export function ReviewPage({
                 <p className="text-sm font-bold mt-2">
                   Dated: <DynamicField value={cn.signatureDate} />
                 </p>
+              </div>
+            </div>
+          </div>
+        </PdfPageSheet>
+
+        {/* SHEET 4: BASIC INFORMATION */}
+        <PdfPageSheet pageNum={4} title="Basic Onboarding Information" inline={inline}>
+          <div className="space-y-6 text-slate-800 dark:text-slate-200">
+            {/* Grid for Personal Details */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
+                Personal Details
+              </h5>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Full Name:</span>
+                  <span className="font-bold">{p.fullName || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Father's Name:</span>
+                  <span className="font-bold">{p.fatherName || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Mother's Name:</span>
+                  <span className="font-bold">{p.motherName || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Gender:</span>
+                  <span className="font-bold capitalize">{p.gender || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Date of Birth:</span>
+                  <span className="font-bold">{p.dateOfBirth || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Age:</span>
+                  <span className="font-bold">{p.age || "—"} years</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Marital Status:</span>
+                  <span className="font-bold">{p.maritalStatus || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Nationality:</span>
+                  <span className="font-bold">{p.nationality || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Aadhaar Number:</span>
+                  <span className="font-bold tracking-wider">{p.aadhaarNumber || "—"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid for Contact Details */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
+                Contact Details
+              </h5>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Mobile Number:</span>
+                  <span className="font-bold">{c.mobileNumber || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Alternate Mobile:</span>
+                  <span className="font-bold">{c.alternateMobile || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Email Address:</span>
+                  <span className="font-bold">{c.emailAddress || "—"}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-slate-400 dark:text-slate-500 block">Current Address:</span>
+                  <span className="font-bold">
+                    {formatAddress(c.currentAddress, c.city, c.state, c.country, c.pincode) || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Permanent Address:</span>
+                  <span className="font-bold">
+                    {formatAddress(c.permanentAddress, c.city, c.state, c.country, c.pincode) || "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid for Physical Characteristics */}
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
+                Physical Characteristics & Traits
+              </h5>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Height:</span>
+                  <span className="font-bold">{p.height || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Weight:</span>
+                  <span className="font-bold">{p.weight || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Blood Group:</span>
+                  <span className="font-bold">{p.bloodGroup || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Eye Color:</span>
+                  <span className="font-bold">{p.eyeColor || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Hair Color:</span>
+                  <span className="font-bold">{p.hairColor || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 dark:text-slate-500 block">Complexion:</span>
+                  <span className="font-bold">{p.complexion || "—"}</span>
+                </div>
               </div>
             </div>
           </div>
