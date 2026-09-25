@@ -33,11 +33,13 @@ export async function GET(req: Request) {
 
     const query: any = {};
 
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
+        { name: { $regex: safeSearch, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
+        { phone: { $regex: safeSearch, $options: "i" } },
       ];
     }
 
@@ -94,13 +96,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Email is already registered." }, { status: 400 });
     }
 
+    // Non-SUPER_ADMIN cannot create ADMIN or SUPER_ADMIN users
+    let assignedRole = role || UserRole.RECIPIENT;
+    if ((assignedRole === "ADMIN" || assignedRole === "SUPER_ADMIN") && userRole !== "SUPER_ADMIN") {
+      assignedRole = UserRole.STAFF;
+    }
+
     const user = await User.create({
       name,
       email: email.toLowerCase(),
       phone,
-      role: role || UserRole.RECIPIENT,
+      role: assignedRole,
       department: department || "General",
-      permissions: permissions || ["READ_PORTAL"],
+      permissions: userRole === "SUPER_ADMIN" ? (permissions || ["READ_PORTAL"]) : ["READ_PORTAL"],
       status: "ACTIVE",
     });
 
@@ -130,15 +138,22 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
     }
 
-    // Hash password if updating password
-    if (updateFields.password) {
-      // Better-auth uses its own hashing, but if admin updates password we can handle it or omit
-      delete updateFields.password;
+    // Whitelist allowable fields to prevent mass assignment and unauthorized privilege escalation
+    const allowedKeys = ["name", "phone", "department", "status"];
+    if (userRole === "SUPER_ADMIN") {
+      allowedKeys.push("role", "permissions");
+    }
+
+    const sanitizedUpdate: any = {};
+    for (const key of allowedKeys) {
+      if (updateFields[key] !== undefined) {
+        sanitizedUpdate[key] = updateFields[key];
+      }
     }
 
     const user = await User.findByIdAndUpdate(
       userId,
-      { $set: updateFields },
+      { $set: sanitizedUpdate },
       { new: true }
     ).select("-password");
 
@@ -147,8 +162,8 @@ export async function PATCH(req: Request) {
     }
 
     // Synchronize updates to linked Donor/Employee status
-    const statusUpdate = updateFields.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
-    if (updateFields.status) {
+    if (sanitizedUpdate.status) {
+      const statusUpdate = sanitizedUpdate.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
       await Donor.findOneAndUpdate({ user: userId }, { donationStatus: statusUpdate });
       await Employee.findOneAndUpdate({ user: userId }, { status: statusUpdate });
     }

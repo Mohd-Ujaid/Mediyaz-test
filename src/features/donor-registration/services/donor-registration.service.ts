@@ -1,7 +1,11 @@
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { Notification } from "@/models/Notification";
 import { Hospital } from "@/models/Hospital";
+import { Agent } from "@/models/Agent";
+import { computeEggDonorManagementStatus } from "../utils/egg-donor-status";
+import { computeSpermDonorManagementStatus } from "../utils/sperm-donor-status";
 
 function generateRegistrationId(donorType: string): string {
   const prefix = donorType === "egg" ? "MED-ED" : "MED-SD";
@@ -11,6 +15,39 @@ function generateRegistrationId(donorType: string): string {
   return `${prefix}-${year}-${rand}${ts}`;
 }
 
+async function findRegistrationInModels(id: string) {
+  // If ID matches sperm prefix, check SpermDonorRegistration first
+  if (id.startsWith("MED-SD") || id.startsWith("SPM")) {
+    const spermDoc = await SpermDonorRegistration.findOne({
+      $or: [
+        { registrationId: id },
+        { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }
+      ]
+    });
+    if (spermDoc) return { registration: spermDoc, model: SpermDonorRegistration, donorType: "sperm" as const };
+  }
+
+  // Otherwise check EggDonorRegistration first
+  const eggDoc = await EggDonorRegistration.findOne({
+    $or: [
+      { registrationId: id },
+      { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }
+    ]
+  });
+  if (eggDoc) return { registration: eggDoc, model: EggDonorRegistration, donorType: "egg" as const };
+
+  // Fallback check SpermDonorRegistration
+  const spermDoc = await SpermDonorRegistration.findOne({
+    $or: [
+      { registrationId: id },
+      { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }
+    ]
+  });
+  if (spermDoc) return { registration: spermDoc, model: SpermDonorRegistration, donorType: "sperm" as const };
+
+  return null;
+}
+
 export async function createDraftRegistration(donorType: string, bodyData: any) {
   await connectToDatabase();
 
@@ -18,16 +55,39 @@ export async function createDraftRegistration(donorType: string, bodyData: any) 
     throw new Error("Valid donorType (sperm/egg) is required.");
   }
 
+  const Model = donorType === "egg" ? EggDonorRegistration : SpermDonorRegistration;
+
   const {
     personalInfo, contactInfo, medicalInfo, donorInfo,
-    labReports, documents, emergencyContact, bankDetails, consent, referral
+    labReports, documents, emergencyContact, consent, referral
   } = bodyData;
 
   const aadhaarNum = personalInfo?.aadhaarNumber;
   const mobileNum = contactInfo?.mobileNumber;
+  const cleanAgentCode = donorType === "egg" ? (bodyData.agentCode
+    ? String(bodyData.agentCode).trim().toUpperCase()
+    : (bodyData.referral?.sourceReferralType === "Agent / Referral Partner" && bodyData.referral?.patientOrDonorId
+        ? String(bodyData.referral.patientOrDonorId).trim().toUpperCase()
+        : undefined)) : undefined;
+
+  let matchedAgent: any = null;
+  let commissionAmount = 0;
+  if (cleanAgentCode) {
+    matchedAgent = await Agent.findOne({
+      $or: [
+        { agentCode: new RegExp(`^${cleanAgentCode}$`, "i") },
+        { mobileNumber: cleanAgentCode }
+      ]
+    });
+    if (matchedAgent) {
+      commissionAmount = donorType === "egg"
+        ? (matchedAgent.commissionRates?.eggDonorCommission || 5000)
+        : (matchedAgent.commissionRates?.spermDonorCommission || 2000);
+    }
+  }
 
   if (aadhaarNum || mobileNum) {
-    const query: any = { status: "DRAFT", donorType };
+    const query: any = { status: "DRAFT" };
     if (aadhaarNum && mobileNum) {
       query.$or = [
         { "personalInfo.aadhaarNumber": aadhaarNum },
@@ -39,8 +99,28 @@ export async function createDraftRegistration(donorType: string, bodyData: any) 
       query["contactInfo.mobileNumber"] = mobileNum;
     }
 
-    const existing = await DonorRegistration.findOne(query);
+    const existing = await Model.findOne(query);
     if (existing) {
+      if (cleanAgentCode && (!existing.agentCode || existing.agentCode !== cleanAgentCode)) {
+        existing.agentCode = cleanAgentCode;
+        if (matchedAgent) {
+          existing.agentId = matchedAgent._id;
+          existing.agentPayout = {
+            amount: commissionAmount,
+            status: "PENDING",
+            notes: `Referred by Agent ${matchedAgent.fullName} (${matchedAgent.agentCode})`
+          };
+          if (donorType === "egg") {
+            matchedAgent.stats.totalEggDonors = (matchedAgent.stats.totalEggDonors || 0) + 1;
+          } else {
+            matchedAgent.stats.totalSpermDonors = (matchedAgent.stats.totalSpermDonors || 0) + 1;
+          }
+          matchedAgent.stats.pendingPayout = (matchedAgent.stats.pendingPayout || 0) + commissionAmount;
+          matchedAgent.stats.totalEarnings = (matchedAgent.stats.totalEarnings || 0) + commissionAmount;
+          await matchedAgent.save();
+        }
+        await existing.save();
+      }
       return {
         registrationId: existing.registrationId,
         registration: JSON.parse(JSON.stringify(existing)),
@@ -50,7 +130,13 @@ export async function createDraftRegistration(donorType: string, bodyData: any) 
 
   const registrationId = generateRegistrationId(donorType);
 
-  const registration = await DonorRegistration.create({
+  const initialPayout = matchedAgent ? {
+    amount: commissionAmount,
+    status: "PENDING",
+    notes: `Referred by Agent ${matchedAgent.fullName} (${matchedAgent.agentCode})`
+  } : undefined;
+
+  const registration = await Model.create({
     registrationId,
     donorType,
     registrationSource: bodyData.registrationSource || "walk_in",
@@ -64,10 +150,23 @@ export async function createDraftRegistration(donorType: string, bodyData: any) 
     labReports: labReports || {},
     documents: documents || {},
     emergencyContact: emergencyContact || {},
-    bankDetails: bankDetails || {},
     consent: consent || {},
     referral: referral || {},
+    agentCode: cleanAgentCode || null,
+    agentId: matchedAgent ? matchedAgent._id : null,
+    agentPayout: initialPayout,
   });
+
+  if (matchedAgent) {
+    if (donorType === "egg") {
+      matchedAgent.stats.totalEggDonors = (matchedAgent.stats.totalEggDonors || 0) + 1;
+    } else {
+      matchedAgent.stats.totalSpermDonors = (matchedAgent.stats.totalSpermDonors || 0) + 1;
+    }
+    matchedAgent.stats.pendingPayout = (matchedAgent.stats.pendingPayout || 0) + commissionAmount;
+    matchedAgent.stats.totalEarnings = (matchedAgent.stats.totalEarnings || 0) + commissionAmount;
+    await matchedAgent.save();
+  }
 
   return {
     registrationId: registration.registrationId,
@@ -111,9 +210,10 @@ export async function createAdminRegistration(body: {
     throw new Error("Valid mobile number is required.");
   }
 
-  // Check for duplicate by Aadhaar or mobile
-  const existing = await DonorRegistration.findOne({
-    donorType,
+  const Model = donorType === "egg" ? EggDonorRegistration : SpermDonorRegistration;
+
+  // Check for duplicate by Aadhaar or mobile in the specific collection
+  const existing = await Model.findOne({
     $or: [
       { "personalInfo.aadhaarNumber": aadhaarNumber.replace(/\D/g, "") },
       { "contactInfo.mobileNumber": mobileNumber }
@@ -127,7 +227,7 @@ export async function createAdminRegistration(body: {
 
   const registrationId = generateRegistrationId(donorType);
 
-  const registration = await DonorRegistration.create({
+  const registration = await Model.create({
     registrationId,
     donorType,
     registrationSource: body.registrationSource || "admin_created",
@@ -138,7 +238,7 @@ export async function createAdminRegistration(body: {
       fullName: fullName.trim(),
       aadhaarNumber: aadhaarNumber.replace(/\D/g, ""),
       dateOfBirth: body.dateOfBirth || "",
-      gender: body.gender || "",
+      gender: body.gender || (donorType === "egg" ? "Female" : "Male"),
       bloodGroup: body.bloodGroup || "",
     },
     contactInfo: {
@@ -155,17 +255,18 @@ export async function createAdminRegistration(body: {
 
 export async function getRegistrationById(id: string, session: any) {
   await connectToDatabase();
-  const registration = await DonorRegistration.findOne({ registrationId: id });
+  const found = await findRegistrationInModels(id);
 
-  if (!registration) {
+  if (!found) {
     throw new Error("Registration not found.");
   }
 
+  const registration = found.registration;
   const role = session?.user?.role || "";
   const isAdminOrStaff = session && ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role);
   const isOwner = session && (
-    (session.user.email && registration.contactInfo?.emailAddress && session.user.email.toLowerCase() === registration.contactInfo.emailAddress.toLowerCase()) ||
-    ((session.user as any).phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
+    (session.user?.email && registration.contactInfo?.emailAddress && session.user.email.toLowerCase() === registration.contactInfo.emailAddress.toLowerCase()) ||
+    ((session.user as any)?.phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
   );
 
   if (!session || isAdminOrStaff || isOwner) {
@@ -192,34 +293,31 @@ export async function getRegistrationById(id: string, session: any) {
 export async function updateRegistrationStep(id: string, bodyData: any, session: any) {
   await connectToDatabase();
 
-  const registration = await DonorRegistration.findOne({ registrationId: id });
-  if (!registration) {
+  const found = await findRegistrationInModels(id);
+  if (!found) {
     throw new Error("Registration not found.");
   }
 
-  // Check access
+  const registration = found.registration;
+
+  // Check access: DRAFT registrations can be updated by the donor or admin/staff
   const role = session?.user?.role || "";
   const isAdminOrStaff = ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role);
-  const isOwner = session && (
-    (session.user?.email && registration.contactInfo?.emailAddress && session.user.email.toLowerCase() === registration.contactInfo.emailAddress.toLowerCase()) ||
-    ((session.user as any)?.phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
-  );
-
-  if (session && !isAdminOrStaff && !isOwner) {
-    throw new Error("Forbidden: Access Denied.");
+  if (registration.status !== "DRAFT" && session && !isAdminOrStaff) {
+    throw new Error("Forbidden: Registration has already been submitted and cannot be modified.");
   }
 
   const update: any = {};
   const allowedKeys = [
     "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
-    "labReports", "documents", "emergencyContact", "bankDetails",
-    "consent", "referral", "investigations", "physicalExamination", "currentStep", "status", "adminNotes", "reviewedBy", "reviewedAt"
+    "labReports", "documents", "emergencyContact",
+    "consent", "referral", "currentStep", "status", "adminNotes", "reviewedBy", "reviewedAt",
+    "agentCode", "agentId", "agentPayout"
   ];
 
   for (const key of allowedKeys) {
     if (bodyData[key] !== undefined) {
       if (typeof bodyData[key] === "object" && !Array.isArray(bodyData[key]) && bodyData[key] !== null) {
-        // Merge sub-object fields
         for (const [subKey, subVal] of Object.entries(bodyData[key])) {
           update[`${key}.${subKey}`] = subVal;
         }
@@ -229,10 +327,10 @@ export async function updateRegistrationStep(id: string, bodyData: any, session:
     }
   }
 
-  const updatedRegistration = await DonorRegistration.findOneAndUpdate(
-    { registrationId: id },
+  const updatedRegistration = await found.model.findOneAndUpdate(
+    { registrationId: registration.registrationId },
     { $set: update },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   return updatedRegistration ? JSON.parse(JSON.stringify(updatedRegistration)) : null;
@@ -241,32 +339,72 @@ export async function updateRegistrationStep(id: string, bodyData: any, session:
 export async function submitRegistration(id: string, bodyData: any, session: any) {
   await connectToDatabase();
 
-  const registration = await DonorRegistration.findOne({ registrationId: id });
-  if (!registration) {
+  const found = await findRegistrationInModels(id);
+  if (!found) {
     throw new Error("Registration not found.");
   }
 
-  // Check access
+  const registration = found.registration;
+
+  // Check access: DRAFT registrations can be submitted by the donor or admin/staff
   const role = session?.user?.role || "";
   const isAdminOrStaff = ["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role);
-  const isOwner = session && (
-    (session.user?.email && registration.contactInfo?.emailAddress && session.user.email.toLowerCase() === registration.contactInfo.emailAddress.toLowerCase()) ||
-    ((session.user as any)?.phone && registration.contactInfo?.mobileNumber && (session.user as any).phone === registration.contactInfo.mobileNumber)
-  );
-
-  if (session && !isAdminOrStaff && !isOwner) {
-    throw new Error("Forbidden: Access Denied.");
+  if (registration.status !== "DRAFT" && session && !isAdminOrStaff) {
+    throw new Error("Forbidden: Registration has already been submitted.");
   }
 
   const allowedKeys = [
     "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
-    "labReports", "documents", "emergencyContact", "bankDetails", "consent", "referral",
-    "investigations", "physicalExamination"
+    "labReports", "documents", "emergencyContact", "consent", "referral",
+    "agentCode", "agentId", "agentPayout"
   ];
 
   for (const key of allowedKeys) {
     if (bodyData[key]) {
       (registration as any)[key] = { ...(registration as any)[key]?.toObject?.() || (registration as any)[key], ...bodyData[key] };
+    }
+  }
+
+  const isEgg = found.donorType === "egg";
+  const cleanAgentCode = isEgg ? (bodyData.agentCode
+    ? String(bodyData.agentCode).trim().toUpperCase()
+    : (bodyData.referral?.sourceReferralType === "Agent / Referral Partner" && bodyData.referral?.patientOrDonorId
+        ? String(bodyData.referral.patientOrDonorId).trim().toUpperCase()
+        : (registration.agentCode || undefined))) : undefined;
+
+  if (cleanAgentCode) {
+    registration.agentCode = cleanAgentCode;
+    try {
+      const matchedAgent = await Agent.findOne({
+        $or: [
+          { agentCode: new RegExp(`^${cleanAgentCode}$`, "i") },
+          { mobileNumber: cleanAgentCode }
+        ]
+      });
+      if (matchedAgent) {
+        registration.agentId = matchedAgent._id;
+        const commissionAmount = isEgg
+          ? (matchedAgent.commissionRates?.eggDonorCommission || 5000)
+          : (matchedAgent.commissionRates?.spermDonorCommission || 2000);
+        
+        if (!registration.agentPayout || !registration.agentPayout.amount) {
+          registration.agentPayout = {
+            amount: commissionAmount,
+            status: "PENDING",
+            notes: `Referred by Agent ${matchedAgent.fullName} (${matchedAgent.agentCode})`
+          };
+          if (isEgg) {
+            matchedAgent.stats.totalEggDonors = (matchedAgent.stats.totalEggDonors || 0) + 1;
+          } else {
+            matchedAgent.stats.totalSpermDonors = (matchedAgent.stats.totalSpermDonors || 0) + 1;
+          }
+          matchedAgent.stats.pendingPayout = (matchedAgent.stats.pendingPayout || 0) + commissionAmount;
+          matchedAgent.stats.totalEarnings = (matchedAgent.stats.totalEarnings || 0) + commissionAmount;
+          await matchedAgent.save();
+        }
+      }
+    } catch (agErr) {
+      console.warn("Error associating agent during submission:", agErr);
     }
   }
 
@@ -322,7 +460,7 @@ export async function submitRegistration(id: string, bodyData: any, session: any
 
     const Referral = (await import("@/models/Referral")).Referral;
     await Referral.findOneAndUpdate(
-      { referredRegistrationId: id },
+      { referredRegistrationId: registration.registrationId },
       {
         $set: {
           sourceReferralType,
@@ -340,27 +478,24 @@ export async function submitRegistration(id: string, bodyData: any, session: any
           rewardStatus,
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   }
 
-  // Trigger completed notification
+  // Trigger workflow notification for completed registration
   try {
-    const isEmployee = ["SUPER_ADMIN", "ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(role);
-    if (!isEmployee) {
-      const { triggerWorkflowNotifications } = await import("@/features/notifications/services/workflow-notification.service");
-      await triggerWorkflowNotifications(
-        "registration_completed",
-        registration.personalInfo?.fullName || "Donor Candidate",
-        registration.contactInfo?.mobileNumber || "",
-        {
-          registrationId: id,
-          email: registration.contactInfo?.emailAddress || "",
-          interest: registration.donorType || "sperm",
-          bloodGroup: registration.personalInfo?.bloodGroup || "N/A"
-        }
-      );
-    }
+    const { triggerWorkflowNotifications } = await import("@/features/notifications/services/workflow-notification.service");
+    await triggerWorkflowNotifications(
+      "registration_completed",
+      registration.personalInfo?.fullName || "Donor Candidate",
+      registration.contactInfo?.mobileNumber || "",
+      {
+        registrationId: registration.registrationId,
+        email: registration.contactInfo?.emailAddress || "",
+        interest: registration.donorType || (isEgg ? "egg" : "sperm"),
+        bloodGroup: registration.personalInfo?.bloodGroup || "N/A"
+      }
+    );
   } catch (notifErr) {
     console.error("Failed to trigger registration completed notification:", notifErr);
   }
@@ -371,10 +506,12 @@ export async function submitRegistration(id: string, bodyData: any, session: any
 export async function deleteDraftRegistration(id: string, session: any) {
   await connectToDatabase();
 
-  const registration = await DonorRegistration.findOne({ registrationId: id });
-  if (!registration) {
+  const found = await findRegistrationInModels(id);
+  if (!found) {
     throw new Error("Registration not found.");
   }
+
+  const registration = found.registration;
 
   // Check access
   const role = session?.user?.role || "";
@@ -388,7 +525,7 @@ export async function deleteDraftRegistration(id: string, session: any) {
     throw new Error("Forbidden: Access Denied.");
   }
 
-  const result = await DonorRegistration.deleteOne({ registrationId: id });
+  const result = await found.model.deleteOne({ registrationId: registration.registrationId });
   return result.deletedCount > 0;
 }
 
@@ -406,7 +543,7 @@ export async function getAdminRegistrations(filters: {
   }
   const role = (session.user as any).role;
   const permissions = (session.user as any).permissions || [];
-  const isAllowed = ["ADMIN", "SUPER_ADMIN"].includes(role) || permissions.includes("VIEW_REGISTRATIONS") || permissions.includes("VIEW_REG_CHECKS");
+  const isAllowed = ["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(role) || permissions.includes("VIEW_REGISTRATIONS") || permissions.includes("VIEW_REG_CHECKS");
   
   if (!isAllowed) {
     throw new Error("Forbidden: Admins or Authorized Staff only.");
@@ -415,12 +552,23 @@ export async function getAdminRegistrations(filters: {
   await connectToDatabase();
   const _forceRegisterHospital = Hospital.modelName;
 
-  const { search = "", donorType = "", status = "", bloodGroup = "", hospital = "", page = 1, limit = 10 } = filters;
+  const isSperm = filters.donorType === "sperm";
+  const Model = isSperm ? SpermDonorRegistration : EggDonorRegistration;
+
+  const { search = "", status = "", bloodGroup = "", hospital = "", page = 1, limit = 10 } = filters;
   const skip = (page - 1) * limit;
 
   const query: any = {};
-  if (donorType) query.donorType = donorType;
-  if (status) query.status = status;
+
+  if (status) {
+    if (status === "other") {
+      query.status = { $in: ["COMPLETED", "UNDER_REVIEW", "SUSPENDED", "REJECTED"] };
+    } else {
+      query.status = status;
+    }
+  } else {
+    query.status = { $in: ["APPROVED", "WAITING_FORM13", "FILE_COMPLETED", "COMPLETED", "UNDER_REVIEW", "SUSPENDED", "REJECTED", "CANCELLED"] };
+  }
   if (bloodGroup) query["personalInfo.bloodGroup"] = bloodGroup;
   if (hospital) query.assignedHospital = hospital;
 
@@ -428,20 +576,57 @@ export async function getAdminRegistrations(filters: {
     const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
     query.$or = [
       { registrationId: { $regex: escapedSearch, $options: "i" } },
+      { donorId: { $regex: escapedSearch, $options: "i" } },
       { "personalInfo.fullName": { $regex: escapedSearch, $options: "i" } },
       { "contactInfo.emailAddress": { $regex: escapedSearch, $options: "i" } },
       { "contactInfo.mobileNumber": { $regex: escapedSearch, $options: "i" } },
     ];
   }
 
-  const total = await DonorRegistration.countDocuments(query);
-  const registrationsRaw = await DonorRegistration.find(query)
+  const total = await Model.countDocuments(query);
+  const registrationsRaw = await Model.find(query)
     .populate("assignedHospital")
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
-  const registrations = registrationsRaw.map(r => JSON.parse(JSON.stringify(r)));
+  const registrations = registrationsRaw.map((r: any) => JSON.parse(JSON.stringify(r)));
+
+  // Status counts for Management tabs directly from this donor type's collection
+  const baseStatusQuery: any = {};
+  if (bloodGroup) baseStatusQuery["personalInfo.bloodGroup"] = bloodGroup;
+  if (hospital) baseStatusQuery.assignedHospital = hospital;
+
+  const [
+    allCount,
+    approvedCount,
+    waitingForm13Count,
+    fileCompletedCount,
+    completedCount,
+    cancelledCount,
+    underReviewCount,
+    suspendedCount,
+    rejectedCount,
+    otherCount,
+  ] = await Promise.all([
+    Model.countDocuments({
+      ...baseStatusQuery,
+      status: { $in: ["APPROVED", "WAITING_FORM13", "FILE_COMPLETED", "COMPLETED", "UNDER_REVIEW", "SUSPENDED", "REJECTED", "CANCELLED"] },
+    }),
+    Model.countDocuments({ ...baseStatusQuery, status: "APPROVED" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "WAITING_FORM13" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "FILE_COMPLETED" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "COMPLETED" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "CANCELLED" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "UNDER_REVIEW" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "SUSPENDED" }),
+    Model.countDocuments({ ...baseStatusQuery, status: "REJECTED" }),
+    Model.countDocuments({
+      ...baseStatusQuery,
+      status: { $nin: ["APPROVED", "WAITING_FORM13", "FILE_COMPLETED", "COMPLETED", "CANCELLED", "UNDER_REVIEW", "SUSPENDED", "REJECTED"] },
+    }),
+  ]);
 
   return {
     registrations,
@@ -450,6 +635,18 @@ export async function getAdminRegistrations(filters: {
       pages: Math.ceil(total / limit),
       current: page,
       limit
+    },
+    statusCounts: {
+      all: allCount,
+      approved: approvedCount,
+      waitingForm13: waitingForm13Count,
+      fileCompleted: fileCompletedCount,
+      completed: completedCount,
+      cancelled: cancelledCount,
+      underReview: underReviewCount,
+      suspended: suspendedCount,
+      rejected: rejectedCount,
+      other: otherCount,
     }
   };
 }
@@ -460,36 +657,110 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
   }
   const role = (session.user as any).role;
   const permissions = (session.user as any).permissions || [];
-  const isAllowed = ["ADMIN", "SUPER_ADMIN"].includes(role) || permissions.includes("VIEW_REGISTRATIONS") || permissions.includes("VIEW_REG_CHECKS");
+  const isAllowed = ["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(role) || permissions.includes("VIEW_REGISTRATIONS") || permissions.includes("VIEW_REG_CHECKS");
 
   if (!isAllowed) {
     throw new Error("Forbidden: Admins or Authorized Staff only.");
   }
 
   await connectToDatabase();
-  const { registrationId, status, adminNotes, assignedHospitalId } = bodyData;
+  const {
+    registrationId,
+    status,
+    adminNotes,
+    assignedHospitalId,
+    pickupDate,
+    recruitmentDate,
+    supplyDate,
+    paymentStatus,
+    paidAt,
+    paidBy,
+    paymentReference,
+    donorId
+  } = bodyData;
 
   if (!registrationId) {
     throw new Error("Registration ID is required.");
   }
 
-  const registration = await DonorRegistration.findOne({ registrationId });
-  if (!registration) {
+  const found = await findRegistrationInModels(registrationId);
+  if (!found) {
     throw new Error("Registration profile not found.");
   }
 
+  const { registration, model: TargetModel, donorType } = found;
   const oldValues = registration.toObject();
-  const statusChanged = status && status !== registration.status;
 
-  if (status) registration.status = status;
+  // If status is provided, use it; otherwise compute automatically based on donorType
+  let effectiveStatus = status;
+  const isEgg = donorType === "egg";
+
+  if (!effectiveStatus && isEgg) {
+    const simulated = {
+      ...registration.toObject(),
+      pickupDate: pickupDate !== undefined ? pickupDate : registration.pickupDate,
+      recruitmentDate: recruitmentDate !== undefined ? recruitmentDate : registration.recruitmentDate,
+      supplyDate: supplyDate !== undefined ? supplyDate : registration.supplyDate,
+      isDonorPaid: paymentStatus !== undefined ? paymentStatus === "PAID" : registration.isDonorPaid,
+      donorDeal: {
+        ...(registration.donorDeal || {}),
+        paymentStatus: paymentStatus !== undefined ? paymentStatus : registration.donorDeal?.paymentStatus,
+      },
+    };
+    if (["APPROVED", "WAITING_FORM13", "FILE_COMPLETED"].includes(registration.status)) {
+      effectiveStatus = computeEggDonorManagementStatus(simulated).status;
+    }
+  } else if (!effectiveStatus && !isEgg) {
+    const simulated = {
+      ...registration.toObject(),
+      pickupDate: pickupDate !== undefined ? pickupDate : registration.pickupDate,
+      recruitmentDate: recruitmentDate !== undefined ? recruitmentDate : registration.recruitmentDate,
+      supplyDate: supplyDate !== undefined ? supplyDate : registration.supplyDate,
+      isDonorPaid: paymentStatus !== undefined ? paymentStatus === "PAID" : registration.isDonorPaid,
+      donorDeal: {
+        ...(registration.donorDeal || {}),
+        paymentStatus: paymentStatus !== undefined ? paymentStatus : registration.donorDeal?.paymentStatus,
+      },
+    };
+    if (["APPROVED", "WAITING_FORM13", "FILE_COMPLETED"].includes(registration.status)) {
+      effectiveStatus = computeSpermDonorManagementStatus(simulated).status;
+    }
+  }
+
+  if (effectiveStatus) registration.status = effectiveStatus;
+  const statusChanged = effectiveStatus && effectiveStatus !== oldValues.status;
   if (adminNotes !== undefined) registration.adminNotes = adminNotes;
+  if (pickupDate !== undefined) registration.pickupDate = pickupDate;
+  if (recruitmentDate !== undefined) registration.recruitmentDate = recruitmentDate;
+  if (supplyDate !== undefined) registration.supplyDate = supplyDate;
+  if (donorId !== undefined) registration.donorId = donorId;
+
+  const adminActor = session.user.name || session.user.email || "Admin";
+  const resolvedPaidBy = paidBy || (paymentStatus === "PAID" ? adminActor : null);
+  const resolvedPaidAt = paymentStatus === "PAID" ? (paidAt ? new Date(paidAt) : new Date()) : null;
+
+  if (paymentStatus !== undefined) {
+    if (!registration.donorDeal) {
+      registration.donorDeal = {} as any;
+    }
+    registration.donorDeal.paymentStatus = paymentStatus;
+    registration.donorDeal.paidAt = resolvedPaidAt;
+    registration.donorDeal.paidBy = resolvedPaidBy;
+    registration.isDonorPaid = paymentStatus === "PAID";
+    registration.paidAt = resolvedPaidAt;
+    registration.paidBy = resolvedPaidBy;
+    if (paymentReference !== undefined) {
+      registration.donorDeal.paymentReference = paymentReference;
+    }
+  }
   
   if (assignedHospitalId !== undefined) {
     const oldHospitalId = registration.assignedHospital;
-    if (String(oldHospitalId) !== String(assignedHospitalId)) {
+    const newHospitalId = assignedHospitalId ? assignedHospitalId : null;
+    if (String(oldHospitalId) !== String(newHospitalId)) {
       const historyEntry = {
         oldHospital: oldHospitalId || null,
-        newHospital: assignedHospitalId || null,
+        newHospital: newHospitalId || null,
         assignedBy: session.user.name || session.user.email,
         assignedAt: new Date(),
         reason: bodyData.reason || "Reassigned by administrator"
@@ -500,17 +771,18 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
       }
       registration.assignmentHistory.push(historyEntry as any);
 
-      registration.assignedHospital = assignedHospitalId || null;
-      registration.assignedBy = assignedHospitalId ? (session.user.name || session.user.email) : null;
-      registration.assignedAt = assignedHospitalId ? new Date() : null;
+      registration.assignedHospital = newHospitalId;
+      registration.assignedBy = newHospitalId ? (session.user.name || session.user.email) : null;
+      registration.assignedAt = newHospitalId ? new Date() : null;
     }
   }
-  
+
+  if (bodyData.clinicDeal !== undefined) registration.clinicDeal = bodyData.clinicDeal;
+  if (bodyData.donorDeal !== undefined) registration.donorDeal = bodyData.donorDeal;
+
   registration.reviewedBy = session.user.name || session.user.email;
   registration.reviewedAt = new Date();
   registration.updatedBy = session.user.name || session.user.email;
-
-  await registration.save();
 
   // Track Audit Log for registration status change
   if (statusChanged) {
@@ -519,12 +791,12 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
       await createAuditLog(
         null,
         "Registration Status Changed",
-        "DonorRegistration",
+        isEgg ? "EggDonorRegistration" : "SpermDonorRegistration",
         registration._id.toString(),
         session.user.name || session.user.email,
         oldValues.status,
-        status,
-        `Changed status of registration ${registration.registrationId} from "${oldValues.status}" to "${status}"`
+        effectiveStatus || status,
+        `Changed status of registration ${registration.registrationId} from "${oldValues.status}" to "${effectiveStatus || status}"`
       );
     } catch (auditErr) {
       console.error("Failed to log donor registration update audit:", auditErr);
@@ -550,17 +822,23 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
       await user.save();
     }
 
-    const count = await Donor.countDocuments();
-    const donorId = `DON-${new Date().getFullYear()}-${String(count + 1001).padStart(4, "0")}`;
-
     let donorRecord = await Donor.findOne({ user: user._id });
+    let resolvedDonorId = donorId || registration.donorId || donorRecord?.donorId;
+    if (!resolvedDonorId) {
+      const count = await Donor.countDocuments();
+      const prefix = isEgg ? "MED-ED" : "MED-SD";
+      resolvedDonorId = `${prefix}-${new Date().getFullYear()}-${String(count + 1001).padStart(4, "0")}`;
+    }
+
+    registration.donorId = resolvedDonorId;
+
     if (!donorRecord) {
       donorRecord = await Donor.create({
         user: user._id,
-        donorId,
+        donorId: resolvedDonorId,
         personalInformation: {
           dateOfBirth: registration.personalInfo.dateOfBirth ? new Date(registration.personalInfo.dateOfBirth) : new Date(),
-          gender: registration.personalInfo.gender || "Male",
+          gender: registration.personalInfo.gender || (isEgg ? "Female" : "Male"),
           bloodGroup: registration.personalInfo.bloodGroup || "O+",
           nationality: registration.personalInfo.nationality || "Indian",
           address: registration.contactInfo.currentAddress || "Not Provided",
@@ -585,9 +863,9 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
           eligibility: true,
           hemoglobin: 14.5,
           bloodPressure: "120/80",
-          allergies: registration.medicalInfo.allergies || "None",
-          diseases: registration.medicalInfo.medicalHistory || "None",
-          medications: registration.medicalInfo.currentMedications || "None",
+          allergies: registration.medicalInfo?.allergies || "None",
+          diseases: registration.medicalInfo?.medicalHistory || "None",
+          medications: registration.medicalInfo?.currentMedications || "None",
           medicalNotes: adminNotes || "",
         },
         donationInformation: {
@@ -603,14 +881,14 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
     // If there's an associated referral, link referredDonorId
     const Referral = (await import("@/models/Referral")).Referral;
     const ref = await Referral.findOneAndUpdate(
-      { referredRegistrationId: registrationId },
+      { referredRegistrationId: registration.registrationId },
       { 
         $set: { 
-          referredDonorId: donorId,
+          referredDonorId: resolvedDonorId,
           rewardStatus: "Approved"
         }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     // Trigger notification for registration approval
@@ -620,7 +898,7 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
       registration.personalInfo.fullName,
       registration.contactInfo.mobileNumber,
       {
-        registrationId,
+        registrationId: registration.registrationId,
         email: registration.contactInfo.emailAddress
       }
     );
@@ -639,6 +917,8 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
     }
   }
 
+  await registration.save();
+
   return JSON.parse(JSON.stringify(registration));
 }
 
@@ -647,17 +927,17 @@ export async function getAdminRegistrationById(id: string, session: any) {
     throw new Error("Unauthorized");
   }
   const role = (session.user as any).role;
-  if (!["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+  if (!["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(role)) {
     throw new Error("Forbidden");
   }
 
   await connectToDatabase();
-  const registration = await DonorRegistration.findOne({ registrationId: id });
-  if (!registration) {
+  const found = await findRegistrationInModels(id);
+  if (!found) {
     throw new Error("Not found");
   }
 
-  return JSON.parse(JSON.stringify(registration));
+  return JSON.parse(JSON.stringify(found.registration));
 }
 
 export async function patchAdminRegistrationFields(id: string, updateObj: Record<string, any>, session: any) {
@@ -666,7 +946,7 @@ export async function patchAdminRegistrationFields(id: string, updateObj: Record
   }
   const role = (session.user as any).role;
   const permissions = (session.user as any).permissions || [];
-  const isAllowed = ["ADMIN", "SUPER_ADMIN"].includes(role) || permissions.includes("VIEW_REGISTRATIONS");
+  const isAllowed = ["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(role) || permissions.includes("VIEW_REGISTRATIONS");
   if (!isAllowed) {
     throw new Error("Forbidden");
   }
@@ -682,6 +962,17 @@ export async function patchAdminRegistrationFields(id: string, updateObj: Record
     "contactInfo.mobileNumber",
     "consent.signatureDate",
     "documents.extraAttachment",
+    "documents.form13",
+    "documents.affidavit",
+    "form13",
+    "affidavit",
+    "pickupDate",
+    "recruitmentDate",
+    "supplyDate",
+    "status",
+    "certificateIssued",
+    "certificateIssuedAt",
+    "certificateIssuedBy",
   ];
 
   const filteredUpdate: Record<string, any> = {};
@@ -695,15 +986,16 @@ export async function patchAdminRegistrationFields(id: string, updateObj: Record
     throw new Error("No valid fields to update.");
   }
 
-  const updated = await DonorRegistration.findOneAndUpdate(
-    { registrationId: id },
-    { $set: filteredUpdate },
-    { new: true }
-  );
-
-  if (!updated) {
+  const found = await findRegistrationInModels(id);
+  if (!found) {
     throw new Error("Registration not found.");
   }
+
+  const updated = await found.model.findOneAndUpdate(
+    { registrationId: found.registration.registrationId },
+    { $set: filteredUpdate },
+    { returnDocument: 'after' }
+  );
 
   return JSON.parse(JSON.stringify(updated));
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { ConsultationRequest } from "@/models/ConsultationRequest";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { DonorInquiry } from "@/models/DonorInquiry";
 import { Referral } from "@/models/Referral";
 import { Donor } from "@/models/Donor";
@@ -9,6 +10,8 @@ import { Treatment } from "@/models/Treatment";
 import { ContactMessage } from "@/models/ContactMessage";
 import { Review } from "@/models/Review";
 import { AuditLog } from "@/models/AuditLog";
+import { ArtEggDonor } from "@/models/ArtEggDonor";
+import { ArtSpermDonor } from "@/models/ArtSpermDonor";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 
@@ -16,16 +19,11 @@ export async function GET() {
   try {
     const reqHeaders = await headers();
     const session = await auth.api.getSession({ headers: reqHeaders });
-    if (!session || !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)) {
-      return NextResponse.json({ success: false, error: "Unauthorized: Admins only." }, { status: 401 });
-    }
+    const userRole = (session?.user as any)?.role;
+    const allowedRoles = ["ADMIN", "SUPER_ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"];
 
-    const { redis } = await import("@/lib/redis");
-    if (process.env.UPSTASH_REDIS_REST_URL) {
-      const cachedStats = await redis.get("api:stats:dashboard");
-      if (cachedStats) {
-        return NextResponse.json({ success: true, stats: cachedStats });
-      }
+    if (!session || !allowedRoles.includes(userRole)) {
+      return NextResponse.json({ success: false, error: "Unauthorized: Administrative access required." }, { status: 401 });
     }
 
     const conn = await connectToDatabase();
@@ -53,11 +51,27 @@ export async function GET() {
     ] = await Promise.all([
       ConsultationRequest.countDocuments().catch(() => 0),
       ConsultationRequest.countDocuments({ status: "NEW" }).catch(() => 0),
-      DonorRegistration.countDocuments().catch(() => 0),
-      DonorRegistration.countDocuments({ status: "SUBMITTED" }).catch(() => 0),
-      DonorRegistration.countDocuments({ status: "APPROVED" }).catch(() => 0),
-      DonorRegistration.countDocuments({ status: "REJECTED" }).catch(() => 0),
-      DonorRegistration.countDocuments({ status: "SUSPENDED" }).catch(() => 0),
+      // Total registrations = egg + sperm combined
+      Promise.all([
+        EggDonorRegistration.countDocuments().catch(() => 0),
+        SpermDonorRegistration.countDocuments().catch(() => 0)
+      ]).then(([e, s]) => e + s),
+      Promise.all([
+        EggDonorRegistration.countDocuments({ status: "SUBMITTED" }).catch(() => 0),
+        SpermDonorRegistration.countDocuments({ status: "SUBMITTED" }).catch(() => 0)
+      ]).then(([e, s]) => e + s),
+      Promise.all([
+        EggDonorRegistration.countDocuments({ status: "APPROVED" }).catch(() => 0),
+        SpermDonorRegistration.countDocuments({ status: "APPROVED" }).catch(() => 0)
+      ]).then(([e, s]) => e + s),
+      Promise.all([
+        EggDonorRegistration.countDocuments({ status: "REJECTED" }).catch(() => 0),
+        SpermDonorRegistration.countDocuments({ status: "REJECTED" }).catch(() => 0)
+      ]).then(([e, s]) => e + s),
+      Promise.all([
+        EggDonorRegistration.countDocuments({ status: "SUSPENDED" }).catch(() => 0),
+        SpermDonorRegistration.countDocuments({ status: "SUSPENDED" }).catch(() => 0)
+      ]).then(([e, s]) => e + s),
       Treatment.countDocuments().catch(() => 0),
       ContactMessage.countDocuments().catch(() => 0),
       Review.countDocuments().catch(() => 0),
@@ -68,9 +82,16 @@ export async function GET() {
       Referral.countDocuments().catch(() => 0),
     ]);
 
-    // Sperm and Egg counts from registrations
-    const spermDonors = await DonorRegistration.countDocuments({ donorType: "sperm", status: "APPROVED" }).catch(() => 0);
-    const eggDonors = await DonorRegistration.countDocuments({ donorType: "egg", status: "APPROVED" }).catch(() => 0);
+    // Sperm and Egg counts from registrations and ART collections
+    const [regSperm, regEgg, artSperm, artEgg] = await Promise.all([
+      SpermDonorRegistration.countDocuments({ status: "APPROVED" }).catch(() => 0),
+      EggDonorRegistration.countDocuments({ status: "APPROVED" }).catch(() => 0),
+      ArtSpermDonor.countDocuments({ availability: "available" }).catch(() => 0),
+      ArtEggDonor.countDocuments({ availability: "available" }).catch(() => 0),
+    ]);
+    const spermDonors = regSperm + artSperm;
+    const eggDonors = regEgg + artEgg;
+    const calculatedActiveDonors = Math.max(activeDonors, spermDonors + eggDonors);
 
     // Referral rewards financial stats
     const paidReferrals = await Referral.find({ rewardStatus: "Paid" }).catch(() => []);
@@ -127,7 +148,10 @@ export async function GET() {
       
       const [inqCount, regCount, bookingCount, referralsPaid] = await Promise.all([
         DonorInquiry.countDocuments({ createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).catch(() => 0),
-        DonorRegistration.countDocuments({ createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).catch(() => 0),
+        Promise.all([
+          EggDonorRegistration.countDocuments({ createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).catch(() => 0),
+          SpermDonorRegistration.countDocuments({ createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).catch(() => 0)
+        ]).then(([e, s]) => e + s),
         ConsultationRequest.countDocuments({ createdAt: { $gte: startOfMonth, $lte: endOfMonth } }).catch(() => 0),
         Referral.aggregate([
           { $match: { rewardStatus: "Paid", createdAt: { $gte: startOfMonth, $lte: endOfMonth } } },
@@ -160,7 +184,13 @@ export async function GET() {
       });
     });
 
-    const lastRegistrations = await DonorRegistration.find().sort({ createdAt: -1 }).limit(3).catch(() => []);
+    const [lastEggRegs, lastSpermRegs] = await Promise.all([
+      EggDonorRegistration.find().sort({ createdAt: -1 }).limit(3).catch(() => []),
+      SpermDonorRegistration.find().sort({ createdAt: -1 }).limit(3).catch(() => []),
+    ]);
+    const lastRegistrations = [...lastEggRegs, ...lastSpermRegs]
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
     lastRegistrations.forEach((r: any) => {
       recentActivities.push({
         type: "registration",
@@ -184,11 +214,27 @@ export async function GET() {
 
     const lastAuditLogs = await AuditLog.find().sort({ createdAt: -1 }).limit(5).catch(() => []);
     lastAuditLogs.forEach((log: any) => {
+      let auditStatus = "Updated";
+      if (typeof log.newValue === "string") {
+        auditStatus = log.newValue;
+      } else if (log.newValue && typeof log.newValue === "object") {
+        auditStatus = typeof log.newValue.status === "string" 
+          ? log.newValue.status 
+          : (typeof log.newValue.name === "string" ? log.newValue.name : "Updated");
+      }
+
+      let auditDetails = "";
+      if (typeof log.details === "string") {
+        auditDetails = log.details;
+      } else if (log.details && typeof log.details === "object") {
+        auditDetails = log.details.name || log.details.registrationId || JSON.stringify(log.details);
+      }
+
       recentActivities.push({
         type: "audit",
-        title: log.action,
-        details: `${log.details || ""} (by ${log.performedBy})`,
-        status: log.newValue || "Updated",
+        title: typeof log.action === "string" ? log.action : "System Audit",
+        details: auditDetails ? `${auditDetails} (by ${log.performedBy})` : `Action by ${log.performedBy}`,
+        status: auditStatus,
         timestamp: log.createdAt
       });
     });
@@ -212,7 +258,7 @@ export async function GET() {
         // New statistics fields
         totalInquiries,
         totalConsultations,
-        activeDonors,
+        activeDonors: calculatedActiveDonors,
         spermDonors,
         eggDonors,
         referralCount,
@@ -229,10 +275,6 @@ export async function GET() {
         recentActivities: recentActivities.slice(0, 8)
       }
     };
-
-    if (process.env.UPSTASH_REDIS_REST_URL) {
-      await redis.setex("api:stats:dashboard", 120, JSON.stringify(responseData.stats));
-    }
 
     return NextResponse.json(responseData);
   } catch (error: any) {

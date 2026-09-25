@@ -16,8 +16,13 @@ import {
 } from "../services/donor-registration.service";
 
 async function getSession() {
-  const reqHeaders = await headers();
-  return await auth.api.getSession({ headers: reqHeaders });
+  try {
+    const reqHeaders = await headers();
+    const session = await auth.api.getSession({ headers: reqHeaders }).catch(() => null);
+    return session;
+  } catch (err) {
+    return null;
+  }
 }
 
 export async function createDraftRegistrationAction(donorType: string, bodyData: any) {

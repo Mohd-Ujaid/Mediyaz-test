@@ -35,20 +35,20 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
     }
   };
 
-  const getTextAreaClassName = (fieldKey: string, baseStyle = "w-full px-3 py-2 rounded-xl border bg-white dark:bg-slate-800 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500") => {
+  const getTextAreaClassName = (fieldKey: string, baseStyle = "w-full px-3 py-2 rounded-xl border bg-white  text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500") => {
     const hasError = errors?.[`medicalInfo.${fieldKey}`];
     if (hasError) {
       return `${baseStyle} border-red-500 focus:ring-red-500 focus:border-red-500 ring-1 ring-red-500/20`;
     }
-    return `${baseStyle} border-slate-200 dark:border-slate-700`;
+    return `${baseStyle} border-slate-200 `;
   };
 
-  const getSelectClassName = (fieldKey: string, baseStyle = "w-full h-9 px-3 rounded-[10px] border bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500") => {
+  const getSelectClassName = (fieldKey: string, baseStyle = "w-full h-9 px-3 rounded-[10px] border bg-white  text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500") => {
     const hasError = errors?.[`medicalInfo.${fieldKey}`];
     if (hasError) {
       return `${baseStyle} border-red-500 focus:ring-red-500 focus:border-red-500 ring-1 ring-red-500/20`;
     }
-    return `${baseStyle} border-slate-200 dark:border-slate-800`;
+    return `${baseStyle} border-slate-200 `;
   };
 
   const renderError = (fieldKey: string) => {
@@ -60,7 +60,7 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Medical Information</h3>
+        <h3 className="text-lg font-bold text-slate-900 ">Medical Information</h3>
         <p className="text-xs text-slate-500 mt-1">All medical information is kept strictly confidential and is used only for screening purposes.</p>
       </div>
 
@@ -75,15 +75,15 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
           { key: "geneticDisorders", label: "Genetic Disorders", placeholder: "Any known genetic conditions..." },
           { key: "psychologicalHistory", label: "Psychological History", placeholder: "Any mental health conditions..." },
           { key: "infectiousDiseases", label: "Infectious Diseases", placeholder: "HIV, Hepatitis, TB, STDs..." },
-          { key: "fertilityHistory", label: "Fertility History", placeholder: "Previous fertility treatments, pregnancies..." },
+          // { key: "fertilityHistory", label: "Fertility History", placeholder: "Previous fertility treatments, pregnancies..." },
         ].map(({ key, label, placeholder }) => (
-          <div key={key} className="space-y-2 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm">
+          <div key={key} className="space-y-2 p-3.5 rounded-xl border border-slate-100  bg-white  shadow-sm">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{label}</label>
+              <label className="text-xs font-semibold text-slate-700 ">{label}</label>
               <select
                 value={showTextarea[key] ? "Yes" : "No"}
                 onChange={(e) => handleToggle(key, e.target.value === "Yes")}
-                className="w-24 h-8 px-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                className="w-24 h-8 px-2 rounded-lg border border-slate-200  bg-white  text-xs focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
               >
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
@@ -106,11 +106,11 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
       </div>
 
       {/* Select Dropdowns */}
-      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5">
-        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">Lifestyle & Health Screening</h4>
+      <div className="p-4 rounded-xl bg-slate-50  border border-slate-200  space-y-5">
+        <h4 className="text-sm font-bold text-slate-700 ">Lifestyle & Health Screening</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Diabetes <span className="text-red-500">*</span></label>
+            <label className="text-xs font-semibold text-slate-700 ">Diabetes <span className="text-red-500">*</span></label>
             <select value={medicalInfo.diabetes} onChange={(e) => updateMedicalInfo({ diabetes: e.target.value as any })} className={getSelectClassName("diabetes")}>
               {RADIO_OPTIONS.diabetes.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
@@ -118,7 +118,7 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Hypertension <span className="text-red-500">*</span></label>
+            <label className="text-xs font-semibold text-slate-700 ">Hypertension <span className="text-red-500">*</span></label>
             <select value={medicalInfo.hypertension} onChange={(e) => updateMedicalInfo({ hypertension: e.target.value as any })} className={getSelectClassName("hypertension")}>
               {RADIO_OPTIONS.hypertension.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
@@ -126,7 +126,7 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Smoking Status <span className="text-red-500">*</span></label>
+            <label className="text-xs font-semibold text-slate-700 ">Smoking Status <span className="text-red-500">*</span></label>
             <select value={medicalInfo.smokingStatus} onChange={(e) => updateMedicalInfo({ smokingStatus: e.target.value as any })} className={getSelectClassName("smokingStatus")}>
               {RADIO_OPTIONS.smokingStatus.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
@@ -134,7 +134,7 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Alcohol Consumption <span className="text-red-500">*</span></label>
+            <label className="text-xs font-semibold text-slate-700 ">Alcohol Consumption <span className="text-red-500">*</span></label>
             <select value={medicalInfo.alcoholConsumption} onChange={(e) => updateMedicalInfo({ alcoholConsumption: e.target.value as any })} className={getSelectClassName("alcoholConsumption")}>
               {RADIO_OPTIONS.alcoholConsumption.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
@@ -142,7 +142,7 @@ export function StepMedicalInfo({ errors }: { errors?: Record<string, string> })
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Drug Use <span className="text-red-500">*</span></label>
+            <label className="text-xs font-semibold text-slate-700 ">Drug Use <span className="text-red-500">*</span></label>
             <select value={medicalInfo.drugUse} onChange={(e) => updateMedicalInfo({ drugUse: e.target.value as any })} className={getSelectClassName("drugUse")}>
               {RADIO_OPTIONS.drugUse.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>

@@ -39,7 +39,7 @@ export function StepLabReports({ errors }: { errors?: Record<string, string> }) 
         />
         {labReports.viralMarkers && labReports.viralMarkers.length > 0 && (
           <div className="space-y-2 mt-2">
-            {labReports.viralMarkers.map((report, idx) => (
+            {labReports.viralMarkers.map((report: any, idx: number) => (
               <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <span className="text-xs font-medium text-slate-600 truncate">{report.name}</span>
                 <button
@@ -89,7 +89,7 @@ export function StepLabReports({ errors }: { errors?: Record<string, string> }) 
         />
         {labReports.otherReports && labReports.otherReports.length > 0 && (
           <div className="space-y-2 mt-2">
-            {labReports.otherReports.map((report, idx) => (
+            {labReports.otherReports.map((report: any, idx: number) => (
               <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800">
                 <span className="text-xs font-medium text-slate-600 truncate">{report.name}</span>
                 <button

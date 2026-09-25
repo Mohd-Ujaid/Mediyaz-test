@@ -43,16 +43,6 @@ const fallbackDoctors = [
 
 export async function GET() {
   try {
-    const { redis } = await import("@/lib/redis");
-    
-    // Check Redis cache first (if redis is configured)
-    if (process.env.UPSTASH_REDIS_REST_URL) {
-      const cachedDoctors = await redis.get("api:doctors");
-      if (cachedDoctors) {
-        return NextResponse.json({ success: true, doctors: cachedDoctors });
-      }
-    }
-
     const conn = await connectToDatabase();
     if (!conn || !conn.connection || conn.connection.readyState !== 1) {
       return NextResponse.json({ success: true, doctors: fallbackDoctors });
@@ -60,11 +50,6 @@ export async function GET() {
 
     const doctors = await User.find({ role: UserRole.DOCTOR }).select("-password").catch(() => fallbackDoctors);
     const finalDoctors = doctors && doctors.length > 0 ? doctors : fallbackDoctors;
-
-    // Set cache for 60 seconds
-    if (process.env.UPSTASH_REDIS_REST_URL) {
-      await redis.setex("api:doctors", 60, JSON.stringify(finalDoctors));
-    }
 
     return NextResponse.json({
       success: true,

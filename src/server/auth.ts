@@ -36,6 +36,15 @@ if (!authSecret) {
 
 export const auth = betterAuth({
     secret: authSecret,
+    advanced: {
+      cookiePrefix: "mediyaz-admin",
+    },
+    trustedOrigins: [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://192.168.1.60:3000",
+      process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    ],
 
     database: mongodbAdapter(db),
     user: {
@@ -90,7 +99,7 @@ export const auth = betterAuth({
                         <h2 style="color: #0f172a; margin-bottom: 16px;">Password Reset Request</h2>
                         <p style="color: #475569; margin-bottom: 16px;">
                             Hello ${user.name},<br/><br/>
-                            We received a request to reset the password for your Mediyaz clinical portal account.
+                             We received a request to reset the password for your Mediyaz portal account.
                         </p>
                         <div style="text-align: center; margin: 32px 0;">
                             <a href="${url}" style="background-color: #2F4F57; color: #ffffff; font-weight: bold; font-size: 14px; text-decoration: none; padding: 14px 28px; border-radius: 8px; display: inline-block;">
@@ -101,7 +110,7 @@ export const auth = betterAuth({
                             This link expires in 1 hour. If you did not request a password reset, please ignore this email — your account remains secure.
                         </p>
                         <p style="color: #64748b; font-size: 12px; margin-top: 24px;">
-                            — Mediyaz Clinical Operations Team
+                            — Mediyaz Operations Team
                         </p>
                     </div>
                 `,

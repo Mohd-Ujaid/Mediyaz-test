@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Award, Lock, Heart, MapPin } from "lucide-react";
+import { ShieldCheck, Award, Lock, Heart, MapPin, Phone, Mail, FileCheck, ArrowUpRight } from "lucide-react";
 import { siteConfig } from "@/config/site.config";
 
 export function Footer() {
@@ -14,114 +14,90 @@ export function Footer() {
   }
 
   return (
-    <footer className="bg-background text-muted-foreground pt-16 pb-12 border-t">
-      <div className="container mx-auto px-4">
+    <footer className="relative z-40 bg-[#112023] text-teal-100/70 pt-16 pb-12 border-t border-teal-950/80">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Accreditation Badges Banner Driven by siteConfig */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-6 sm:p-8 rounded-3xl bg-muted/30 border mb-16">
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground text-sm">CAP & CLIA Accredited</h4>
-              <p className="text-xs text-muted-foreground">Highest clinical laboratory standards</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-              <Lock className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground text-sm">100% Privacy Guarantee</h4>
-              <p className="text-xs text-muted-foreground">256-bit encrypted health data</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-brand-500/10 text-brand-600 dark:text-brand-400">
-              <Award className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground text-sm">FDA Registered Facility</h4>
-              <p className="text-xs text-muted-foreground">Federal cell & tissue governance</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-              <Heart className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground text-sm">Cell Viability 99%</h4>
-              <p className="text-xs text-muted-foreground">-196°C Vapor phase nitrogen storage</p>
-            </div>
-          </div>
-        </div>
-
         {/* Links Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-teal-900/40">
           
-          {/* Brand & Address */}
+          {/* Brand & Contact Info */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-3">
+            <Link href="/" className="inline-block bg-white/5 hover:bg-white/10 p-2.5 rounded-xl transition-colors">
               <Image
                 src="/images/logo.webp"
                 alt="Mediyaz Art Bank"
-                width={160}
-                height={40}
-                className="h-10 w-auto object-contain"
+                width={200}
+                height={55}
+                className="h-9 w-auto object-contain brightness-0 invert"
+                priority
               />
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed max-w-sm">
-              {siteConfig.description}
+            </Link>
+            <p className="text-xs sm:text-sm text-teal-100/80 leading-relaxed max-w-md">
+              Mediyaz is a professional donor access and coordination platform. We supply cryo-preserved oocytes and semen samples to authorized fertility clinics and hospitals under strict ethical standards.
             </p>
-            <div className="flex items-center gap-3 pt-2 text-muted-foreground text-xs">
-              <MapPin className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400 shrink-0" />
-              <span>{siteConfig.contact.address.city}, {siteConfig.contact.address.state} • {siteConfig.contact.address.country}</span>
+            <div className="space-y-2 pt-2 text-xs">
+              <div className="flex items-center gap-2.5 text-teal-50/90">
+                <MapPin className="w-4 h-4 text-[#e7ae08] shrink-0 mt-0.5" />
+                <span>{siteConfig.contact.address.street}, {siteConfig.contact.address.city}, {siteConfig.contact.address.country}</span>
+              </div>
+              <div className="flex items-center gap-2.5 text-teal-50/90">
+                <Phone className="w-4 h-4 text-[#e7ae08] shrink-0" />
+                <span>{siteConfig.contact.phone} (Coordinated Desk)</span>
+              </div>
+              <div className="flex items-center gap-2.5 text-teal-50/90">
+                <Mail className="w-4 h-4 text-[#e7ae08] shrink-0" />
+                <span>{siteConfig.contact.email}</span>
+              </div>
             </div>
           </div>
 
-          {/* Programs & Patients */}
+          {/* Clinics & Partners */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Donor Programs</h4>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li><Link href="/donor" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Donor Programs Overview</Link></li>
-              <li><Link href="/donor?type=sperm" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Sperm Donor Program</Link></li>
-              <li><Link href="/donor?type=egg" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Egg Donor Program</Link></li>
-              <li><Link href="/donor/query" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Submit Donor Inquiry</Link></li>
-              <li><Link href="/donor/register" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Complete Registration</Link></li>
-              <li><Link href="/recipient" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Find a Donor (Intended Parents)</Link></li>
-              <li><Link href="/track" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Track Pre-Screening Status</Link></li>
+            <h4 className="text-xs font-bold text-[#faf9f6] uppercase tracking-wider">Clinics & Hospitals</h4>
+            <ul className="space-y-2.5 text-xs">
+              <li><Link href="/recipient/find-donor" className="hover:text-white font-semibold text-[#e7ae08] transition-colors flex items-center gap-1">REQUEST A DONOR <ArrowUpRight className="w-3 h-3 text-teal-200/60" /></Link></li>
+              <li><Link href="/recipient/available-donors" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Our Partner Networks</Link></li>
+              <li><Link href="/clinics" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Clinical Hubs</Link></li>
+              <li><Link href="/track" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Track Shipment Status</Link></li>
             </ul>
           </div>
 
-          {/* Resources & Support */}
+          {/* Intended Parents */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">Clinical Services</h4>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li><Link href="/services" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Fertility Services</Link></li>
-              <li><Link href="/doctors" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Our Specialists</Link></li>
-              <li><Link href="/clinics" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Clinics & Hospitals</Link></li>
-              <li><Link href="/about" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">About Us</Link></li>
-              <li><Link href="/blog" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Research & Blog</Link></li>
-              <li><Link href="/contact" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Contact & Support</Link></li>
-              <li><Link href="/admin" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Staff Console</Link></li>
+            <h4 className="text-xs font-bold text-[#faf9f6] uppercase tracking-wider">Intended Parents</h4>
+            <ul className="space-y-2.5 text-xs">
+              <li><Link href="/recipient/available-donors" className="hover:text-white font-semibold text-[#e7ae08] transition-colors flex items-center gap-1">FIND A DONOR <ArrowUpRight className="w-3 h-3 text-teal-200/60" /></Link></li>
+              <li><Link href="/recipient/find-donor" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Submit Matching Preference</Link></li>
+              <li><Link href="/recipient/available-donors" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Private Registry Lookup</Link></li>
+              <li><Link href="/track" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Track Coordination Request</Link></li>
+            </ul>
+          </div>
+
+          {/* Donors & Resources */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-[#faf9f6] uppercase tracking-wider">Donors & Company</h4>
+            <ul className="space-y-2.5 text-xs">
+              <li><Link href="/donor" className="hover:text-white font-semibold text-[#e7ae08] transition-colors flex items-center gap-1">BECOME A DONOR <ArrowUpRight className="w-3 h-3 text-teal-200/60" /></Link></li>
+              <li><Link href="/donor/register" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Apply Online</Link></li>
+              <li><Link href="/about" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">About Mediyaz</Link></li>
+              <li><Link href="/doctors" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Physician Directory</Link></li>
+              <li><Link href="/contact" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Contact Clinical Support</Link></li>
             </ul>
           </div>
 
         </div>
 
-        {/* Bottom Legal */}
-        <div className="pt-8 flex flex-col md:flex-row items-center justify-between text-xs text-muted-foreground gap-4">
-          <div>
-            &copy; {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
+        {/* Bottom Legal Notice */}
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-teal-200/60 gap-4">
+          <div className="max-w-2xl text-center sm:text-left">
+            &copy; {new Date().getFullYear()} {siteConfig.name}. Mediyaz coordinates donor access. Surgical procedures, IVF treatments, and medical diagnostics are provided independently by authorized clinical partners.
           </div>
-          <div className="flex items-center gap-6">
-            <Link href="/privacy" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Terms of Service</Link>
-            <Link href="/hipaa" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">HIPAA Compliance</Link>
-            <Link href="/security" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">Security Disclosure</Link>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
+            <Link href="/about" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Ethical Code</Link>
+            <Link href="/contact" className="hover:text-[#e7ae08] text-teal-100/80 transition-colors">Privacy Governance</Link>
           </div>
         </div>
+
       </div>
     </footer>
   );

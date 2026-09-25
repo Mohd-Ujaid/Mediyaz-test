@@ -2,11 +2,12 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface IPricingSnapshot {
   donorDealPrice: number;
-  serviceCharge: number;
-  processingFee: number;
-  registrationFee: number;
-  commission: number;
-  additionalCharges: number;
+  profiledonorDealPrice: number;
+  // serviceCharge: number;
+  // processingFee: number;
+  // registrationFee: number;
+  // commission: number;
+  // additionalCharges: number;
   currency: string;
   changedBy: string;
   changedAt: Date;
@@ -20,11 +21,11 @@ export interface IHospital extends Document {
 
   // Basic Information
   shortName: string;
-  code: string;
+  // code: string;
   registrationNumber: string;
-  licenseNumber: string;
+  // licenseNumber: string;
   gstNumber?: string;
-  panNumber?: string;
+  // panNumber?: string;
 
   // Contact
   contactPerson: string;
@@ -44,17 +45,18 @@ export interface IHospital extends Document {
   // Medical Information
   hospitalType: string; // e.g. "Public", "Private", "Trust"
   specializations: string[];
-  organTypesSupported: string[];
-  icuAvailability: boolean;
-  transplantLicenseNumber: string;
+  // organTypesSupported: string[];
+  // icuAvailability: boolean;
+  // transplantLicenseNumber: string;
 
   // Pricing & Financials (Admin Only)
   donorDealPrice: number;
-  serviceCharge: number;
-  processingFee: number;
-  registrationFee: number;
-  commission: number;
-  additionalCharges: number;
+  profiledonorDealPrice: number;
+  // serviceCharge: number;
+  // processingFee: number;
+  // registrationFee: number;
+  // commission: number;
+  // additionalCharges: number;
   currency: string;
   pricingHistory: IPricingSnapshot[];
 
@@ -65,11 +67,12 @@ export interface IHospital extends Document {
 const PricingSnapshotSchema = new Schema<IPricingSnapshot>(
   {
     donorDealPrice: { type: Number, required: true },
-    serviceCharge: { type: Number, required: true },
-    processingFee: { type: Number, required: true },
-    registrationFee: { type: Number, required: true },
-    commission: { type: Number, required: true },
-    additionalCharges: { type: Number, required: true },
+    profiledonorDealPrice: { type: Number, required: true },
+    // serviceCharge: { type: Number, required: true },
+    // processingFee: { type: Number, required: true },
+    // registrationFee: { type: Number, required: true },
+    // commission: { type: Number, required: true },
+    // additionalCharges: { type: Number, required: true },
     currency: { type: String, default: "INR" },
     changedBy: { type: String, required: true },
     changedAt: { type: Date, default: Date.now }
@@ -86,11 +89,11 @@ const HospitalSchema = new Schema<IHospital>(
 
     // Basic
     shortName: { type: String, required: true },
-    code: { type: String, required: true, unique: true },
+    // code: { type: String, required: true, unique: true },
     registrationNumber: { type: String, required: true },
-    licenseNumber: { type: String, required: true },
+    // licenseNumber: { type: String, required: true },
     gstNumber: { type: String, default: "" },
-    panNumber: { type: String, default: "" },
+    // panNumber: { type: String, default: "" },
 
     // Contact
     contactPerson: { type: String, required: true },
@@ -110,17 +113,18 @@ const HospitalSchema = new Schema<IHospital>(
     // Medical
     hospitalType: { type: String, required: true },
     specializations: { type: [String], default: [] },
-    organTypesSupported: { type: [String], default: [] },
-    icuAvailability: { type: Boolean, default: false },
-    transplantLicenseNumber: { type: String, required: true },
+    // organTypesSupported: { type: [String], default: [] },
+    // icuAvailability: { type: Boolean, default: false },
+    // transplantLicenseNumber: { type: String, required: true },
 
     // Pricing
     donorDealPrice: { type: Number, required: true, default: 0 },
-    serviceCharge: { type: Number, required: true, default: 0 },
-    processingFee: { type: Number, required: true, default: 0 },
-    registrationFee: { type: Number, required: true, default: 0 },
-    commission: { type: Number, required: true, default: 0 },
-    additionalCharges: { type: Number, required: true, default: 0 },
+    profiledonorDealPrice: { type: Number, required: true, default: 0 },
+    // serviceCharge: { type: Number, required: true, default: 0 },
+    // processingFee: { type: Number, required: true, default: 0 },
+    // registrationFee: { type: Number, required: true, default: 0 },
+    // commission: { type: Number, required: true, default: 0 },
+    // additionalCharges: { type: Number, required: true, default: 0 },
     currency: { type: String, required: true, default: "INR" },
     pricingHistory: { type: [PricingSnapshotSchema], default: [] }
   },

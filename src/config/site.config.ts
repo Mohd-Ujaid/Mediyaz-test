@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * MEDIYAZ FERTILITY CLINIC - PRODUCTION SITE & BRANDING CONFIGURATION
+ * MEDIYAZ ART BANK - PRODUCTION SITE & BRANDING CONFIGURATION
  * ==============================================================================
  * Central configuration file for white-label enterprise deployment.
  * All brand names, logos, contact info, accreditations, and legal notices
@@ -12,7 +12,7 @@ export const siteConfig = {
   shortName: process.env.NEXT_PUBLIC_SITE_SHORT_NAME || "Mediyaz",
   tagline: "Seeds for Life",
   description:
-    "Mediyaz Art Bank – Seeds for Life. A premium international fertility platform, cryogenic sperm & egg registry, and regenerative medicine center.",
+    "Mediyaz Art Bank – Seeds for Life. A premium international donor-access and donor-coordination platform connecting clinics, hospitals and individuals with sperm and egg donor programs.",
   url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 
   // Brand Assets & Styling
@@ -25,21 +25,21 @@ export const siteConfig = {
 
   // Contact Information
   contact: {
-    phone: process.env.NEXT_PUBLIC_CONTACT_PHONE || "+1 (800) 555-0199",
+    phone: process.env.NEXT_PUBLIC_CONTACT_PHONE || "+91 9667780807",
     emergencyHotline:
-      process.env.NEXT_PUBLIC_EMERGENCY_HOTLINE || "+1 (800) 555-0190",
-    email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "contact@mediyaz.org",
+      process.env.NEXT_PUBLIC_EMERGENCY_HOTLINE || "+91 9667780807",
+    email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "info@mediyazartbank.com",
     supportEmail:
-      process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@mediyaz.org",
-    clinicalDeskEmail: "fertility@mediyaz.org",
+      process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "info@mediyazartbank.com",
+    clinicalDeskEmail: "info@mediyazartbank.com",
     address: {
-      street: "gali no 4",
-      city: "new delhi",
-      state: "In",
+      street: "336 Gali No. 4, Govindpuri",
+      city: "Kalkaji, South Delhi",
+      state: "Delhi",
       zip: "110019",
       country: "India",
     },
-    hours: "Mon - Fri: 8:00 AM - 6:00 PM EST | 24/7 Emergency Line",
+    hours: "10:00 AM-06:00PM | Monday - Saturday",
   },
 
   // Clinical Accreditations & Compliance Badges

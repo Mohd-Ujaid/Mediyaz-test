@@ -34,13 +34,15 @@ export async function GET(req: Request) {
     // 2. Query permissions
     let query: any = {};
 
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+
     if (userRole === "ADMIN" || userRole === "SUPER_ADMIN" || userRole === "STAFF") {
       // Admin query filters
       if (status) query.status = status;
       if (priority) query.priority = priority;
       if (lookingFor) query["treatmentRequirement.lookingFor"] = lookingFor;
       if (bloodGroup) query["donorPreferences.bloodGroup"] = bloodGroup;
-      if (city) query["personalDetails.city"] = { $regex: city, $options: "i" };
+      if (city) query["personalDetails.city"] = { $regex: escapeRegex(city), $options: "i" };
       if (assignedStaff) {
         if (assignedStaff === "unassigned") {
           query.assignedStaff = { $exists: false };
@@ -50,10 +52,11 @@ export async function GET(req: Request) {
       }
 
       if (search) {
+        const safeSearch = escapeRegex(search);
         query.$or = [
-          { "personalDetails.fullName": { $regex: search, $options: "i" } },
-          { "personalDetails.email": { $regex: search, $options: "i" } },
-          { "personalDetails.phone": { $regex: search, $options: "i" } },
+          { "personalDetails.fullName": { $regex: safeSearch, $options: "i" } },
+          { "personalDetails.email": { $regex: safeSearch, $options: "i" } },
+          { "personalDetails.phone": { $regex: safeSearch, $options: "i" } },
         ];
       }
     } else {
@@ -95,7 +98,7 @@ export async function POST(req: Request) {
     let userId = reqUser?.id;
 
     // 2. Resolve target User database record
-    let targetUserRecord;
+    let targetUserRecord = null;
     const personalEmail = body.personalDetails?.email || reqUser?.email;
     const personalName = body.personalDetails?.fullName || reqUser?.name;
     const personalPhone = body.personalDetails?.phone || (reqUser as any)?.phone;
@@ -103,17 +106,18 @@ export async function POST(req: Request) {
     if (userId) {
       targetUserRecord = await User.findById(userId);
     } else if (personalEmail) {
-      targetUserRecord = await User.findOne({ email: personalEmail });
-    }
-
-    if (!targetUserRecord && personalEmail) {
-      targetUserRecord = await User.create({
-        name: personalName,
-        email: personalEmail,
-        phone: personalPhone,
-        role: UserRole.RECIPIENT,
-        status: "ACTIVE",
-      });
+      // Security: Only create new recipient record if email is unregistered.
+      // Do NOT attach guest submission to an existing account without authentication.
+      const existing = await User.findOne({ email: personalEmail.toLowerCase() });
+      if (!existing) {
+        targetUserRecord = await User.create({
+          name: personalName,
+          email: personalEmail.toLowerCase(),
+          phone: personalPhone,
+          role: UserRole.RECIPIENT,
+          status: "ACTIVE",
+        });
+      }
     }
 
     // 3. Create requirements document

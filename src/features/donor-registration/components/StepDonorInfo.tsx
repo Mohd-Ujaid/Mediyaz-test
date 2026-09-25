@@ -327,7 +327,7 @@ export function StepDonorInfo({ errors }: { errors?: Record<string, string> }) {
             {renderError("abstinencePeriod")}
           </div>
         </div>
-        {renderClinicalPanels()}
+        {/* Clinical panels removed */}
       </div>
     );
   }
@@ -541,7 +541,7 @@ export function StepDonorInfo({ errors }: { errors?: Record<string, string> }) {
           {renderError("otherPointsOfNote")}
         </div>
       </div>
-      {renderClinicalPanels()}
+      {/* Clinical panels removed */}
     </div>
   );
 }

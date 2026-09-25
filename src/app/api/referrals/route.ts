@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Referral } from "@/models/Referral";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { triggerWorkflowNotifications } from "@/features/notifications/services/workflow-notification.service";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
@@ -54,9 +55,11 @@ export async function GET(req: Request) {
     // Fetch registration statuses for each referred registration
     const enrichedReferrals = await Promise.all(
       referrals.map(async (ref: any) => {
-        const registration = await DonorRegistration.findOne({ registrationId: ref.referredRegistrationId })
-          .select("status")
-          .catch(() => null);
+        const regId = ref.referredRegistrationId;
+        const registration = await (regId?.startsWith("MED-SD") || regId?.startsWith("SPM")
+          ? SpermDonorRegistration.findOne({ registrationId: regId }).select("status").catch(() => null)
+          : EggDonorRegistration.findOne({ registrationId: regId }).select("status").catch(() => null)
+        );
         return {
           ...ref.toObject(),
           registrationStatus: registration ? registration.status : "PENDING_REVIEW",

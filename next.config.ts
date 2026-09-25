@@ -1,48 +1,54 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // allowedDevOrigins: ["192.168.1.2"],
+   allowedDevOrigins: ['192.168.1.60'],
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        pathname: '/**',
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
       },
       {
-        protocol: 'https',
-        hostname: 'ik.imagekit.io',
-        pathname: '/**',
+        protocol: "https",
+        hostname: "ik.imagekit.io",
+        pathname: "/**",
       },
     ],
   },
   experimental: {
-    optimizePackageImports: ['lucide-react', 'framer-motion'],
+    optimizePackageImports: ["lucide-react", "framer-motion"],
   },
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: "/(.*)",
         headers: [
           {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on',
+            key: "X-DNS-Prefetch-Control",
+            value: "on",
           },
           {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains',
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
           },
           {
-            key: 'X-Frame-Options',
-            value: 'DENY',
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
           },
           {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'self'",
           },
           {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          }
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
         ],
       },
     ];
@@ -50,8 +56,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/employee/:path+',
-        destination: '/admin/:path+',
+        source: "/admin/:path*",
+        destination: "/:path*",
       },
     ];
   },

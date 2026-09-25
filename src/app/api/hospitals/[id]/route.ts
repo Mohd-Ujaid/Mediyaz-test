@@ -21,7 +21,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const hospital = await Hospital.findById(id);
+    const hospital: any = await Hospital.findById(id);
     if (!hospital) {
       return NextResponse.json({ success: false, error: "Hospital/clinic not found." }, { status: 404 });
     }

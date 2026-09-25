@@ -155,6 +155,17 @@ export async function GET(req: Request) {
 // POST: Guest submits message
 export async function POST(req: Request) {
   try {
+    const reqHeaders = await headers();
+    const clientIp = reqHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || reqHeaders.get("x-real-ip") || "127.0.0.1";
+    const { checkRateLimit } = await import("@/lib/rate-limiter");
+    const rateCheck = checkRateLimit(`contact_${clientIp}`, 5, 10 * 60 * 1000);
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: "Too many contact messages from this connection. Please wait 10 minutes before submitting again." },
+        { status: 429 }
+      );
+    }
+
     await connectToDatabase();
     const body = await req.json();
     const { name, email, message } = body;
@@ -257,13 +268,13 @@ export async function PATCH(req: Request) {
                 <p style="font-size: 11px; color: #64748b; margin: 4px 0 0 0;">Accredited Cryogenic ART Donor Registry</p>
               </div>
               <p>Dear <strong>${contact.name}</strong>,</p>
-              <p>Thank you for reaching out to Mediyaz ART Bank. Our clinical team has reviewed your inquiry and replied:</p>
+              <p>Thank you for reaching out to Mediyaz ART Bank. Our registry coordination team has reviewed your inquiry and replied:</p>
               <div style="border-left: 4px solid #0f766e; padding: 12px 16px; margin: 20px 0; color: #334155; font-style: italic; border-radius: 4px; background: #f8fafc;">
                 ${replyEmailText.replace(/\n/g, "<br/>")}
               </div>
               <p>If you have any further questions or require additional assistance, feel free to reply to this email.</p>
               <br/>
-              <p style="margin: 0; font-weight: bold; color: #0f766e;">Mediyaz Clinical Support Team</p>
+              <p style="margin: 0; font-weight: bold; color: #0f766e;">Mediyaz Art Bank Support Team</p>
               <p style="margin: 4px 0 0 0; font-size: 11px; color: #64748b;">Global Helpdesk & Coordination Registry</p>
             </div>
           `

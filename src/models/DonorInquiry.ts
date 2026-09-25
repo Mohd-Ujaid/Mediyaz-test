@@ -15,6 +15,7 @@ export interface IDonorInquiry extends Document {
   skinTone?: string;
   city: string;
   state: string;
+  country?: string;
   preferredContactTime: string;
   message?: string;
   consent: boolean;
@@ -54,6 +55,7 @@ const DonorInquirySchema = new Schema<IDonorInquiry>(
     skinTone: { type: String },
     city: { type: String, required: true },
     state: { type: String, required: true },
+    country: { type: String, default: "India" },
     preferredContactTime: { type: String, required: true },
     message: { type: String },
     consent: { type: Boolean, required: true },

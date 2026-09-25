@@ -5,9 +5,9 @@ if (!process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_PRIVATE_KEY || !pr
 }
 
 export const imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY || "dummy_public_key",
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY || "dummy_private_key",
-  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/dummy",
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY || "public_key",
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY || "private_REz6IYv4Mh5lRWoNtOD6yvQy9l0=",
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || "https://ik.imagekit.io/ytb96aypi",
 });
 
 export async function uploadToImageKit(
