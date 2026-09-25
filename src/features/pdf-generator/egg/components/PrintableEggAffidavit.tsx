@@ -166,11 +166,13 @@ const EggAffidavit = ({ consent, donor, documents, withHeader = false }: any) =>
                 width: 110,
                 height: 40,
                 objectFit: "contain",
+                marginBottom: 3,
               }}
             />
           ) : (
             <View style={{ height: 35, width: 120, borderBottomWidth: 1, borderBottomColor: "#666" }} />
           )}
+          <Text style={styles.deponentLabel}>DEPONENT</Text>
         </View>
       </Page>
 
@@ -278,11 +280,13 @@ const EggAffidavit = ({ consent, donor, documents, withHeader = false }: any) =>
                   width: 100,
                   height: 35,
                   objectFit: "contain",
+                  marginBottom: 3,
                 }}
               />
             ) : (
               <View style={{ height: 30 }} />
             )}
+            <Text style={styles.deponentLabel}>DEPONENT</Text>
           </View>
         </View>
       </Page>
@@ -318,7 +322,7 @@ const EggAffidavit = ({ consent, donor, documents, withHeader = false }: any) =>
         </View>
 
         {/* Deponent Signature for Undertaking */}
-        <View style={{ alignItems: "flex-end", marginTop: 10, marginBottom: 16 }}>
+        <View style={{ alignItems: "flex-end", marginTop: 8, marginBottom: 16 }}>
           {signatureUrl ? (
             <Image
               src={signatureUrl}
@@ -327,11 +331,13 @@ const EggAffidavit = ({ consent, donor, documents, withHeader = false }: any) =>
                 width: 95,
                 height: 32,
                 objectFit: "contain",
+                marginBottom: 3,
               }}
             />
           ) : (
             <View style={{ height: 26 }} />
           )}
+          <Text style={styles.deponentLabel}>DEPONENT</Text>
         </View>
 
         {/* Verification Section */}
@@ -364,11 +370,13 @@ const EggAffidavit = ({ consent, donor, documents, withHeader = false }: any) =>
                     width: 95,
                     height: 32,
                     objectFit: "contain",
+                    marginBottom: 3,
                   }}
                 />
               ) : (
                 <View style={{ height: 26 }} />
               )}
+              <Text style={styles.deponentLabel}>DEPONENT</Text>
             </View>
           </View>
         </View>
