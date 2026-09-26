@@ -251,7 +251,7 @@ export function NotificationBell({
                       >
                         {notif.title}
                       </p>
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap" suppressHydrationWarning>
                         {new Date(notif.createdAt).toLocaleDateString()}
                       </span>
                     </div>

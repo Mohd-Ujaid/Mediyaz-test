@@ -17,6 +17,12 @@ import {
   Image as ImageIcon,
   AlertCircle,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const ReactPdfViewer = dynamic(
+  () => import("@/features/pdf-preview/components/ReactPdfViewer"),
+  { ssr: false }
+);
 
 interface InAppDocumentViewerProps {
   isOpen: boolean;
@@ -41,7 +47,18 @@ export function InAppDocumentViewer({
   const [hasError, setHasError] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const ua = navigator.userAgent || "";
+      setIsMobile(
+        /android|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile/i.test(ua) ||
+        window.innerWidth < 768
+      );
+    }
+  }, []);
 
   // Reset state on open or URL change
   useEffect(() => {
@@ -300,18 +317,14 @@ export function InAppDocumentViewer({
           )}
 
           {isPdf ? (
-            <iframe
-              ref={iframeRef}
-              id="document-preview-frame"
-              src={`${internalProxyUrl}#toolbar=1&navpanes=0`}
-              onLoad={() => setLoading(false)}
-              onError={() => {
-                setLoading(false);
-                setHasError(true);
-              }}
-              className="w-full h-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs"
-              title={title}
-            />
+            <div className="w-full h-full overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+              <ReactPdfViewer
+                pdfUrl={internalProxyUrl}
+                title={title}
+                fileName={resolvedName}
+                embedded={true}
+              />
+            </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center overflow-auto p-4 select-none">
               <img

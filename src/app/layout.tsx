@@ -22,7 +22,7 @@ export default function RootLayout({
     
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen flex flex-col bg-background antialiased selection:bg-primary selection:text-white`}>
+      <body suppressHydrationWarning className={`${inter.className} min-h-screen flex flex-col bg-background antialiased selection:bg-primary selection:text-white`}>
         <TooltipProvider>
           <LayoutWrapper>{children}</LayoutWrapper>
         </TooltipProvider>
