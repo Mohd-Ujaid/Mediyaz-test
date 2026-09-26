@@ -63,6 +63,11 @@ export async function proxy(request: NextRequest) {
     });
   }
 
+  // Redirect authenticated users away from login/auth pages to dashboard
+  if (isAuthPage) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
   // 2. Authenticated Admin Authorization & Global Delete Restrictions
   const role = (session.user as any)?.role;
   const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(role);

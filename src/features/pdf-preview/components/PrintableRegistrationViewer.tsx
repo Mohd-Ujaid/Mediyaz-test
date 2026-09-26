@@ -77,9 +77,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { pdf } from "@react-pdf/renderer";
 import { PDFDocument } from "pdf-lib";
 import PrintableRegistrationDocument from "@/features/pdf-generator/components/PrintableRegistration";
+
+const ReactPdfViewer = dynamic(() => import("./ReactPdfViewer"), {
+  ssr: false,
+});
 
 interface PrintableRegistrationViewerProps {
   registration: any;
@@ -203,21 +208,12 @@ export default function PrintableRegistrationViewer({
   }, [registration, qrCodeUrl]);
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100vh",
-      }}
-    >
+    <div style={{ width: "100%", height: "100vh" }}>
       {pdfUrl ? (
-        <iframe
-          src={pdfUrl}
-          width="100%"
-          height="100%"
-          title="Merged PDF"
-          style={{
-            border: "none",
-          }}
+        <ReactPdfViewer
+          pdfUrl={pdfUrl}
+          title="Registration PDF"
+          fileName="registration.pdf"
         />
       ) : (
         <div

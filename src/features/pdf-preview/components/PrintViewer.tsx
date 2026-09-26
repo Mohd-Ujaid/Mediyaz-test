@@ -2,8 +2,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { pdf } from "@react-pdf/renderer";
 import PrintableRegistrationDocument from "@/features/pdf-generator/components/PrintableRegistration";
+
+const ReactPdfViewer = dynamic(() => import("./ReactPdfViewer"), {
+  ssr: false,
+});
 
 interface PrintViewerProps {
   registration: any;
@@ -25,7 +30,30 @@ export default function PrintViewer({
   affidavitType,
 }: PrintViewerProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const isOnlyAffidavit =
+    sections &&
+    sections.length === 1 &&
+    (sections[0] === "affidavit" || sections[0] === "egg_affidavit");
+
+  const isEgg =
+    registration?.donorType === "egg" ||
+    registration?.registrationId?.startsWith("MED-ED") ||
+    registration?.registrationId?.startsWith("EGG-");
+
+  const docTitle = isOnlyAffidavit
+    ? isEgg
+      ? "Affidavit of Oocyte Donor"
+      : "Affidavit of Sperm Donor"
+    : isEgg
+    ? "Egg Donor Registration Form"
+    : "Sperm Donor Registration Form";
+
+  const filePrefix = isOnlyAffidavit ? "Affidavit" : "Registration";
+  const regId = registration?.registrationId || registration?.fileNumber || "Donor";
+  const fileName = `${regId}_${filePrefix}.pdf`;
 
   useEffect(() => {
     async function generatePdf() {
@@ -45,14 +73,14 @@ export default function PrintViewer({
         const shouldPrintUploadedAffidavit =
           Boolean(uploadedAffidavitUrl) && affidavitType !== "template";
 
-        const isOnlyAffidavit =
+        const isOnlyAffidavitLocal =
           sections &&
           sections.length === 1 &&
           (sections[0] === "affidavit" || sections[0] === "egg_affidavit");
 
         // Fast path: if ONLY affidavit is selected, and it's an uploaded PDF, and user chose uploaded
         if (
-          isOnlyAffidavit &&
+          isOnlyAffidavitLocal &&
           shouldPrintUploadedAffidavit &&
           isAffidavitPdf &&
           affidavitType === "uploaded"
@@ -62,6 +90,7 @@ export default function PrintViewer({
             const externalBlob = await externalRes.blob();
             const finalPdfBlob = new Blob([externalBlob], { type: "application/pdf" });
             const url = URL.createObjectURL(finalPdfBlob);
+            setPdfBlob(finalPdfBlob);
             setPdfUrl(url);
             return;
           } catch (directErr) {
@@ -132,6 +161,7 @@ export default function PrintViewer({
         }
 
         const url = URL.createObjectURL(finalBlob);
+        setPdfBlob(finalBlob);
         setPdfUrl(url);
       } catch (err: any) {
         console.error("Failed to generate PDF:", err);
@@ -157,23 +187,24 @@ export default function PrintViewer({
     );
   }
 
+  if (pdfUrl) {
+    return (
+      <ReactPdfViewer
+        pdfBlob={pdfBlob}
+        pdfUrl={pdfUrl}
+        title={docTitle}
+        fileName={fileName}
+      />
+    );
+  }
+
   return (
-    <div style={{ width: "100vw", height: "100vh", margin: 0, padding: 0, overflow: "hidden" }}>
-      {pdfUrl ? (
-        <iframe
-          src={pdfUrl}
-          width="100%"
-          height="100%"
-          title="Registration PDF"
-          style={{ border: "none" }}
-        />
-      ) : (
-        <div style={{ display: "flex", height: "100%", justifyContent: "center", alignItems: "center", fontFamily: "sans-serif", flexDirection: "column", gap: 12 }}>
-          <div style={{ width: 48, height: 48, border: "4px solid #006666", borderTop: "4px solid transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-          <div style={{ color: "#555" }}>Generating Registration PDF...</div>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      )}
+    <div className="flex flex-col h-screen w-screen justify-center items-center font-sans gap-3.5 bg-slate-50">
+      <div className="w-11 h-11 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" />
+      <div className="text-center">
+        <div className="text-slate-800 font-semibold text-sm">Preparing Document</div>
+        <div className="text-slate-500 text-xs mt-1">Generating {docTitle}...</div>
+      </div>
     </div>
   );
 }
