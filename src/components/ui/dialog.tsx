@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl bg-white dark:bg-slate-900 p-6 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-2xl duration-200 outline-none max-h-[90vh] overflow-y-auto data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 flex flex-col w-[95vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-2xl duration-200 outline-none max-h-[90vh] overflow-y-auto overscroll-contain p-6 sm:p-8 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
@@ -65,7 +65,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-4 right-4 h-8 w-8 rounded-xl p-0 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="absolute top-4 right-4 h-8 w-8 rounded-xl p-0 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer z-30"
                 size="icon-sm"
               />
             }

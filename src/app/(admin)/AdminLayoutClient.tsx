@@ -26,7 +26,8 @@ import {
   ExternalLink,
   Search,
   CheckCircle2,
-  Calendar
+  Calendar,
+  Receipt
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 
@@ -306,10 +307,6 @@ export default function AdminLayoutClient({
 
           {/* Center / Right controls */}
           <div className="flex items-center gap-3">
-            
-            
-
-            <Separator orientation="vertical" className="h-5 bg-slate-200 hidden md:block" />
 
             {/* Notification Bell */}
             <NotificationBell 

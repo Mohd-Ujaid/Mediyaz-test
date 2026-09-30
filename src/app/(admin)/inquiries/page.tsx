@@ -230,8 +230,38 @@ export default function AdminInquiriesPage() {
         </div>
       </div>
 
+      {/* Inquiries Metric Strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-slate-300 transition-colors">
+          <div className="text-[11px] font-semibold text-teal-600 uppercase tracking-wider">Total Inquiries</div>
+          <div className="text-2xl sm:text-3xl font-bold mt-2 text-foreground tabular-nums tracking-tight">{inquiries.length}</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Prospective donor leads</p>
+        </Card>
+        <Card className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-slate-300 transition-colors">
+          <div className="text-[11px] font-semibold text-rose-600 uppercase tracking-wider">Egg Donor Leads</div>
+          <div className="text-2xl sm:text-3xl font-bold text-rose-600 mt-2 tabular-nums tracking-tight">
+            {inquiries.filter((i) => i.donationInterest === "egg").length}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Oocyte inquiries received</p>
+        </Card>
+        <Card className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-slate-300 transition-colors">
+          <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wider">Sperm Donor Leads</div>
+          <div className="text-2xl sm:text-3xl font-bold text-blue-600 mt-2 tabular-nums tracking-tight">
+            {inquiries.filter((i) => i.donationInterest === "sperm").length}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Semen inquiries received</p>
+        </Card>
+        <Card className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-slate-300 transition-colors">
+          <div className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Active Pipeline</div>
+          <div className="text-2xl sm:text-3xl font-bold text-emerald-600 mt-2 tabular-nums tracking-tight">
+            {inquiries.filter((i) => i.status !== "Rejected" && i.status !== "Registered").length}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">In contact &amp; consultation</p>
+        </Card>
+      </div>
+
       {/* Filter and Search Bar */}
-      <Card className="rounded-[10px] border-slate-200 dark:border-slate-800 p-4 shadow-sm bg-white dark:bg-slate-950">
+      <Card className="rounded-2xl border-slate-200 dark:border-slate-800 p-4 shadow-sm bg-white dark:bg-slate-950">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {/* Search bar */}
           <div className="relative col-span-1 sm:col-span-2">
@@ -240,7 +270,7 @@ export default function AdminInquiriesPage() {
               placeholder="Search Name, Phone, Email, City..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 text-xs h-9 rounded-[10px] bg-white dark:bg-slate-950"
+              className="pl-10 text-xs h-9 rounded-xl bg-white dark:bg-slate-950"
             />
           </div>
 
@@ -249,7 +279,7 @@ export default function AdminInquiriesPage() {
             <select
               value={interestFilter}
               onChange={(e) => setInterestFilter(e.target.value)}
-              className="w-full h-9 px-3 rounded-[10px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
             >
               <option value="">All Interests</option>
               <option value="sperm">Sperm Donors</option>
@@ -262,7 +292,7 @@ export default function AdminInquiriesPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full h-9 px-3 rounded-[10px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
             >
               <option value="">All Statuses</option>
               {STATUS_FLOW.map(s => <option key={s} value={s}>{s}</option>)}
@@ -272,7 +302,7 @@ export default function AdminInquiriesPage() {
       </Card>
 
       {/* Inquiries List */}
-      <Card className="rounded-[10px] border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-950 overflow-hidden">
+      <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-950 overflow-hidden">
         <CardHeader className="py-4 px-6 border-b dark:border-slate-800">
           <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">Inquiry Telemetry</CardTitle>
         </CardHeader>

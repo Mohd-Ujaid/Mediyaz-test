@@ -158,23 +158,61 @@
   }
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary overflow-x-clip w-full;
-    font-size: 16px;
-    line-height: 1.65;
+    font-size: 14px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
   }
   html {
     @apply font-sans scroll-smooth overflow-x-clip w-full;
-    font-size: 16px;
+    font-size: 14px;
   }
   h1, h2, h3, h4, h5, h6 {
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
     line-height: 1.25;
   }
   p {
-    line-height: 1.7;
+    line-height: 1.55;
   }
+  /* Completely hide visible scrollbars across all browsers while keeping smooth scrolling fully functional */
+  html,
+  body,
+  * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  ::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+  }
+
+  ::-webkit-scrollbar-thumb,
+  *::-webkit-scrollbar-thumb {
+    display: none !important;
+    background: transparent !important;
+  }
+
+  ::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-track {
+    display: none !important;
+    background: transparent !important;
+  }
+
+  ::-webkit-scrollbar-corner,
+  *::-webkit-scrollbar-corner {
+    display: none !important;
+    background: transparent !important;
+  }
+}
+
+/* Tabular numerals for timestamps, IDs, and financial telemetry */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Custom design system utilities */

@@ -58,17 +58,26 @@ export async function GET(req: Request) {
       "SUSPENDED",
     ];
 
+    const approvedStatuses = ["APPROVED", "WAITING_FORM13", "FILE_COMPLETED", "COMPLETED"];
+    const inProcessStatuses = ["UNDER_REVIEW", "DOCUMENTS_VERIFIED", "AFFIDAVIT_UPLOADED"];
+
     if (status) {
       if (status === "all") {
         delete query.status;
       } else if (status === "NEW" || status === "SUBMITTED") {
         query.status = { $in: ["NEW", "SUBMITTED"] };
+      } else if (status === "IN_PROCESS" || status === "in_process") {
+        query.status = { $in: inProcessStatuses };
+      } else if (status === "APPROVED" || status === "approved") {
+        query.status = { $in: approvedStatuses };
       } else {
         query.status = status;
       }
     } else {
       if (normalizedTab === "all") {
         // Show all registrations
+      } else if (normalizedTab === "in_process" || normalizedTab === "inprocess") {
+        query.status = { $in: inProcessStatuses };
       } else if (normalizedTab === "draft") {
         query.status = "DRAFT";
       } else if (normalizedTab === "under_review") {
@@ -78,7 +87,11 @@ export async function GET(req: Request) {
       } else if (normalizedTab === "affidavit_uploaded") {
         query.status = "AFFIDAVIT_UPLOADED";
       } else if (normalizedTab === "approved") {
-        query.status = "APPROVED";
+        query.status = { $in: approvedStatuses };
+      } else if (normalizedTab === "file_completed") {
+        query.status = "FILE_COMPLETED";
+      } else if (normalizedTab === "waiting_form13") {
+        query.status = "WAITING_FORM13";
       } else if (normalizedTab === "rejected") {
         query.status = "REJECTED";
       } else if (normalizedTab === "suspended") {
@@ -116,9 +129,10 @@ export async function GET(req: Request) {
       totalUnderReview,
       totalDocsVerified,
       totalAffidavit,
-      totalApproved,
+      totalApprovedStrict,
       totalWaitingForm13,
       totalFileCompleted,
+      totalCompleted,
       totalRejected,
       totalDraft,
       totalSuspended,
@@ -131,6 +145,7 @@ export async function GET(req: Request) {
       SpermDonorRegistration.countDocuments({ status: "APPROVED" }),
       SpermDonorRegistration.countDocuments({ status: "WAITING_FORM13" }),
       SpermDonorRegistration.countDocuments({ status: "FILE_COMPLETED" }),
+      SpermDonorRegistration.countDocuments({ status: "COMPLETED" }),
       SpermDonorRegistration.countDocuments({ status: "REJECTED" }),
       SpermDonorRegistration.countDocuments({ status: "DRAFT" }),
       SpermDonorRegistration.countDocuments({ status: "SUSPENDED" }),
@@ -139,16 +154,21 @@ export async function GET(req: Request) {
     const totalOtherUntilApproved =
       totalUnderReview + totalDocsVerified + totalAffidavit + totalRejected + totalSuspended;
 
+    const totalInProcess = totalUnderReview + totalDocsVerified + totalAffidavit;
+    const totalApproved = totalApprovedStrict + totalWaitingForm13 + totalFileCompleted + totalCompleted;
+
     const stats = {
       total: totalAll,
       new: totalNew,
       submitted: totalNew, // backward compatibility
+      inProcess: totalInProcess,
       underReview: totalUnderReview,
       documentsVerified: totalDocsVerified,
       affidavitUploaded: totalAffidavit,
       approved: totalApproved,
       waitingForm13: totalWaitingForm13,
       fileCompleted: totalFileCompleted,
+      completed: totalCompleted,
       rejected: totalRejected,
       draft: totalDraft,
       suspended: totalSuspended,
@@ -196,32 +216,36 @@ export async function GET(req: Request) {
                  (r.referral?.patientOrDonorId ? agentMap[r.referral.patientOrDonorId] : null);
 
       let clinicDeal = r.clinicDeal;
+      const hospCategory = clinicDeal?.donorCategory || r.hospitalDealType || "normal";
       if ((!clinicDeal || !clinicDeal.hospitalDealPrice) && r.assignedHospital) {
-        const category = clinicDeal?.donorCategory || "normal";
         const price =
-          category === "profile"
-            ? r.assignedHospital.profiledonorDealPrice || r.assignedHospital.donorDealPrice || 0
-            : r.assignedHospital.donorDealPrice || 0;
+          hospCategory === "profile"
+            ? r.assignedHospital.profiledonorDealPrice || r.assignedHospital.donorDealPrice || 85000
+            : r.assignedHospital.donorDealPrice || 65000;
         clinicDeal = {
-          donorCategory: category,
+          donorCategory: hospCategory,
           hospitalDealPrice: price,
           currency: r.assignedHospital.currency || "INR",
+          notes: clinicDeal?.notes || `Assigned based on ${hospCategory} category`,
+          agreedAt: clinicDeal?.agreedAt || r.assignedAt || new Date(),
+          agreedBy: clinicDeal?.agreedBy || r.assignedBy || "Mediyaz System",
         };
       }
 
-      let donorDeal = r.donorDeal;
-      if ((!donorDeal || !donorDeal.compensationAmount) && r.assignedHospital) {
-        const category = clinicDeal?.donorCategory || donorDeal?.donorCategory || "normal";
-        const compAmount = category === "profile" ? 25000 : 10000;
+      let donorDeal = r.donorDeal || null;
+      if (donorDeal) {
+        const rawComp = donorDeal.compensationAmount !== undefined
+          ? Number(donorDeal.compensationAmount)
+          : (donorDeal.totalAgreedAmount !== undefined ? Number(donorDeal.totalAgreedAmount) : 0);
         donorDeal = {
-          donorCategory: category,
-          compensationAmount: compAmount,
-          paymentMethod: donorDeal?.paymentMethod || "bank_transfer",
-          paymentTerms: donorDeal?.paymentTerms || "Full on Sample Clearance",
-          paymentStatus: donorDeal?.paymentStatus || (r.status === "APPROVED" ? "PAID" : "PENDING"),
-          advanceAmount: donorDeal?.advanceAmount || 0,
-          balanceAmount: donorDeal?.balanceAmount || (r.status === "APPROVED" ? 0 : compAmount),
-          notes: donorDeal?.notes || "Standard sperm donor compensation agreement",
+          ...donorDeal,
+          donorCategory: donorDeal.donorCategory || hospCategory,
+          compensationAmount: rawComp,
+          totalAgreedAmount: rawComp,
+          paymentTerms: donorDeal.paymentTerms || "Full on Sample Clearance",
+          paymentStatus: donorDeal.paymentStatus || (r.status === "APPROVED" ? "PAID" : "PENDING"),
+          advanceAmount: donorDeal.advanceAmount || 0,
+          balanceAmount: donorDeal.balanceAmount !== undefined ? donorDeal.balanceAmount : rawComp,
         };
       }
 

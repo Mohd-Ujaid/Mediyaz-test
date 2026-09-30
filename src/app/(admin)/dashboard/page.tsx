@@ -146,15 +146,16 @@ export default function AdminDashboard() {
               Clinical Operations Overview
             </h1>
           </div>
+          <p className="text-xs text-slate-500 mt-0.5">Real-time donor screening, regulatory filings, and partner performance</p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <Button
             variant="outline"
             size="sm"
             onClick={loadStats}
             disabled={loading}
-            className="rounded-xl text-xs h-9 border-slate-200 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="rounded-xl text-xs h-9 border-slate-200 text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer shadow-2xs hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#285b63]" : "text-slate-500"}`} />
             <span>Refresh</span>
@@ -162,7 +163,7 @@ export default function AdminDashboard() {
           <Link href="/donor-registrations/egg">
             <Button
               size="sm"
-              className="rounded-xl text-xs h-9 bg-[#285b63] hover:bg-[#204b52] text-white font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+              className="rounded-xl text-xs h-9 bg-[#285b63] hover:bg-[#204b52] text-white font-bold flex items-center gap-1.5 shadow-xs cursor-pointer hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150"
             >
               <span>Egg Registrations</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -172,7 +173,7 @@ export default function AdminDashboard() {
             <Button
               size="sm"
               variant="outline"
-              className="rounded-xl text-xs h-9 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              className="rounded-xl text-xs h-9 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150"
             >
               <Dna className="w-3.5 h-3.5 text-[#285b63]" />
               <span>Sperm Registrations</span>
@@ -194,7 +195,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Metric 1: Total Registrations */}
-            <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+            <Card className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -205,14 +206,14 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight">
+                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
                     {stats.totalRegistrations}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">Sperm &amp; Egg donor profiles</p>
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-[11px]">
                   <span className="text-slate-500">Pending Screening:</span>
-                  <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">
+                  <span className="font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/60 tabular-nums">
                     {stats.pendingRegistrations} Under Review
                   </span>
                 </div>
@@ -220,7 +221,7 @@ export default function AdminDashboard() {
             </Card>
 
             {/* Metric 2: Active ART Donors */}
-            <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+            <Card className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -231,14 +232,14 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight">
+                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
                     {stats.activeDonors || stats.approvedRegistrations || 0}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">Cleared clinical &amp; lab testing</p>
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-[11px]">
                   <span className="text-slate-500">Breakdown:</span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-slate-800 tabular-nums">
                     <span className="text-[#285b63]">{stats.spermDonors || 0} Sperm</span> • <span className="text-[#ff7468]">{stats.eggDonors || 0} Egg</span>
                   </span>
                 </div>
@@ -246,7 +247,7 @@ export default function AdminDashboard() {
             </Card>
 
             {/* Metric 3: Pre-Registration Inquiries */}
-            <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+            <Card className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -257,14 +258,14 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight">
+                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
                     {stats.totalInquiries}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">Initial candidate screenings</p>
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-[11px]">
                   <span className="text-slate-500">Consultations Booked:</span>
-                  <span className="font-bold text-slate-900">
+                  <span className="font-bold text-slate-900 tabular-nums">
                     {stats.totalConsultations} Consults
                   </span>
                 </div>
@@ -272,7 +273,7 @@ export default function AdminDashboard() {
             </Card>
 
             {/* Metric 4: Referral Partners & Network */}
-            <Card className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+            <Card className="rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-md hover:border-slate-300 transition-all duration-200">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -283,15 +284,15 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 <div className="mt-3">
-                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight">
+                  <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight tabular-nums">
                     {stats.referralCount}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">Active referral partner accounts</p>
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-[11px]">
                   <span className="text-slate-500">Rewards Disbursed:</span>
-                  <span className="font-bold text-emerald-700">
-                    ₹{(stats.totalRewardsPaid || 0).toLocaleString()}
+                  <span className="font-bold text-emerald-700 tabular-nums">
+                    ₹{(stats.totalRewardsPaid || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
               </CardContent>
@@ -472,9 +473,7 @@ export default function AdminDashboard() {
                     Recent clinical screening events, donor uploads, and administrative actions.
                   </CardDescription>
                 </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-                  ● PIPELINE ACTIVE
-                </span>
+                
               </CardHeader>
               <CardContent className="p-5 pt-4">
                 <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { DonorRegistration } from "@/models/DonorRegistration";
 import { VerificationOtp } from "@/models/VerificationOtp";
-import { sendVerificationOtpEmail } from "@/features/email/services/email.service";
+import { sendTwilioWhatsApp } from "@/features/twilio/services/twilio.service";
 
-// --- Rate Limit Configuration ---
+// --- Rate Limit Configuration (Handled directly by Next.js) ---
 const MAX_SEND_ATTEMPTS = 3;      // Max OTP sends per 10 minutes
 const MAX_VERIFY_ATTEMPTS = 5;    // Max wrong guesses before OTP is invalidated
 
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   try {
     await connectToDatabase();
     const body = await req.json();
-    const { action, phone, aadhaar, email, otp, registrationId, donorType } = body;
+    const { action, phone, aadhaar, email, otp, registrationId } = body;
 
     if (!action) {
       return NextResponse.json({ success: false, error: "Action is required." }, { status: 400 });
@@ -24,27 +24,18 @@ export async function POST(req: Request) {
     const cleanEmail = email ? email.toString().trim().toLowerCase() : "";
 
     // =========================================================================
-    // ACTION: SEND OTP
+    // ACTION: SEND OTP VIA WHATSAPP (Twilio used strictly as transport)
     // =========================================================================
     if (action === "send") {
       if (!cleanAadhaar || cleanAadhaar.length !== 12) {
         return NextResponse.json({ success: false, error: "A valid 12-digit Aadhaar number is mandatory." }, { status: 400 });
       }
       if (!cleanPhone || cleanPhone.length !== 10) {
-        return NextResponse.json({ success: false, error: "A valid 10-digit mobile phone number is mandatory." }, { status: 400 });
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!cleanEmail || !emailRegex.test(cleanEmail)) {
-        return NextResponse.json({ success: false, error: "A valid Email address is mandatory to receive your OTP." }, { status: 400 });
+        return NextResponse.json({ success: false, error: "A valid 10-digit mobile phone number is mandatory to receive WhatsApp OTP." }, { status: 400 });
       }
 
-      // --- RATE LIMITING: Max 3 OTP sends per 10 minutes ---
-      const existingOtp = await VerificationOtp.findOne({
-        $or: [
-          { email: cleanEmail },
-          { phone: cleanPhone }
-        ]
-      });
+      // --- NEXT.JS RATE LIMITING: Max 3 OTP sends per phone per 10 minutes ---
+      const existingOtp = await VerificationOtp.findOne({ phone: cleanPhone });
       if (existingOtp && existingOtp.sendAttempts >= MAX_SEND_ATTEMPTS) {
         return NextResponse.json({
           success: false,
@@ -53,12 +44,16 @@ export async function POST(req: Request) {
       }
 
       // Only block if already submitted or approved
+      const duplicateConditions: any[] = [
+        { "personalInfo.aadhaarNumber": cleanAadhaar },
+        { "contactInfo.mobileNumber": cleanPhone },
+      ];
+      if (cleanEmail) {
+        duplicateConditions.push({ "contactInfo.emailAddress": cleanEmail });
+      }
+
       const duplicateQuery: any = {
-        $or: [
-          { "personalInfo.aadhaarNumber": cleanAadhaar },
-          { "contactInfo.mobileNumber": cleanPhone },
-          { "contactInfo.emailAddress": cleanEmail },
-        ],
+        $or: duplicateConditions,
         status: { $nin: ["REJECTED", "DRAFT"] }
       };
       if (registrationId) {
@@ -70,85 +65,92 @@ export async function POST(req: Request) {
         let matchedField = "credentials";
         if (duplicate.personalInfo?.aadhaarNumber === cleanAadhaar) matchedField = "Aadhaar number";
         else if (duplicate.contactInfo?.mobileNumber === cleanPhone) matchedField = "Mobile number";
-        else if (duplicate.contactInfo?.emailAddress?.toLowerCase() === cleanEmail) matchedField = "Email address";
+        else if (cleanEmail && duplicate.contactInfo?.emailAddress?.toLowerCase() === cleanEmail) matchedField = "Email address";
         return NextResponse.json({
           success: false,
           error: `This ${matchedField} is already registered in the Mediyaz Donor Registry (ID: ${duplicate.registrationId}). Under ART Act regulations, duplicate registrations are not permitted.`
         }, { status: 400 });
       }
 
-      // Generate a 6-digit numeric OTP
+      // --- NEXT.JS OTP GENERATION: 6-digit numeric OTP ---
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // Store/update OTP
+      // Store/update OTP in database with Next.js tracking
       if (existingOtp) {
-        existingOtp.email = cleanEmail;
         existingOtp.phone = cleanPhone;
         existingOtp.aadhaar = cleanAadhaar;
+        if (cleanEmail) existingOtp.email = cleanEmail;
         existingOtp.code = otpCode;
         existingOtp.verifyAttempts = 0;
         existingOtp.sendAttempts = existingOtp.sendAttempts + 1;
         await existingOtp.save();
       } else {
         await VerificationOtp.create({
-          email: cleanEmail,
           phone: cleanPhone,
           aadhaar: cleanAadhaar,
+          email: cleanEmail || "",
           code: otpCode,
           sendAttempts: 1,
           verifyAttempts: 0,
         });
       }
 
-      // Send via Email
-      const emailResult = await sendVerificationOtpEmail(cleanEmail, otpCode, donorType || "Donor");
-      if (!emailResult.success) {
+      // Send OTP via Twilio WhatsApp API using Authentication Template SID HX79fc8e0faf226129d2cf3ef80ce9e712
+      const messageBody = `Your Mediyaz verification OTP is: *${otpCode}*. This OTP is valid for 10 minutes. Please do not share this code with anyone.`;
+      const waResult = await sendTwilioWhatsApp(cleanPhone, messageBody, {
+        otpCode,
+        contentSid: process.env.TWILIO_WHATSAPP_AUTH_TEMPLATE_SID || "HX79fc8e0faf226129d2cf3ef80ce9e712",
+        contentVariables: { "1": otpCode },
+      });
+
+      // If WhatsApp failed to send, DO NOT advance to OTP step — return an error immediately
+      if (!waResult.success) {
+        if (existingOtp) {
+          existingOtp.sendAttempts = Math.max(0, existingOtp.sendAttempts - 1);
+          await existingOtp.save();
+        } else {
+          await VerificationOtp.deleteOne({ phone: cleanPhone });
+        }
+
+        console.error(`[ADMIN WHATSAPP OTP DISPATCH FAILED] Phone: +91 ${cleanPhone} | Error: ${waResult.error}`);
+
         return NextResponse.json({
           success: false,
-          error: emailResult.error || "Failed to deliver OTP to the provided email address."
+          error: `There is an error sending OTP to your WhatsApp number (+91 ${cleanPhone}). Please try again in some time.`
         }, { status: 500 });
       }
 
       if (process.env.NODE_ENV !== "production") {
-        console.log(`\n[DEV OTP DISPATCH] Email: ${cleanEmail} | Phone: ${cleanPhone} | OTP: ${otpCode}\n`);
+        console.log(`\n[DEV ADMIN WHATSAPP OTP DISPATCH SUCCESS] Phone: +91 ${cleanPhone} | OTP: ${otpCode} | Twilio: ${waResult.messageSid}\n`);
       }
 
       return NextResponse.json({
         success: true,
-        message: `Verification OTP sent successfully to ${cleanEmail}.`,
-        email: cleanEmail,
+        message: `Verification OTP sent successfully via WhatsApp to +91 ${cleanPhone}.`,
+        phone: cleanPhone,
       });
     }
 
     // =========================================================================
-    // ACTION: VERIFY OTP
+    // ACTION: VERIFY OTP (Handled completely by Next.js & MongoDB)
     // =========================================================================
     if (action === "verify") {
-      if (!cleanEmail && !cleanPhone) {
-        return NextResponse.json({ success: false, error: "Email address is required." }, { status: 400 });
+      if (!cleanPhone) {
+        return NextResponse.json({ success: false, error: "Mobile phone number is required." }, { status: 400 });
       }
       if (!otp) {
-        return NextResponse.json({ success: false, error: "OTP code is required." }, { status: 400 });
+        return NextResponse.json({ success: false, error: "6-digit OTP code is required." }, { status: 400 });
       }
 
-      const record = await VerificationOtp.findOne({
-        $or: [
-          ...(cleanEmail ? [{ email: cleanEmail }] : []),
-          ...(cleanPhone ? [{ phone: cleanPhone }] : []),
-        ]
-      });
+      const record = await VerificationOtp.findOne({ phone: cleanPhone });
 
       if (!record) {
         return NextResponse.json({ success: false, error: "OTP not found or expired. Please request a new OTP." }, { status: 400 });
       }
 
+      // --- NEXT.JS BRUTE-FORCE PROTECTION: Max 5 wrong guesses ---
       if (record.verifyAttempts >= MAX_VERIFY_ATTEMPTS) {
-        await VerificationOtp.deleteMany({
-          $or: [
-            ...(cleanEmail ? [{ email: cleanEmail }] : []),
-            ...(cleanPhone ? [{ phone: cleanPhone }] : []),
-          ]
-        });
+        await VerificationOtp.deleteMany({ phone: cleanPhone });
         return NextResponse.json({
           success: false,
           error: `Too many incorrect attempts. Your OTP has been invalidated for security. Please request a new OTP.`
@@ -167,16 +169,11 @@ export async function POST(req: Request) {
         }, { status: 400 });
       }
 
-      await VerificationOtp.deleteMany({
-        $or: [
-          ...(cleanEmail ? [{ email: cleanEmail }] : []),
-          ...(cleanPhone ? [{ phone: cleanPhone }] : []),
-        ]
-      });
+      await VerificationOtp.deleteMany({ phone: cleanPhone });
 
       return NextResponse.json({
         success: true,
-        message: "Email address, mobile phone, and Aadhaar verified successfully."
+        message: "Mobile phone and Aadhaar verified successfully via WhatsApp OTP."
       });
     }
 
@@ -186,4 +183,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-

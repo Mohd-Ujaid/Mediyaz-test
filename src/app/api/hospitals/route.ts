@@ -90,9 +90,22 @@ export async function GET(req: Request) {
       return obj;
     });
 
+    const [totalAll, totalActive, totalInactive, totalArchived] = await Promise.all([
+      Hospital.countDocuments({ status: { $ne: "ARCHIVED" } }),
+      Hospital.countDocuments({ status: "ACTIVE" }),
+      Hospital.countDocuments({ status: "INACTIVE" }),
+      Hospital.countDocuments({ status: "ARCHIVED" }),
+    ]);
+
     return NextResponse.json({
       success: true,
       hospitals,
+      stats: {
+        total: totalAll,
+        active: totalActive,
+        inactive: totalInactive,
+        archived: totalArchived,
+      },
       pagination: {
         total,
         pages: Math.ceil(total / limit),

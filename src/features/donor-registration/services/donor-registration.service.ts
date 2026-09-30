@@ -4,7 +4,7 @@ import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { Notification } from "@/models/Notification";
 import { Hospital } from "@/models/Hospital";
 import { Agent } from "@/models/Agent";
-import { computeEggDonorManagementStatus } from "../utils/egg-donor-status";
+import { computeEggDonorManagementStatus, mergeWithDotNotation } from "../utils/egg-donor-status";
 import { computeSpermDonorManagementStatus } from "../utils/sperm-donor-status";
 
 function generateRegistrationId(donorType: string): string {
@@ -232,7 +232,7 @@ export async function createAdminRegistration(body: {
     donorType,
     registrationSource: body.registrationSource || "admin_created",
     createdByEmployee: body.createdByEmployee || session?.user?.id || null,
-    status: "DRAFT",
+    status: "NEW",
     currentStep: 1,
     personalInfo: {
       fullName: fullName.trim(),
@@ -695,9 +695,8 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
   let effectiveStatus = status;
   const isEgg = donorType === "egg";
 
-  if (!effectiveStatus && isEgg) {
-    const simulated = {
-      ...registration.toObject(),
+  if (!effectiveStatus) {
+    const simulated = mergeWithDotNotation(registration.toObject(), {
       pickupDate: pickupDate !== undefined ? pickupDate : registration.pickupDate,
       recruitmentDate: recruitmentDate !== undefined ? recruitmentDate : registration.recruitmentDate,
       supplyDate: supplyDate !== undefined ? supplyDate : registration.supplyDate,
@@ -706,23 +705,11 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
         ...(registration.donorDeal || {}),
         paymentStatus: paymentStatus !== undefined ? paymentStatus : registration.donorDeal?.paymentStatus,
       },
-    };
-    if (["APPROVED", "WAITING_FORM13", "FILE_COMPLETED"].includes(registration.status)) {
+    });
+
+    if (isEgg) {
       effectiveStatus = computeEggDonorManagementStatus(simulated).status;
-    }
-  } else if (!effectiveStatus && !isEgg) {
-    const simulated = {
-      ...registration.toObject(),
-      pickupDate: pickupDate !== undefined ? pickupDate : registration.pickupDate,
-      recruitmentDate: recruitmentDate !== undefined ? recruitmentDate : registration.recruitmentDate,
-      supplyDate: supplyDate !== undefined ? supplyDate : registration.supplyDate,
-      isDonorPaid: paymentStatus !== undefined ? paymentStatus === "PAID" : registration.isDonorPaid,
-      donorDeal: {
-        ...(registration.donorDeal || {}),
-        paymentStatus: paymentStatus !== undefined ? paymentStatus : registration.donorDeal?.paymentStatus,
-      },
-    };
-    if (["APPROVED", "WAITING_FORM13", "FILE_COMPLETED"].includes(registration.status)) {
+    } else {
       effectiveStatus = computeSpermDonorManagementStatus(simulated).status;
     }
   }
@@ -803,26 +790,27 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
     }
   }
 
-  if (status === "APPROVED") {
+  if (status === "APPROVED" && oldValues.status !== "APPROVED") {
     const { User, UserRole } = await import("@/models/User");
     const { Donor } = await import("@/models/Donor");
     
-    let user = await User.findOne({ email: registration.contactInfo.emailAddress.toLowerCase() });
-    if (!user) {
+    const email = registration.contactInfo?.emailAddress ? registration.contactInfo.emailAddress.toLowerCase().trim() : null;
+    let user = email ? await User.findOne({ email }) : null;
+    if (!user && email) {
       user = await User.create({
-        name: registration.personalInfo.fullName,
-        email: registration.contactInfo.emailAddress.toLowerCase(),
-        phone: registration.contactInfo.mobileNumber,
+        name: registration.personalInfo?.fullName || "Egg Donor",
+        email: email,
+        phone: registration.contactInfo?.mobileNumber || "",
         role: UserRole.DONOR,
         status: "ACTIVE",
         emailVerified: true
       });
-    } else {
+    } else if (user) {
       user.role = UserRole.DONOR;
       await user.save();
     }
 
-    let donorRecord = await Donor.findOne({ user: user._id });
+    let donorRecord = user ? await Donor.findOne({ user: user._id }) : null;
     let resolvedDonorId = donorId || registration.donorId || donorRecord?.donorId;
     if (!resolvedDonorId) {
       const count = await Donor.countDocuments();
@@ -832,17 +820,17 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
 
     registration.donorId = resolvedDonorId;
 
-    if (!donorRecord) {
+    if (!donorRecord && user) {
       donorRecord = await Donor.create({
         user: user._id,
         donorId: resolvedDonorId,
         personalInformation: {
-          dateOfBirth: registration.personalInfo.dateOfBirth ? new Date(registration.personalInfo.dateOfBirth) : new Date(),
-          gender: registration.personalInfo.gender || (isEgg ? "Female" : "Male"),
-          bloodGroup: registration.personalInfo.bloodGroup || "O+",
-          nationality: registration.personalInfo.nationality || "Indian",
-          address: registration.contactInfo.currentAddress || "Not Provided",
-          maritalStatus: registration.personalInfo.maritalStatus || "Single",
+          dateOfBirth: registration.personalInfo?.dateOfBirth ? new Date(registration.personalInfo.dateOfBirth) : new Date(),
+          gender: registration.personalInfo?.gender || (isEgg ? "Female" : "Male"),
+          bloodGroup: registration.personalInfo?.bloodGroup || "O+",
+          nationality: registration.personalInfo?.nationality || "Indian",
+          address: registration.contactInfo?.currentAddress || "Not Provided",
+          maritalStatus: registration.personalInfo?.maritalStatus || "Single",
         },
         physicalAttributes: {
           height: Number(registration.personalInfo.height?.replace(/\D/g, "")) || 170,
@@ -917,7 +905,33 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
     }
   }
 
-  await registration.save();
+  // Atomically update DB fields
+  await TargetModel.updateOne(
+    { _id: registration._id },
+    {
+      $set: {
+        pickupDate: registration.pickupDate,
+        recruitmentDate: registration.recruitmentDate,
+        supplyDate: registration.supplyDate,
+        status: effectiveStatus || registration.status,
+        adminNotes: registration.adminNotes,
+        donorId: registration.donorId,
+        reviewedBy: registration.reviewedBy,
+        reviewedAt: registration.reviewedAt,
+        updatedBy: registration.updatedBy,
+        assignedHospital: registration.assignedHospital,
+        assignedBy: registration.assignedBy,
+        assignedAt: registration.assignedAt,
+        clinicDeal: registration.clinicDeal,
+        donorDeal: registration.donorDeal,
+        isDonorPaid: registration.isDonorPaid,
+        paidAt: registration.paidAt,
+        paidBy: registration.paidBy,
+      },
+    }
+  );
+
+  await registration.save().catch((err: any) => console.warn("Mongoose save warning (non-fatal):", err));
 
   return JSON.parse(JSON.stringify(registration));
 }
@@ -991,8 +1005,20 @@ export async function patchAdminRegistrationFields(id: string, updateObj: Record
     throw new Error("Registration not found.");
   }
 
+  // Auto-calculate status if not explicitly passed
+  if (!filteredUpdate.status) {
+    const isEgg = found.donorType === "egg";
+    const merged = mergeWithDotNotation(found.registration.toObject(), filteredUpdate);
+    const autoStatus = isEgg
+      ? computeEggDonorManagementStatus(merged).status
+      : computeSpermDonorManagementStatus(merged).status;
+    if (!["REJECTED", "SUSPENDED", "CANCELLED"].includes(found.registration.status)) {
+      filteredUpdate.status = autoStatus;
+    }
+  }
+
   const updated = await found.model.findOneAndUpdate(
-    { registrationId: found.registration.registrationId },
+    { _id: found.registration._id },
     { $set: filteredUpdate },
     { returnDocument: 'after' }
   );

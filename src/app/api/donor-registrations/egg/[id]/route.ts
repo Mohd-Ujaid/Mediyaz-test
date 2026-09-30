@@ -4,7 +4,7 @@ import { EggDonorRegistration } from "@/models/EggDonorRegistration";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import { Hospital } from "@/models/Hospital";
-import { computeEggDonorManagementStatus } from "@/features/donor-registration/utils/egg-donor-status";
+import { computeEggDonorManagementStatus, mergeWithDotNotation } from "@/features/donor-registration/utils/egg-donor-status";
 import mongoose from "mongoose";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -120,28 +120,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         existing.hospitalDealType === "registry" ||
         existing.clinicDeal?.donorCategory === "registry";
 
-      const effectiveClinicDeal = body.clinicDeal || existing.clinicDeal;
-      if (!effectiveClinicDeal || !effectiveClinicDeal.hospitalDealPrice || effectiveClinicDeal.hospitalDealPrice <= 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Deal with clinic must be applied before approving this egg donor.",
-          },
-          { status: 400 }
-        );
-      }
+      const category =
+        body.clinicDeal?.donorCategory ||
+        existing.clinicDeal?.donorCategory ||
+        body.donorDeal?.donorCategory ||
+        existing.donorDeal?.donorCategory ||
+        body.hospitalDealType ||
+        existing.hospitalDealType ||
+        "normal";
 
-      if (!isRegistry) {
-        const effectiveDonorDeal = body.donorDeal || existing.donorDeal;
-        if (!effectiveDonorDeal || !effectiveDonorDeal.compensationAmount || effectiveDonorDeal.compensationAmount <= 0) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: "Deal with donor (compensation amount and payment terms) must be filled before approving this egg donor.",
-            },
-            { status: 400 }
-          );
-        }
+      // Ensure user-entered values are properly typed
+      if (body.donorDeal && body.donorDeal.compensationAmount !== undefined) {
+        body.donorDeal.compensationAmount = Number(body.donorDeal.compensationAmount) || 0;
+      }
+      if (body.clinicDeal && body.clinicDeal.hospitalDealPrice !== undefined) {
+        body.clinicDeal.hospitalDealPrice = Number(body.clinicDeal.hospitalDealPrice) || 0;
       }
     }
 
@@ -176,21 +169,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       body.donorDeal.agreedBy = body.donorDeal.agreedBy || userName;
     }
 
-    // Auto-compute status if not explicitly overridden, or if in management pipeline
-    if (!body.status && ["APPROVED", "WAITING_FORM13", "FILE_COMPLETED"].includes(existing.status)) {
-      const mergedForStatus = {
-        ...existing.toObject(),
-        ...body,
-        labReports: {
-          ...(existing.labReports?.toObject ? existing.labReports.toObject() : existing.labReports || {}),
-          ...(body.labReports || {}),
-        },
-        documents: {
-          ...(existing.documents?.toObject ? existing.documents.toObject() : existing.documents || {}),
-          ...(body.documents || {}),
-        },
-      };
-      body.status = computeEggDonorManagementStatus(mergedForStatus).status;
+    // Merge updates with base document, correctly resolving dot-notation keys
+    const mergedForStatus = mergeWithDotNotation(existing.toObject(), body);
+    const autoStatusResult = computeEggDonorManagementStatus(mergedForStatus);
+
+    // Auto-compute status if not explicitly overridden by admin
+    if (!body.status) {
+      if (!["REJECTED", "SUSPENDED", "CANCELLED"].includes(existing.status)) {
+        body.status = autoStatusResult.status;
+      }
     }
 
     if (body.status && body.status !== existing.status) {
@@ -206,7 +193,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
     const directUpdates: any = {};
     let donorIdToUse = body.donorId || existing.donorId;
-    if (body.status === "APPROVED" && !donorIdToUse) {
+    if (
+      (body.status === "APPROVED" || ["WAITING_FORM13", "FILE_COMPLETED"].includes(body.status)) &&
+      !donorIdToUse
+    ) {
       const { Donor } = await import("@/models/Donor");
       const count = await Donor.countDocuments();
       donorIdToUse = `DON-${new Date().getFullYear()}-${String(count + 1001).padStart(4, "0")}`;
@@ -238,12 +228,23 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       directUpdates.affidavit = affidavitDoc;
     }
 
+    if (body.donorDeal !== undefined) directUpdates.donorDeal = body.donorDeal;
+    if (body.clinicDeal !== undefined) directUpdates.clinicDeal = body.clinicDeal;
+    if (body.hospitalDealType !== undefined) directUpdates.hospitalDealType = body.hospitalDealType;
+    if (body.assignedHospital !== undefined) {
+      directUpdates.assignedHospital = body.assignedHospital
+        ? (mongoose.Types.ObjectId.isValid(body.assignedHospital) ? new mongoose.Types.ObjectId(body.assignedHospital) : body.assignedHospital)
+        : null;
+    }
+
     if (Object.keys(directUpdates).length > 0) {
       await EggDonorRegistration.collection.updateOne(
         { _id: existing._id },
         { $set: directUpdates }
       ).catch(() => {});
     }
+
+    const freshRegistration = await EggDonorRegistration.findById(existing._id).populate("assignedHospital") || registration;
 
     // Create Audit Log if status changed or hospital assigned
     if (body.status && body.status !== existing.status) {
@@ -257,14 +258,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           userName,
           existing.status,
           body.status,
-          `Status updated to "${body.status}". Assigned hospital: ${registration?.assignedHospital ? (registration.assignedHospital as any).name : "None"}. Clinic Deal: ₹${registration?.clinicDeal?.hospitalDealPrice || 0}. Donor Payout: ₹${registration?.donorDeal?.compensationAmount || 0}.`
+          `Status updated to "${body.status}". Assigned hospital: ${freshRegistration?.assignedHospital ? (freshRegistration.assignedHospital as any).name : "None"}. Clinic Deal: ₹${freshRegistration?.clinicDeal?.hospitalDealPrice || 0}. Donor Payout: ₹${freshRegistration?.donorDeal?.compensationAmount || 0}.`
         );
       } catch (auditErr) {
         console.error("Audit log error:", auditErr);
       }
     }
 
-    return NextResponse.json({ success: true, registration });
+    return NextResponse.json({ success: true, registration: freshRegistration });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

@@ -93,6 +93,8 @@ const DOCUMENTS_CONFIG = [
 export type SpermRegTab =
   | "all"
   | "new"
+  | "in_process"
+  | "approved"
   | "draft"
   | "under_review"
   | "documents_verified"
@@ -147,6 +149,7 @@ export default function AdminSpermDonorRegistrationsPage() {
     total?: number;
     new?: number;
     submitted?: number;
+    inProcess?: number;
     underReview?: number;
     documentsVerified?: number;
     affidavitUploaded?: number;
@@ -480,15 +483,15 @@ export default function AdminSpermDonorRegistrationsPage() {
           : matchedHosp.donorDealPrice || 15000
         : 15000);
 
-    const defaultDonorComp =
-      reg.donorDeal?.compensationAmount ||
-      (initialCategory === "registry" ? 0 : initialCategory === "profile" ? 10000 : 5000);
+    const donorComp = reg.donorDeal?.compensationAmount && Number(reg.donorDeal.compensationAmount) > 0
+      ? Number(reg.donorDeal.compensationAmount)
+      : 0;
 
     setDealForm({
       assignedHospitalId: assignedId,
       donorCategory: initialCategory,
       hospitalDealPrice: defaultClinicPrice,
-      compensationAmount: defaultDonorComp,
+      compensationAmount: donorComp,
       paymentTerms: reg.donorDeal?.paymentTerms || "Full upon sample delivery",
       paymentMethod: reg.donorDeal?.paymentMethod || "bank_transfer",
       paymentStatus: reg.donorDeal?.paymentStatus || "PENDING",
@@ -535,21 +538,11 @@ export default function AdminSpermDonorRegistrationsPage() {
       ? 12000
       : 15000;
 
-    const defaultComp = category === "registry" ? 0 : category === "profile" ? 10000 : 5000;
-    const newComp =
-      category === "registry"
-        ? 0
-        : !dealForm.compensationAmount ||
-          dealForm.compensationAmount === 5000 ||
-          dealForm.compensationAmount === 10000
-        ? defaultComp
-        : dealForm.compensationAmount;
-
     setDealForm((prev) => ({
       ...prev,
       donorCategory: category,
       hospitalDealPrice: newPrice,
-      compensationAmount: newComp,
+      compensationAmount: category === "registry" ? 0 : prev.compensationAmount,
     }));
   };
 
@@ -602,6 +595,12 @@ export default function AdminSpermDonorRegistrationsPage() {
 
       if (dealForm.targetStatus) {
         payload.status = dealForm.targetStatus;
+      } else if (
+        selectedReg.documents?.affidavit?.url ||
+        selectedReg.status === "AFFIDAVIT_UPLOADED" ||
+        selectedReg.status === "DOCUMENTS_VERIFIED"
+      ) {
+        payload.status = "APPROVED";
       }
 
       const res = await fetch(`/api/donor-registrations/sperm/${encodeURIComponent(regId)}`, {
@@ -615,8 +614,9 @@ export default function AdminSpermDonorRegistrationsPage() {
         throw new Error(data.error || "Failed to update hospital & deal");
       }
 
+      const isNowApproved = payload.status === "APPROVED" || data.registration?.status === "APPROVED";
       toast.success(
-        dealForm.targetStatus === "APPROVED"
+        isNowApproved
           ? "Sperm donor approved and deal saved successfully!"
           : "Hospital assignment and financial deal saved!"
       );
@@ -1250,9 +1250,7 @@ export default function AdminSpermDonorRegistrationsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Sperm Donor Registrations
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Review, verify, and manage incoming semen donor applications under Indian ART Act 2021 statutory guidelines.
-          </p>
+         
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
@@ -1277,246 +1275,94 @@ export default function AdminSpermDonorRegistrationsPage() {
         </div>
       </div>
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-teal-600 uppercase tracking-wider">Total Semen Applications</div>
-          <div className="text-2xl sm:text-3xl font-bold mt-2 text-foreground">{stats.total || totalCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Sperm donor records in DB</p>
-        </Card>
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider">New Registrations</div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-600 mt-2">
-            {(stats as any).new ?? stats.submitted ?? registrations.filter((r) => r.status === "NEW" || r.status === "SUBMITTED").length}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Awaiting initial document verification</p>
-        </Card>
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Approved</div>
-          <div className="text-2xl sm:text-3xl font-bold text-emerald-600 mt-2">
-            {stats.approved ?? registrations.filter((r) => r.status === "APPROVED").length}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Verified, affidavit &amp; hospital assigned</p>
-        </Card>
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider">Under Review</div>
-          <div className="text-2xl sm:text-3xl font-bold text-purple-600 mt-2">
-            {stats.underReview ?? registrations.filter((r) => r.status === "UNDER_REVIEW").length}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Verification &amp; check in progress</p>
-        </Card>
+      {/* Interactive Status Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {[
+          {
+            tab: "all" as const,
+            title: "Total Registration",
+            count: stats.total || totalCount,
+            textColor: "text-teal-600 dark:text-teal-400",
+            borderHover: "hover:border-teal-300 dark:hover:border-teal-700",
+            activeBorder: "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 ring-2 ring-teal-500/20",
+            badgeBg: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
+          },
+          {
+            tab: "new" as const,
+            title: "New Registration",
+            count: (stats as any).new ?? stats.submitted ?? 0,
+            textColor: "text-blue-600 dark:text-blue-400",
+            borderHover: "hover:border-blue-300 dark:hover:border-blue-700",
+            activeBorder: "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20",
+            badgeBg: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+          },
+          {
+            tab: "in_process" as const,
+            title: "In Process",
+            count: (stats as any).inProcess ?? (((stats as any).underReview || 0) + ((stats as any).documentsVerified || 0) + ((stats as any).affidavitUploaded || 0)),
+            textColor: "text-purple-600 dark:text-purple-400",
+            borderHover: "hover:border-purple-300 dark:hover:border-purple-700",
+            activeBorder: "border-purple-500 dark:border-purple-400 bg-purple-50/50 dark:bg-purple-950/30 ring-2 ring-purple-500/20",
+            badgeBg: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300",
+          },
+          {
+            tab: "approved" as const,
+            title: "Approved",
+            count: stats.approved ?? 0,
+            textColor: "text-emerald-600 dark:text-emerald-400",
+            borderHover: "hover:border-emerald-300 dark:hover:border-emerald-700",
+            activeBorder: "border-emerald-500 dark:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20",
+            badgeBg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+          },
+          {
+            tab: "draft" as const,
+            title: "Draft",
+            count: (stats as any).draft ?? 0,
+            textColor: "text-amber-600 dark:text-amber-400",
+            borderHover: "hover:border-amber-300 dark:hover:border-amber-700",
+            activeBorder: "border-amber-500 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-amber-500/20",
+            badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+          },
+        ].map((card) => {
+          const isSelected = activeTab === card.tab;
+          return (
+            <button
+              key={card.tab}
+              type="button"
+              onClick={() => handleTabChange(card.tab)}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer select-none text-left relative overflow-hidden group shadow-2xs ${
+                isSelected
+                  ? card.activeBorder
+                  : `border-slate-200/80 dark:border-slate-800 bg-card ${card.borderHover} hover:shadow-sm`
+              }`}
+              title={`Click to filter by ${card.title}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider truncate ${card.textColor}`}>
+                  {card.title}
+                </span>
+                {isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0 animate-pulse" />
+                )}
+              </div>
+              <div className="flex items-baseline justify-between mt-2">
+                <span className={`text-2xl sm:text-3xl font-bold tabular-nums tracking-tight ${card.textColor}`}>
+                  {card.count}
+                </span>
+                {isSelected && (
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${card.badgeBg}`}>
+                    Active
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ─── Unified Control Toolbar: Segmented Status Tabs + Search & Filters ─── */}
+      {/* ─── Unified Control Toolbar: Search & Filters ─── */}
+      
       <Card className="p-3.5 sm:p-4 rounded-2xl border bg-card shadow-xs space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
-          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => handleTabChange("all")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "all"
-                  ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="All sperm donor registrations"
-            >
-              <span>All</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "all"
-                    ? "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {stats.total ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("new")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "new"
-                  ? "bg-white dark:bg-slate-900 text-[#285b63] dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Incoming submitted registrations"
-            >
-              <span>New</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "new"
-                    ? "bg-[#285b63]/10 text-[#285b63] dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).new ?? stats.submitted ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("draft")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "draft"
-                  ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Incomplete draft registrations"
-            >
-              <span>Draft</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "draft"
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).draft ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("under_review")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "under_review"
-                  ? "bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Under administrative and clinical review"
-            >
-              <span>Under Review</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "under_review"
-                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).underReview ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("documents_verified")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "documents_verified"
-                  ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Identity documents verified"
-            >
-              <span>Documents Verified</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "documents_verified"
-                    ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).documentsVerified ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("affidavit_uploaded")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "affidavit_uploaded"
-                  ? "bg-white dark:bg-slate-900 text-cyan-700 dark:text-cyan-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Signed statutory affidavit uploaded"
-            >
-              <span>Affidavit Uploaded</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "affidavit_uploaded"
-                    ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).affidavitUploaded ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("approved")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "approved"
-                  ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Approved registrations moved to Management"
-            >
-              <span>Approved</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "approved"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).approved ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("rejected")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "rejected"
-                  ? "bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Rejected applications"
-            >
-              <span>Rejected</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "rejected"
-                    ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).rejected ?? 0}
-              </span>
-            </button>
-
-            
-
-            {((stats as any).otherUntilApproved || 0) > 0 && (
-              <button
-                type="button"
-                onClick={() => handleTabChange("other")}
-                className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === "other"
-                    ? "bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-                }`}
-                title="Other intermediate statuses until approved"
-              >
-                <span>Other Status</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                    activeTab === "other"
-                      ? "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
-                      : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                  }`}
-                >
-                  {(stats as any).otherUntilApproved ?? 0}
-                </span>
-              </button>
-            )}
-          </div>
-
-          
-        </div>
-
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-80 md:w-96">
             <Input
@@ -1536,10 +1382,8 @@ export default function AdminSpermDonorRegistrationsPage() {
                 setStatusFilter(val);
                 if (val === "NEW" || val === "SUBMITTED") setActiveTab("new");
                 else if (val === "DRAFT") setActiveTab("draft");
-                else if (val === "UNDER_REVIEW") setActiveTab("under_review");
-                else if (val === "DOCUMENTS_VERIFIED") setActiveTab("documents_verified");
-                else if (val === "AFFIDAVIT_UPLOADED") setActiveTab("affidavit_uploaded");
-                else if (val === "APPROVED") setActiveTab("approved");
+                else if (val === "UNDER_REVIEW" || val === "DOCUMENTS_VERIFIED" || val === "AFFIDAVIT_UPLOADED") setActiveTab("in_process");
+                else if (val === "APPROVED" || val === "FILE_COMPLETED" || val === "WAITING_FORM13" || val === "COMPLETED") setActiveTab("approved");
                 else if (val === "REJECTED") setActiveTab("rejected");
                 else if (val === "SUSPENDED") setActiveTab("suspended");
               }}
@@ -1550,6 +1394,20 @@ export default function AdminSpermDonorRegistrationsPage() {
                   <option value="">All New Registrations</option>
                   <option value="NEW">New</option>
                   <option value="SUBMITTED">Submitted</option>
+                </>
+              ) : activeTab === "in_process" ? (
+                <>
+                  <option value="">All In Process</option>
+                  <option value="UNDER_REVIEW">Under Review</option>
+                  <option value="DOCUMENTS_VERIFIED">Documents Verified</option>
+                  <option value="AFFIDAVIT_UPLOADED">Affidavit Uploaded</option>
+                </>
+              ) : activeTab === "approved" ? (
+                <>
+                  <option value="">All Approved</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="FILE_COMPLETED">File Completed</option>
+                  <option value="WAITING_FORM13">Waiting Form 13</option>
                 </>
               ) : activeTab === "draft" ? (
                 <>
@@ -1562,8 +1420,6 @@ export default function AdminSpermDonorRegistrationsPage() {
                 <option value="DOCUMENTS_VERIFIED">Documents Verified</option>
               ) : activeTab === "affidavit_uploaded" ? (
                 <option value="AFFIDAVIT_UPLOADED">Affidavit Uploaded</option>
-              ) : activeTab === "approved" ? (
-                <option value="APPROVED">Approved</option>
               ) : activeTab === "rejected" ? (
                 <option value="REJECTED">Rejected</option>
               ) : activeTab === "suspended" ? (
@@ -1578,6 +1434,8 @@ export default function AdminSpermDonorRegistrationsPage() {
                   <option value="AFFIDAVIT_UPLOADED">Affidavit Uploaded</option>
                   <option value="UNDER_REVIEW">Under Review</option>
                   <option value="APPROVED">Approved</option>
+                  <option value="FILE_COMPLETED">File Completed</option>
+                  <option value="WAITING_FORM13">Waiting Form 13</option>
                   <option value="REJECTED">Rejected</option>
                   <option value="SUSPENDED">Suspended</option>
                 </>
@@ -1624,7 +1482,8 @@ export default function AdminSpermDonorRegistrationsPage() {
             No matching sperm donor registrations found in database.
           </div>
         ) : (
-          <Table className="min-w-[1050px]">
+          <div className="overflow-x-auto w-full">
+            <Table className="min-w-[1050px]">
             <TableHeader>
               {activeTab === "draft" ? (
                 <TableRow className="bg-amber-50/50 dark:bg-amber-950/20">
@@ -1893,7 +1752,7 @@ export default function AdminSpermDonorRegistrationsPage() {
                             <Check className="w-2.5 h-2.5 stroke-[3.5]" />
                           </span>
                         );
-                        labelText = "Done";
+                        labelText = "Approved";
                       } else if (isInProcess) {
                         statusTheme = "bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800";
                         iconNode = (
@@ -2010,6 +1869,7 @@ export default function AdminSpermDonorRegistrationsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
         {!loading && registrations.length > 0 && (
           <div className="p-4 border-t">
@@ -2024,7 +1884,7 @@ export default function AdminSpermDonorRegistrationsPage() {
 
       {/* ─── Detail Review Dialog (Matching Egg Donor View Exactly) ─── */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="rounded-3xl max-w-5xl bg-background border shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-3xl w-[98vw] sm:w-[96vw] lg:w-[95vw] xl:w-[94vw] 2xl:w-[92vw] max-w-[1600px] 2xl:max-w-[1720px] bg-background border shadow-2xl p-0 max-h-[94vh] flex flex-col overflow-hidden">
           {selectedReg && (() => {
             const wf = getWorkflowStatus(selectedReg);
             const isDocVerified = wf.step1Complete;
@@ -2035,25 +1895,25 @@ export default function AdminSpermDonorRegistrationsPage() {
               selectedReg.clinicDeal?.donorCategory === "registry";
 
             return (
-              <div className="space-y-6">
-                {/* ─── Profile Header ────────────────────────────────────────── */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 border-b pb-5 justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+                {/* ─── Profile Header (Fixed at top - does not move when scrolling) ─── */}
+                <div className="bg-background border-b px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4.5 flex flex-col md:flex-row items-start md:items-center gap-3 sm:gap-4 justify-between shrink-0 z-20 pr-12 sm:pr-16 select-none">
+                  <div className="flex items-center gap-4 min-w-0">
                     {selectedReg.documents?.passportPhoto?.url ? (
                       <img
                         alt="Passport Photo"
                         src={selectedReg.documents.passportPhoto.url}
-                        className="w-16 h-16 rounded-2xl object-cover border-2 border-teal-500 shadow-md cursor-pointer hover:opacity-90 transition"
+                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-teal-500 shadow-md shrink-0 cursor-pointer hover:opacity-90 transition"
                         onClick={() => setPreviewMedia({ url: selectedReg.documents.passportPhoto.url, title: "Passport Photo" })}
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border shrink-0">
                         No Photo
                       </div>
                     )}
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-xl font-bold text-foreground">
+                        <h2 className="text-lg sm:text-xl font-bold text-foreground truncate">
                           {selectedReg.personalInfo?.fullName}
                         </h2>
                         <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 font-bold border border-teal-200">
@@ -2071,7 +1931,7 @@ export default function AdminSpermDonorRegistrationsPage() {
                           Status: {selectedReg.status === "SUBMITTED" ? "NEW" : (selectedReg.status || "NEW").replace(/_/g, " ")}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
                         Reg ID: <span className="font-mono font-bold text-foreground">{selectedReg.registrationId}</span>
                         {selectedReg.donorId && (
                           <> • Donor ID: <span className="font-mono font-bold text-teal-700 dark:text-teal-400">{selectedReg.donorId}</span></>
@@ -2086,7 +1946,7 @@ export default function AdminSpermDonorRegistrationsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleOpenPrint(selectedReg)}
-                      className="h-8 rounded-xl text-xs gap-1.5 shadow-xs border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950"
+                      className="h-8 rounded-xl text-xs gap-1.5 shadow-xs border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950 cursor-pointer"
                     >
                       <Printer className="w-3.5 h-3.5 text-teal-600" /> Print Registration &amp; Forms
                     </Button>
@@ -2097,12 +1957,15 @@ export default function AdminSpermDonorRegistrationsPage() {
                         handleOpenEdit(selectedReg);
                         setIsDetailOpen(false);
                       }}
-                      className="h-8 rounded-xl text-xs gap-1.5 text-emerald-600 border-emerald-250 hover:bg-emerald-50 shadow-xs"
+                      className="h-8 rounded-xl text-xs gap-1.5 text-emerald-600 border-emerald-250 hover:bg-emerald-50 shadow-xs cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" /> Edit Registration
                     </Button>
                   </div>
                 </div>
+
+                {/* ─── Scrollable Body Content (Scrolls beneath fixed header) ─── */}
+                <div className="overflow-y-auto flex-1 p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6">
 
                 {/* ─── 4-Step Pipeline Workflow Stepper ──────────────────────── */}
                 <div className="p-4 rounded-2xl border bg-gradient-to-br from-slate-50 to-white dark:from-slate-900/60 dark:to-slate-900/30 space-y-3 shadow-xs">
@@ -2306,7 +2169,7 @@ export default function AdminSpermDonorRegistrationsPage() {
                         <span className="text-[10px] text-muted-foreground font-semibold">Aadhaar, Photo &amp; Sign</span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {[
                           {
                             key: "aadhaarFront",
@@ -2343,18 +2206,18 @@ export default function AdminSpermDonorRegistrationsPage() {
                           return (
                             <div
                               key={idx}
-                              className={`p-2.5 rounded-xl border flex flex-col justify-between transition-all ${
-                                hasDoc ? "bg-background border-border" : "bg-muted/40 border-dashed"
+                              className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
+                                hasDoc ? "bg-background border-border shadow-2xs hover:border-slate-300 dark:hover:border-slate-700" : "bg-muted/40 border-dashed"
                               }`}
                             >
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 <div className="flex items-center justify-between text-[11px]">
-                                  <span className="font-bold flex items-center gap-1 truncate">
-                                    <item.icon className={`w-3 h-3 ${item.color} shrink-0`} />
+                                  <span className="font-bold flex items-center gap-1.5 truncate">
+                                    <item.icon className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
                                     <span className="truncate">{item.label}</span>
                                   </span>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                                    hasDoc ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                    hasDoc ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300" : "bg-rose-100 text-rose-600"
                                   }`}>
                                     {hasDoc ? "Uploaded" : "Missing"}
                                   </span>
@@ -2363,15 +2226,15 @@ export default function AdminSpermDonorRegistrationsPage() {
                                 {hasDoc && isImg && (
                                   <div
                                     onClick={() => setPreviewMedia({ url: item.doc.url, title: item.label })}
-                                    className="w-full h-24 rounded-lg overflow-hidden border bg-muted/40 cursor-pointer relative group flex items-center justify-center"
+                                    className="w-full h-36 sm:h-40 md:h-44 xl:h-48 rounded-lg overflow-hidden border bg-muted/40 cursor-pointer relative group flex items-center justify-center"
                                   >
                                     <img
                                       src={item.doc.url}
                                       alt={item.label}
                                       className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                                     />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold gap-1">
-                                      <Eye className="w-3 h-3" /> Enlarge
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-bold gap-1.5">
+                                      <Eye className="w-3.5 h-3.5" /> Enlarge
                                     </div>
                                   </div>
                                 )}
@@ -2380,30 +2243,30 @@ export default function AdminSpermDonorRegistrationsPage() {
                                   <button
                                     type="button"
                                     onClick={() => setPreviewMedia({ url: item.doc.url, title: item.label })}
-                                    className="w-full h-24 rounded-lg border bg-muted/40 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground text-xs gap-1 cursor-pointer transition-colors"
+                                    className="w-full h-36 sm:h-40 md:h-44 xl:h-48 rounded-lg border bg-muted/40 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground text-xs gap-1.5 cursor-pointer transition-colors"
                                   >
-                                    <FileText className="w-6 h-6 text-teal-600" />
-                                    <span className="text-[10px] font-mono truncate max-w-[90%]">
+                                    <FileText className="w-8 h-8 text-teal-600" />
+                                    <span className="text-[11px] font-mono truncate max-w-[90%]">
                                       View PDF
                                     </span>
                                   </button>
                                 )}
 
                                 {!hasDoc && (
-                                  <div className="w-full h-24 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground text-[10px] italic">
+                                  <div className="w-full h-36 sm:h-40 md:h-44 xl:h-48 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground text-[11px] italic">
                                     Not uploaded
                                   </div>
                                 )}
                               </div>
 
                               {hasDoc && (
-                                <div className="pt-2 mt-1 border-t flex items-center justify-between">
+                                <div className="pt-2.5 mt-2 border-t flex items-center justify-between">
                                   <button
                                     type="button"
                                     onClick={() => setPreviewMedia({ url: item.doc.url, title: item.label })}
-                                    className="text-[10px] text-teal-600 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                                    className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                                   >
-                                    <Eye className="w-2.5 h-2.5" /> Preview Document
+                                    <Eye className="w-3 h-3" /> Preview Document
                                   </button>
                                 </div>
                               )}
@@ -3061,9 +2924,10 @@ export default function AdminSpermDonorRegistrationsPage() {
                   </div>
                 </div>
               </div>
-            );
-          })()}
-        </DialogContent>
+            </div>
+          );
+        })()}
+      </DialogContent>
       </Dialog>
 
       {/* ─── Dual Deals & Hospital Assignment Modal (Matching Egg Donor View Exactly) ─── */}
@@ -3206,9 +3070,9 @@ export default function AdminSpermDonorRegistrationsPage() {
                   </label>
                   <Input
                     type="number"
-                    value={dealForm.compensationAmount || ""}
-                    onChange={(e) => setDealForm({ ...dealForm, compensationAmount: Number(e.target.value) })}
-                    placeholder="e.g. 5000"
+                    value={Number(dealForm.compensationAmount) > 0 ? dealForm.compensationAmount : ""}
+                    onChange={(e) => setDealForm({ ...dealForm, compensationAmount: Number(e.target.value) || 0 })}
+                    placeholder="Enter compensation amount manually (e.g. 5000)"
                     className="text-xs font-mono font-bold text-emerald-600"
                     required
                   />

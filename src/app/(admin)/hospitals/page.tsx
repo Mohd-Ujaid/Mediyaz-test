@@ -32,6 +32,7 @@ import {
   Heart,
   Loader2,
   MoreHorizontal,
+  Receipt,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -100,6 +101,12 @@ export default function HospitalManagementPage() {
   const [stateFilter, setStateFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    archived: 0,
+  });
   // const [organFilter, setOrganFilter] = useState("");
   const [sortField, setSortField] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -444,9 +451,7 @@ data.hospitals?.forEach((h: any, index: number) => {
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <Building2 className="w-6 h-6 text-teal-600" /> ART Clinics Management
           </h1>
-          <p className="text-xs text-slate-500">
-            Configure partner clinics, manage organ specialty lists, and verify business donor deals.
-          </p>
+       
         </div>
         {isAdmin && (
           <div className="flex gap-2">
@@ -465,6 +470,85 @@ data.hospitals?.forEach((h: any, index: number) => {
             </Button>
           </div>
         )}
+      </div>
+
+      {/* Interactive Hospital Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          {
+            key: "",
+            title: "Total Clinics",
+            count: stats.total || hospitals.length,
+            textColor: "text-teal-600 dark:text-teal-400",
+            borderHover: "hover:border-teal-300 dark:hover:border-teal-700",
+            activeBorder: "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 ring-2 ring-teal-500/20",
+            badgeBg: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
+          },
+          {
+            key: "ACTIVE",
+            title: "Active Centers",
+            count: stats.active,
+            textColor: "text-emerald-600 dark:text-emerald-400",
+            borderHover: "hover:border-emerald-300 dark:hover:border-emerald-700",
+            activeBorder: "border-emerald-500 dark:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20",
+            badgeBg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+          },
+          {
+            key: "INACTIVE",
+            title: "Inactive Centers",
+            count: stats.inactive,
+            textColor: "text-amber-600 dark:text-amber-400",
+            borderHover: "hover:border-amber-300 dark:hover:border-amber-700",
+            activeBorder: "border-amber-500 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-amber-500/20",
+            badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+          },
+          {
+            key: "ARCHIVED",
+            title: "Archived Clinics",
+            count: stats.archived,
+            textColor: "text-rose-600 dark:text-rose-400",
+            borderHover: "hover:border-rose-300 dark:hover:border-rose-700",
+            activeBorder: "border-rose-500 dark:border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 ring-2 ring-rose-500/20",
+            badgeBg: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+          },
+        ].map((item) => {
+          const isSelected = statusFilter === item.key;
+          return (
+            <button
+              key={item.key || "all"}
+              type="button"
+              onClick={() => {
+                setStatusFilter(item.key);
+                setCurrentPage(1);
+              }}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer select-none text-left relative overflow-hidden group shadow-2xs ${
+                isSelected
+                  ? item.activeBorder
+                  : `border-slate-200/80 dark:border-slate-800 bg-card ${item.borderHover} hover:shadow-sm`
+              }`}
+              title={`Click to filter by ${item.title}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider truncate ${item.textColor}`}>
+                  {item.title}
+                </span>
+                {isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0 animate-pulse" />
+                )}
+              </div>
+              <div className="flex items-baseline justify-between mt-2">
+                <span className={`text-2xl sm:text-3xl font-bold tabular-nums tracking-tight ${item.textColor}`}>
+                  {item.count}
+                </span>
+                {isSelected && (
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${item.badgeBg}`}>
+                    Active
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Advanced Filters Panel */}
@@ -497,273 +581,35 @@ data.hospitals?.forEach((h: any, index: number) => {
             </select>
           </div>
 
-          {/* states Type */}
+          {/* States Filter */}
           <div>
-<select
-  value={stateFilter}
-  onChange={(e) => setStateFilter(e.target.value)}
-  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
->
-  {/* <option value="">Select State (All)</option>
-
-  <option value="Andhra Pradesh">Andhra Pradesh</option>
-  <option value="Arunachal Pradesh">Arunachal Pradesh</option>
-  <option value="Assam">Assam</option>
-  <option value="Bihar">Bihar</option>
-  <option value="Chhattisgarh">Chhattisgarh</option>
-  <option value="Goa">Goa</option>
-  <option value="Gujarat">Gujarat</option>
-  <option value="Haryana">Haryana</option>
-  <option value="Himachal Pradesh">Himachal Pradesh</option>
-  <option value="Jharkhand">Jharkhand</option>
-  <option value="Karnataka">Karnataka</option>
-  <option value="Kerala">Kerala</option>
-  <option value="Madhya Pradesh">Madhya Pradesh</option>
-  <option value="Maharashtra">Maharashtra</option>
-  <option value="Manipur">Manipur</option>
-  <option value="Meghalaya">Meghalaya</option>
-  <option value="Mizoram">Mizoram</option>
-  <option value="Nagaland">Nagaland</option>
-  <option value="Odisha">Odisha</option>
-  <option value="Punjab">Punjab</option>
-  <option value="Rajasthan">Rajasthan</option>
-  <option value="Sikkim">Sikkim</option>
-  <option value="Tamil Nadu">Tamil Nadu</option>
-  <option value="Telangana">Telangana</option>
-  <option value="Tripura">Tripura</option>
-  <option value="Uttar Pradesh">Uttar Pradesh</option>
-  <option value="Uttarakhand">Uttarakhand</option>
-  <option value="West Bengal">West Bengal</option>
-
-
-  <option value="Andaman and Nicobar Islands">
-    Andaman and Nicobar Islands
-  </option>
-  <option value="Chandigarh">Chandigarh</option>
-  <option value="Dadra and Nagar Haveli and Daman and Diu">
-    Dadra and Nagar Haveli and Daman and Diu
-  </option>
-  <option value="Delhi">Delhi</option>
-  <option value="Jammu and Kashmir">Jammu and Kashmir</option>
-  <option value="Ladakh">Ladakh</option>
-  <option value="Lakshadweep">Lakshadweep</option>
-  <option value="Puducherry">Puducherry</option> */}
-
-  <option value="">Select State</option>
-                  {INDIAN_STATES.filter(s => s !== "Other").map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                  <option value="Other">Other</option>
-</select>
-
-
+            <select
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
+            >
+              <option value="">Select State (All)</option>
+              {INDIAN_STATES.filter(s => s !== "Other").map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value="Other">Other</option>
+            </select>
           </div>
 
           
-          {/* city types */}
-
+          {/* City Filter */}
           <div>
-          
-
-<select
-  value={cityFilter}
-  onChange={(e) => setCityFilter(e.target.value)}
-  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
->
-  {/* <option value="">Select City (All)</option>
-
-  <option value="Agartala">Agartala</option>
-  <option value="Agra">Agra</option>
-  <option value="Ahmedabad">Ahmedabad</option>
-  <option value="Aizawl">Aizawl</option>
-  <option value="Ajmer">Ajmer</option>
-  <option value="Alappuzha">Alappuzha</option>
-  <option value="Aligarh">Aligarh</option>
-  <option value="Alwar">Alwar</option>
-  <option value="Amravati">Amravati</option>
-  <option value="Amritsar">Amritsar</option>
-  <option value="Anand">Anand</option>
-  <option value="Asansol">Asansol</option>
-  <option value="Aurangabad">Aurangabad</option>
-  <option value="Ayodhya">Ayodhya</option>
-
-  <option value="Bareilly">Bareilly</option>
-  <option value="Bathinda">Bathinda</option>
-  <option value="Belagavi">Belagavi</option>
-  <option value="Bengaluru">Bengaluru</option>
-  <option value="Berhampur">Berhampur</option>
-  <option value="Bhagalpur">Bhagalpur</option>
-  <option value="Bhilai">Bhilai</option>
-  <option value="Bhopal">Bhopal</option>
-  <option value="Bhubaneswar">Bhubaneswar</option>
-  <option value="Bikaner">Bikaner</option>
-  <option value="Bilaspur">Bilaspur</option>
-  <option value="Bokaro">Bokaro</option>
-
-  <option value="Chandigarh">Chandigarh</option>
-  <option value="Chennai">Chennai</option>
-  <option value="Coimbatore">Coimbatore</option>
-  <option value="Cuttack">Cuttack</option>
-
-  <option value="Daman">Daman</option>
-  <option value="Davanagere">Davanagere</option>
-  <option value="Dehradun">Dehradun</option>
-  <option value="Delhi">Delhi</option>
-  <option value="Dhanbad">Dhanbad</option>
-  <option value="Dharamshala">Dharamshala</option>
-  <option value="Dibrugarh">Dibrugarh</option>
-  <option value="Dimapur">Dimapur</option>
-  <option value="Diu">Diu</option>
-  <option value="Durg">Durg</option>
-  <option value="Durgapur">Durgapur</option>
-
-  <option value="Ernakulam">Ernakulam</option>
-  <option value="Erode">Erode</option>
-
-  <option value="Faridabad">Faridabad</option>
-
-  <option value="Gandhinagar">Gandhinagar</option>
-  <option value="Gangtok">Gangtok</option>
-  <option value="Gaya">Gaya</option>
-  <option value="Ghaziabad">Ghaziabad</option>
-  <option value="Gorakhpur">Gorakhpur</option>
-  <option value="Greater Noida">Greater Noida</option>
-  <option value="Guntur">Guntur</option>
-  <option value="Gurugram">Gurugram</option>
-  <option value="Guwahati">Guwahati</option>
-  <option value="Gwalior">Gwalior</option>
-
-  <option value="Haldwani">Haldwani</option>
-  <option value="Haridwar">Haridwar</option>
-  <option value="Hisar">Hisar</option>
-  <option value="Howrah">Howrah</option>
-  <option value="Hubballi">Hubballi</option>
-
-  <option value="Imphal">Imphal</option>
-  <option value="Indore">Indore</option>
-  <option value="Itanagar">Itanagar</option>
-
-  <option value="Jabalpur">Jabalpur</option>
-  <option value="Jaipur">Jaipur</option>
-  <option value="Jalandhar">Jalandhar</option>
-  <option value="Jalgaon">Jalgaon</option>
-  <option value="Jammu">Jammu</option>
-  <option value="Jamnagar">Jamnagar</option>
-  <option value="Jamshedpur">Jamshedpur</option>
-  <option value="Jhansi">Jhansi</option>
-  <option value="Jodhpur">Jodhpur</option>
-  <option value="Jorhat">Jorhat</option>
-  <option value="Junagadh">Junagadh</option>
-
-  <option value="Kadapa">Kadapa</option>
-  <option value="Kakinada">Kakinada</option>
-  <option value="Kannur">Kannur</option>
-  <option value="Kanpur">Kanpur</option>
-  <option value="Karnal">Karnal</option>
-  <option value="Karimnagar">Karimnagar</option>
-  <option value="Kavaratti">Kavaratti</option>
-  <option value="Khammam">Khammam</option>
-  <option value="Kochi">Kochi</option>
-  <option value="Kohima">Kohima</option>
-  <option value="Kolhapur">Kolhapur</option>
-  <option value="Kolkata">Kolkata</option>
-  <option value="Kollam">Kollam</option>
-  <option value="Kota">Kota</option>
-  <option value="Kozhikode">Kozhikode</option>
-  <option value="Kullu">Kullu</option>
-  <option value="Kurnool">Kurnool</option>
-
-  <option value="Leh">Leh</option>
-  <option value="Ludhiana">Ludhiana</option>
-  <option value="Lucknow">Lucknow</option>
-  <option value="Lunglei">Lunglei</option>
-
-  <option value="Madurai">Madurai</option>
-  <option value="Mandi">Mandi</option>
-  <option value="Mangaluru">Mangaluru</option>
-  <option value="Margao">Margao</option>
-  <option value="Mathura">Mathura</option>
-  <option value="Meerut">Meerut</option>
-  <option value="Mohali">Mohali</option>
-  <option value="Moradabad">Moradabad</option>
-  <option value="Mumbai">Mumbai</option>
-  <option value="Muzaffarpur">Muzaffarpur</option>
-  <option value="Mysuru">Mysuru</option>
-
-  <option value="Nagpur">Nagpur</option>
-  <option value="Nainital">Nainital</option>
-  <option value="Naharlagun">Naharlagun</option>
-  <option value="Nashik">Nashik</option>
-  <option value="Navi Mumbai">Navi Mumbai</option>
-  <option value="Nellore">Nellore</option>
-  <option value="Noida">Noida</option>
-
-  <option value="Panaji">Panaji</option>
-  <option value="Panipat">Panipat</option>
-  <option value="Patiala">Patiala</option>
-  <option value="Patna">Patna</option>
-  <option value="Puducherry">Puducherry</option>
-  <option value="Pune">Pune</option>
-  <option value="Puri">Puri</option>
-  <option value="Purnia">Purnia</option>
-
-  <option value="Raipur">Raipur</option>
-  <option value="Rajahmundry">Rajahmundry</option>
-  <option value="Rajkot">Rajkot</option>
-  <option value="Ranchi">Ranchi</option>
-  <option value="Rewa">Rewa</option>
-  <option value="Rishikesh">Rishikesh</option>
-  <option value="Rohtak">Rohtak</option>
-  <option value="Rourkela">Rourkela</option>
-
-  <option value="Sagar">Sagar</option>
-  <option value="Salem">Salem</option>
-  <option value="Sambalpur">Sambalpur</option>
-  <option value="Shillong">Shillong</option>
-  <option value="Shimla">Shimla</option>
-  <option value="Shivamogga">Shivamogga</option>
-  <option value="Siliguri">Siliguri</option>
-  <option value="Silchar">Silchar</option>
-  <option value="Solan">Solan</option>
-  <option value="Solapur">Solapur</option>
-  <option value="Srinagar">Srinagar</option>
-  <option value="Surat">Surat</option>
-
-  <option value="Tawang">Tawang</option>
-  <option value="Tezpur">Tezpur</option>
-  <option value="Thane">Thane</option>
-  <option value="Thiruvananthapuram">Thiruvananthapuram</option>
-  <option value="Thoothukudi">Thoothukudi</option>
-  <option value="Thrissur">Thrissur</option>
-  <option value="Tiruchirappalli">Tiruchirappalli</option>
-  <option value="Tirunelveli">Tirunelveli</option>
-  <option value="Tirupati">Tirupati</option>
-  <option value="Tiruppur">Tiruppur</option>
-  <option value="Tura">Tura</option>
-
-  <option value="Udaipur">Udaipur</option>
-  <option value="Ujjain">Ujjain</option>
-
-  <option value="Vadodara">Vadodara</option>
-  <option value="Varanasi">Varanasi</option>
-  <option value="Vasco da Gama">Vasco da Gama</option>
-  <option value="Vellore">Vellore</option>
-  <option value="Vijayawada">Vijayawada</option>
-  <option value="Visakhapatnam">Visakhapatnam</option>
-
-  <option value="Warangal">Warangal</option> */}
-
-  <option value="">Select City</option>
-   {(STATE_CITIES[stateFilter] || []).filter((c) => c !== "Other").map((c) => ( 
-    <option key={c} value={c}> {c} </option> ))} 
-    {(STATE_CITIES[stateFilter] || []).includes("Other") && ( <option value="Other">Other</option>)}
-
-  
-</select>
-
-
+            <select
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
+            >
+              <option value="">Select City (All)</option>
+              {(STATE_CITIES[stateFilter] || []).filter((c) => c !== "Other").map((c) => ( 
+                <option key={c} value={c}>{c}</option>
+              ))} 
+              {(STATE_CITIES[stateFilter] || []).includes("Other") && <option value="Other">Other</option>}
+            </select>
           </div>
 
           {/* Organ Filter */}
@@ -799,8 +645,7 @@ data.hospitals?.forEach((h: any, index: number) => {
                   <th className="p-3.5">Location</th>
                   <th className="p-3.5">Contact Person</th>
                   <th className="p-3.5">Status</th>
-                  {/* <th className="p-3.5">Hospital Deal</th> */}
-                  {/* <th className="p-3.5"></th> */}
+                  <th className="p-3.5">Hospital Deal</th>
                   <th className="p-3.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -843,6 +688,18 @@ data.hospitals?.forEach((h: any, index: number) => {
                       }`}>
                         {h.status}
                       </span>
+                    </td>
+                    <td className="p-3.5 font-mono">
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-semibold text-teal-600 dark:text-teal-400">
+                          Normal: ₹{(h.donorDealPrice || 0).toLocaleString()}
+                        </div>
+                        {h.profiledonorDealPrice > 0 && (
+                          <div className="text-[10px] text-purple-600 dark:text-purple-400">
+                            Profile: ₹{h.profiledonorDealPrice.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3.5 text-right">
                       <div className="flex items-center justify-end">
@@ -1377,11 +1234,17 @@ data.hospitals?.forEach((h: any, index: number) => {
                 {/* TAB: FINANCIAL DEAL INFO (Admin only) */}
                 {detailTab === "financial" && isAdmin && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
                       <div className="space-y-0.5">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Donor Deal Price</div>
-                        <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                          {selectedHospital.donorDealPrice} {selectedHospital.currency}
+                        <div className="text-[10px] text-slate-400 font-bold uppercase">Standard Hospital Deal Price</div>
+                        <div className="text-sm font-bold text-teal-600 font-mono">
+                          ₹{Number(selectedHospital.donorDealPrice || 0).toLocaleString()} {selectedHospital.currency || "INR"}
+                        </div>
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] text-slate-400 font-bold uppercase">Profile Donor Deal Price</div>
+                        <div className="text-sm font-bold text-purple-600 font-mono">
+                          ₹{Number(selectedHospital.profiledonorDealPrice || 0).toLocaleString()} {selectedHospital.currency || "INR"}
                         </div>
                       </div>
                     </div>

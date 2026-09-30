@@ -87,34 +87,34 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-white dark:bg-slate-950 font-sans select-none p-4 sm:p-8 relative overflow-hidden">
-      
-
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-slate-50 via-white to-teal-50/30 dark:bg-slate-950 font-sans select-none p-4 sm:p-8 relative overflow-hidden">
+    
       <div className="w-full max-w-md space-y-6 relative z-10 my-auto">
-     
-        <div className="text-center space-y-3">
+        
+
+        {/* Form Card */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl shadow-slate-900/5 dark:shadow-none space-y-5">
+
+
+<div className="text-center space-y-3">
           <div className="flex justify-center">
-            <div className="inline-flex items-center justify-center p-2 rounded-2xl ">
+            <div className="inline-flex items-center justify-center ">
               <img
-                src="/images/logo.webp"
-                alt="Mediyaz Art Bank"
-                className="h-25 w-auto object-contain"
+                src="/logo.webp"
+                alt="Mediyaz ART Bank"
+                className="h-24 w-auto object-contain"
               />
             </div>
           </div>
-
-
 
           <div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Administrator Sign In
             </h2>
-        
           </div>
         </div>
 
-        {/* Form Card */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none space-y-5">
+
           {error && (
             <div className="p-3.5 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-2xl flex items-start gap-2.5 animate-in fade-in duration-200">
               <ShieldAlert className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
@@ -122,12 +122,7 @@ export default function AdminLoginPage() {
             </div>
           )}
 
-          {success && (
-            <div className="p-3.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-2xl flex items-center gap-2.5 animate-in fade-in duration-200">
-              <ShieldCheck className="w-5 h-5 shrink-0 text-emerald-600" />
-              <span>Session authenticated. Redirecting to Executive Console...</span>
-            </div>
-          )}
+          
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Email Input */}
@@ -141,7 +136,7 @@ export default function AdminLoginPage() {
                   <Mail className="w-4 h-4" />
                 </div>
                 <Input
-                  placeholder="admin@mediyaz.org"
+                  placeholder="Enter You Email"
                   type="email"
                   autoComplete="email"
                   {...form.register("email")}
@@ -175,7 +170,7 @@ export default function AdminLoginPage() {
                 </div>
                 <Input
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••••••"
+                  placeholder="Enter You Password"
                   autoComplete="current-password"
                   {...form.register("password")}
                   className="pl-10 pr-10 bg-slate-50/70 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl h-11 text-xs focus-visible:ring-2 focus-visible:ring-[#285b63] transition-all"
@@ -233,8 +228,8 @@ export default function AdminLoginPage() {
                 </>
               ) : (
                 <>
-                  <span>Login </span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Access </span>
+                  {/* <ArrowRight className="w-4 h-4" /> */}
                 </>
               )}
             </Button>

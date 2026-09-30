@@ -22,6 +22,12 @@ interface SendEmailOptions {
   to: string;
   subject: string;
   html: string;
+  attachments?: Array<{
+    filename: string;
+    content?: any;
+    path?: string;
+    contentType?: string;
+  }>;
 }
 
 // 1. Dynamic SMTP Transporter Initializer
@@ -70,7 +76,7 @@ const getTransporter = () => {
 };
 
 // 2. Base Email Dispatch Utility
-export const sendEmail = async ({ to, subject, html }: SendEmailOptions) => {
+export const sendEmail = async ({ to, subject, html, attachments }: SendEmailOptions) => {
   // Validate basic email structure
   if (!to || !to.includes("@")) {
     console.error(`[EMAIL ERROR] Invalid email address: ${to}`);
@@ -89,6 +95,7 @@ export const sendEmail = async ({ to, subject, html }: SendEmailOptions) => {
         to,
         subject,
         html,
+        attachments: attachments || [],
       });
       
       console.log(`[EMAIL SUCCESS] Message sent in background: ${info.messageId} to ${to}`);

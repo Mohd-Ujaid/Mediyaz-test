@@ -9,12 +9,12 @@ import {
   sendRegistrationApprovedUserEmail,
   sendEmail
 } from "@/features/email/services/email.service";
-import { sendTwilioWhatsApp, sendTwilioSMS } from "@/features/twilio/services/twilio.service";
+import { sendTwilioWhatsApp } from "@/features/twilio/services/twilio.service";
 
 export interface NotificationPayload {
   recipientName: string;
   recipientContact: string; // email or phone
-  type: "email" | "sms" | "whatsapp";
+  type: "email" | "whatsapp";
   event:
     | "inquiry_submitted"
     | "consultation_scheduled"
@@ -43,12 +43,6 @@ export async function sendNotification(payload: NotificationPayload) {
       await sendTwilioWhatsApp(payload.recipientContact, payload.message);
     } catch (err) {
       console.error("[NOTIFICATION EXCEPTION] Failed to send Twilio WhatsApp:", err);
-    }
-  } else if (payload.type === "sms") {
-    try {
-      await sendTwilioSMS(payload.recipientContact, payload.message);
-    } catch (err) {
-      console.error("[NOTIFICATION EXCEPTION] Failed to send Twilio SMS:", err);
     }
   } else {
     // Other channels remain simulated for logging
@@ -110,7 +104,6 @@ export async function triggerWorkflowNotifications(
         if (phone || additionalInfo.phone) {
           const p = phone || additionalInfo.phone;
           await sendTwilioWhatsApp(p, `Dear ${name}, thank you for submitting your donor pre-screening query to the Mediyaz registry. Program: ${additionalInfo.interest || "sperm"} donor.`);
-          await sendTwilioSMS(p, `Dear ${name}, your donor inquiry has been received at Mediyaz Art Bank.`);
         }
         // 2. Send Alert Notification to Clinic Admin
         await sendInquiryAdminNotificationEmail({
@@ -173,7 +166,6 @@ export async function triggerWorkflowNotifications(
         if (phone || additionalInfo.phone) {
           const p = phone || additionalInfo.phone;
           await sendTwilioWhatsApp(p, `Dear ${name}, thank you for submitting your donor matching requirements to Mediyaz ART Bank. Case ID: ${additionalInfo.requirementId || "N/A"}. Our coordinator will contact you shortly.`);
-          await sendTwilioSMS(p, `Dear ${name}, your donor match requirement has been successfully submitted to Mediyaz ART Bank.`);
         }
         break;
 

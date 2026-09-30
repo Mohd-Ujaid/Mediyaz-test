@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import { Hospital } from "@/models/Hospital";
+import { computeSpermDonorManagementStatus, mergeWithDotNotation } from "@/features/donor-registration/utils/sperm-donor-status";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -120,6 +122,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       body.donorDeal.agreedBy = body.donorDeal.agreedBy || userName;
     }
 
+    // Merge updates with base document, correctly resolving dot-notation keys
+    const mergedForStatus = mergeWithDotNotation(existing.toObject(), body);
+    const autoStatusResult = computeSpermDonorManagementStatus(mergedForStatus);
+
+    // Auto-compute status if not explicitly overridden by admin
+    if (!body.status) {
+      if (!["REJECTED", "SUSPENDED", "CANCELLED"].includes(existing.status)) {
+        body.status = autoStatusResult.status;
+      }
+    }
+
     if (body.status && body.status !== existing.status) {
       body.reviewedBy = userName;
       body.reviewedAt = new Date();
@@ -132,8 +145,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     ).populate("assignedHospital");
 
     // AUTO-GENERATE DONOR ID ON APPROVAL (IF NOT ALREADY ASSIGNED)
-    let donorIdToUse = registration?.donorId || existing.donorId;
-    if (body.status === "APPROVED" && !donorIdToUse) {
+    let donorIdToUse = body.donorId || registration?.donorId || existing.donorId;
+    if (
+      (body.status === "APPROVED" || ["WAITING_FORM13", "FILE_COMPLETED"].includes(body.status)) &&
+      !donorIdToUse
+    ) {
       const { Donor } = await import("@/models/Donor");
       const count = await Donor.countDocuments();
       const currentYear = new Date().getFullYear();
@@ -145,6 +161,25 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       );
       donorIdToUse = formattedDonorId;
     }
+
+    const directUpdates: any = {};
+    if (body.donorDeal !== undefined) directUpdates.donorDeal = body.donorDeal;
+    if (body.clinicDeal !== undefined) directUpdates.clinicDeal = body.clinicDeal;
+    if (body.hospitalDealType !== undefined) directUpdates.hospitalDealType = body.hospitalDealType;
+    if (body.assignedHospital !== undefined) {
+      directUpdates.assignedHospital = body.assignedHospital
+        ? (mongoose.Types.ObjectId.isValid(body.assignedHospital) ? new mongoose.Types.ObjectId(body.assignedHospital) : body.assignedHospital)
+        : null;
+    }
+    if (Object.keys(directUpdates).length > 0) {
+      await SpermDonorRegistration.collection.updateOne(
+        { _id: existing._id },
+        { $set: directUpdates }
+      ).catch(() => {});
+    }
+
+    const freshRegistration = await SpermDonorRegistration.findById(existing._id).populate("assignedHospital") || registration;
+
     if (body.status && body.status !== existing.status) {
       try {
         const { createAuditLog } = await import("@/features/audit-logs/services/audit-log.service");
@@ -156,14 +191,14 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           userName,
           existing.status,
           body.status,
-          `Status updated to "${body.status}". Assigned hospital: ${registration?.assignedHospital ? (registration.assignedHospital as any).name : "None"}. Clinic Deal: ₹${registration?.clinicDeal?.hospitalDealPrice || 0}. Donor Payout: ₹${registration?.donorDeal?.compensationAmount || 0}.`
+          `Status updated to "${body.status}". Assigned hospital: ${freshRegistration?.assignedHospital ? (freshRegistration.assignedHospital as any).name : "None"}. Clinic Deal: ₹${freshRegistration?.clinicDeal?.hospitalDealPrice || 0}. Donor Payout: ₹${freshRegistration?.donorDeal?.compensationAmount || 0}.`
         );
       } catch (auditErr) {
         console.error("Audit log error:", auditErr);
       }
     }
 
-    return NextResponse.json({ success: true, registration });
+    return NextResponse.json({ success: true, registration: freshRegistration });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

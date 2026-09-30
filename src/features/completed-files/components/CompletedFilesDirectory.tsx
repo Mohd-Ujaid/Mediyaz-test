@@ -29,7 +29,9 @@ import {
   Check,
   MoreHorizontal,
   Dna,
+  Receipt,
 } from "lucide-react";
+import { CompletedFileInvoiceModal } from "./CompletedFileInvoiceModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -150,6 +152,7 @@ export function CompletedFilesDirectory({
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
 
@@ -514,6 +517,12 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
     } finally {
       setDownloadingZipId(null);
     }
+  };
+
+  // Open Invoice Generator & Dispatch Modal
+  const handleOpenInvoiceModal = (reg: any) => {
+    setSelectedReg(reg);
+    setIsInvoiceModalOpen(true);
   };
 
   // Open Payment Update Modal
@@ -1224,6 +1233,13 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                                 Hospital Payment
                               </DropdownMenuItem>
                               <DropdownMenuItem
+                                onClick={() => handleOpenInvoiceModal(reg)}
+                                className="cursor-pointer gap-2 text-xs font-semibold py-2 text-emerald-600 focus:text-emerald-700"
+                              >
+                                <Receipt className="w-4 h-4 text-emerald-600" />
+                                Generate / Send Invoice
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => {
                                   setSelectedReg(reg);
                                   setIsDocModalOpen(true);
@@ -1771,16 +1787,29 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                     <div className="p-3 rounded-lg bg-teal-500/5 border border-teal-500/20 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-teal-800 dark:text-teal-300">ART Clinic Deal</span>
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setIsDetailModalOpen(false);
-                            handleOpenPaymentModal(selectedReg);
-                          }}
-                          className="h-6 px-2 text-[10px] bg-teal-600 hover:bg-teal-700 text-white rounded-md gap-1"
-                        >
-                          <CreditCard className="w-3 h-3" /> Update Payment
-                        </Button>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setIsDetailModalOpen(false);
+                              handleOpenInvoiceModal(selectedReg);
+                            }}
+                            className="h-6 px-2 text-[10px] text-emerald-700 dark:text-emerald-300 border-emerald-400/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-md gap-1"
+                          >
+                            <Receipt className="w-3 h-3 text-emerald-600" /> Invoice
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setIsDetailModalOpen(false);
+                              handleOpenPaymentModal(selectedReg);
+                            }}
+                            className="h-6 px-2 text-[10px] bg-teal-600 hover:bg-teal-700 text-white rounded-md gap-1"
+                          >
+                            <CreditCard className="w-3 h-3" /> Update Payment
+                          </Button>
+                        </div>
                       </div>
                       <div><span className="text-muted-foreground">Assigned Clinic:</span> <span className="font-semibold text-foreground">{typeof selectedReg.assignedHospital === "object" ? selectedReg.assignedHospital?.name : "None"}</span></div>
                       <div><span className="text-muted-foreground">Agreed Price:</span> <span className="font-black text-teal-600">₹{(selectedReg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}</span></div>
@@ -1850,7 +1879,18 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setIsDetailModalOpen(false);
+                        handleOpenInvoiceModal(selectedReg);
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs h-9 px-3 gap-1.5 shadow-sm font-semibold"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      Generate / Send Invoice
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() => handlePrintRegistration(selectedReg)}
@@ -2149,6 +2189,20 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
         donorName={viewerDoc.donorName}
         donorId={viewerDoc.donorId}
       />
+
+      {/* Completed File Invoice & Dispatch Modal */}
+      {selectedReg && (
+        <CompletedFileInvoiceModal
+          isOpen={isInvoiceModalOpen}
+          onClose={() => setIsInvoiceModalOpen(false)}
+          registration={selectedReg}
+          donorType={
+            selectedReg.donorType === "sperm" || donorTypeFilter === "sperm"
+              ? "sperm"
+              : "egg"
+          }
+        />
+      )}
     </div>
   );
 }

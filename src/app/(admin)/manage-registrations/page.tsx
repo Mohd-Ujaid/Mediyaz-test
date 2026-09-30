@@ -48,6 +48,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   XCircle,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -120,6 +121,7 @@ const getDonorDealInfo = (reg: any) => {
 
   const rawAmount =
     reg.donorDeal?.compensationAmount ??
+    reg.donorDeal?.totalAgreedAmount ??
     reg.donorDeal?.amount;
 
   const defaultComp = category === "profile" ? (isSperm ? 10000 : 60000) : (isSperm ? 5000 : 40000);
@@ -222,12 +224,10 @@ export default function ManageRegistrationsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [tempSelectedHospitalId, setTempSelectedHospitalId] = useState<string | null>(null);
 
-  // Edit Clinical & Schedule Dates Modal (Pickup, Recruitment, Supply)
+  // Edit Oocyte Pickup Date Modal
   const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
   const [pickupReg, setPickupReg] = useState<any | null>(null);
   const [pickupDateValue, setPickupDateValue] = useState("");
-  const [recruitmentDateValue, setRecruitmentDateValue] = useState("");
-  const [supplyDateValue, setSupplyDateValue] = useState("");
   const [savingPickupDate, setSavingPickupDate] = useState(false);
 
   // In-App Document Viewer State
@@ -299,8 +299,6 @@ export default function ManageRegistrationsPage() {
   const handleOpenPickupModal = (reg: any) => {
     setPickupReg(reg);
     setPickupDateValue(formatDateForInput(reg.pickupDate));
-    setRecruitmentDateValue(formatDateForInput(reg.recruitmentDate));
-    setSupplyDateValue(formatDateForInput(reg.supplyDate));
     setIsPickupModalOpen(true);
   };
 
@@ -308,56 +306,56 @@ export default function ManageRegistrationsPage() {
     if (!pickupReg) return;
     setSavingPickupDate(true);
     try {
+      const targetId = pickupReg.registrationId || pickupReg._id;
+      const cleanPickup = (pickupDateValue || "").trim();
       const updatedSim = {
         ...pickupReg,
-        pickupDate: pickupDateValue,
-        recruitmentDate: recruitmentDateValue,
-        supplyDate: supplyDateValue,
+        pickupDate: cleanPickup,
       };
       const autoStatus = computeEggDonorManagementStatus(updatedSim).status;
 
-      const data = await updateAdminRegistrationStatusAction({
-        registrationId: pickupReg.registrationId,
-        pickupDate: pickupDateValue,
-        recruitmentDate: recruitmentDateValue,
-        supplyDate: supplyDateValue,
+      // 1. Direct atomic patch for guaranteed persistence
+      const patchRes = await patchAdminRegistrationFieldsAction(targetId, {
+        pickupDate: cleanPickup,
         status: autoStatus,
       });
-      if (data.success) {
+
+      // 2. Also sync status transition pipeline
+      const statusRes = await updateAdminRegistrationStatusAction({
+        registrationId: targetId,
+        pickupDate: cleanPickup,
+        status: autoStatus,
+      }).catch((e: any) => ({ success: false, error: e?.message }));
+
+      if (patchRes.success || statusRes.success) {
         if (autoStatus === "WAITING_FORM13") {
-          toast.success("Dates saved! Status automatically advanced to WAITING FORM 13.");
+          toast.success("Oocyte pickup date saved! Status automatically advanced to WAITING FORM 13.");
         } else if (autoStatus === "FILE_COMPLETED") {
-          toast.success("Dates saved! Status is FILE COMPLETED.");
+          toast.success("Oocyte pickup date saved! Status is FILE COMPLETED.");
         } else {
-          toast.success("Schedule dates updated successfully!");
+          toast.success("Oocyte pickup date saved successfully!");
         }
         setIsPickupModalOpen(false);
-        const updatedPickup = pickupDateValue;
-        const updatedRecruit = recruitmentDateValue;
-        const updatedSupply = supplyDateValue;
-        const targetId = pickupReg.registrationId;
+        const updatedPickup = cleanPickup;
         setPickupReg(null);
+
         setRegistrations((prev) =>
           prev.map((r) =>
-            r.registrationId === targetId
+            r.registrationId === targetId || r._id === targetId
               ? {
                   ...r,
                   pickupDate: updatedPickup,
-                  recruitmentDate: updatedRecruit,
-                  supplyDate: updatedSupply,
                   status: autoStatus,
                 }
               : r
           )
         );
-        if (selectedReg && selectedReg.registrationId === targetId) {
+        if (selectedReg && (selectedReg.registrationId === targetId || selectedReg._id === targetId)) {
           setSelectedReg((prev: any) =>
             prev
               ? {
                   ...prev,
                   pickupDate: updatedPickup,
-                  recruitmentDate: updatedRecruit,
-                  supplyDate: updatedSupply,
                   status: autoStatus,
                 }
               : null
@@ -365,10 +363,10 @@ export default function ManageRegistrationsPage() {
         }
         loadRegistrations();
       } else {
-        toast.error(data.error || "Failed to update dates.");
+        toast.error(patchRes.error || (statusRes as any).error || "Failed to update pickup date.");
       }
-    } catch {
-      toast.error("Error updating dates.");
+    } catch (err: any) {
+      toast.error(err?.message || "Error updating pickup date.");
     } finally {
       setSavingPickupDate(false);
     }
@@ -502,7 +500,39 @@ export default function ManageRegistrationsPage() {
   const [form13Reg, setForm13Reg] = useState<any | null>(null);
   const [uploadingForm13, setUploadingForm13] = useState(false);
 
+  const checkCanUploadForm13 = (reg: any) => {
+    if (!reg) return { canUpload: false, missing: [] };
+    const hasViralMarker = !!(reg.labReports?.viralMarkersReport?.url || (Array.isArray(reg.labReports?.viralMarkers) ? reg.labReports?.viralMarkers[0]?.url : reg.labReports?.viralMarkers?.url));
+    const hasBloodReport = !!(reg.labReports?.bloodReport?.url);
+    const hasInsurance = !!(reg.labReports?.insurance?.url || reg.documents?.insurance?.url || reg.labReports?.lifeInsurance?.url);
+    const hasHealthInsurance = !!(reg.labReports?.healthInsurance?.url);
+    const hasPickup = !!(reg.pickupDate);
+    const missing: string[] = [];
+    if (!hasViralMarker) missing.push("Viral Markers Report");
+    if (!hasBloodReport) missing.push("Blood Test Report");
+    if (!hasInsurance) missing.push("Life / Medical Insurance Policy");
+    if (!hasHealthInsurance) missing.push("Health Insurance Policy");
+    if (!hasPickup) missing.push("Pickup Date");
+    return {
+      canUpload: missing.length === 0,
+      missing,
+      hasViralMarker,
+      hasBloodReport,
+      hasInsurance,
+      hasHealthInsurance,
+      hasPickup,
+    };
+  };
+
   const handleOpenForm13Modal = (reg: any) => {
+    const info = getForm13Info(reg);
+    if (!info.isUploaded) {
+      const { canUpload, missing } = checkCanUploadForm13(reg);
+      if (!canUpload) {
+        toast.error(`Form 13 upload is locked. Upload/set first: ${missing.join(", ")}`);
+        return;
+      }
+    }
     setForm13Reg(reg);
     setIsForm13ModalOpen(true);
   };
@@ -534,6 +564,14 @@ export default function ManageRegistrationsPage() {
 
   const handleUploadForm13 = async (file: File) => {
     if (!form13Reg) return;
+    const isAlreadyUploaded = !!getForm13Info(form13Reg).isUploaded;
+    if (!isAlreadyUploaded) {
+      const { canUpload, missing } = checkCanUploadForm13(form13Reg);
+      if (!canUpload) {
+        toast.error(`Cannot upload Form 13. Please upload/set: ${missing.join(", ")}`);
+        return;
+      }
+    }
     if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
       toast.error("Only PDF files are accepted for Form 13.");
       return;
@@ -1339,9 +1377,7 @@ export default function ManageRegistrationsPage() {
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Egg Donor Management
           </h1>
-          <p className="text-xs text-slate-500">
-            Manage approved egg donors, upload required lab reports and insurances, track donor compensation, set pickup dates, and collect Form 13.
-          </p>
+        
         </div>
         <div className="flex gap-2">
           <Button 
@@ -1355,177 +1391,103 @@ export default function ManageRegistrationsPage() {
         </div>
       </div>
 
+      {/* Interactive Status Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          {
+            tab: "all" as const,
+            title: "Total Records",
+            count: statusCounts.all || 0,
+            textColor: "text-teal-600 dark:text-teal-400",
+            borderHover: "hover:border-teal-300 dark:hover:border-teal-700",
+            activeBorder: "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 ring-2 ring-teal-500/20",
+            badgeBg: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
+          },
+          {
+            tab: "APPROVED" as const,
+            title: "Approved Donors",
+            count: statusCounts.approved || 0,
+            textColor: "text-emerald-600 dark:text-emerald-400",
+            borderHover: "hover:border-emerald-300 dark:hover:border-emerald-700",
+            activeBorder: "border-emerald-500 dark:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20",
+            badgeBg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+          },
+          {
+            tab: "WAITING_FORM13" as const,
+            title: "Waiting Form 13",
+            count: statusCounts.waitingForm13 || 0,
+            textColor: "text-amber-600 dark:text-amber-400",
+            borderHover: "hover:border-amber-300 dark:hover:border-amber-700",
+            activeBorder: "border-amber-500 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-amber-500/20",
+            badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+          },
+          {
+            tab: "FILE_COMPLETED" as const,
+            title: "File Completed",
+            count: statusCounts.fileCompleted || 0,
+            textColor: "text-blue-600 dark:text-blue-400",
+            borderHover: "hover:border-blue-300 dark:hover:border-blue-700",
+            activeBorder: "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20",
+            badgeBg: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+          },
+          {
+            tab: "COMPLETED" as const,
+            title: "Cycle Completed",
+            count: statusCounts.completed || 0,
+            textColor: "text-purple-600 dark:text-purple-400",
+            borderHover: "hover:border-purple-300 dark:hover:border-purple-700",
+            activeBorder: "border-purple-500 dark:border-purple-400 bg-purple-50/50 dark:bg-purple-950/30 ring-2 ring-purple-500/20",
+            badgeBg: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300",
+          },
+          {
+            tab: "CANCELLED" as const,
+            title: "Cancelled",
+            count: statusCounts.cancelled || 0,
+            textColor: "text-rose-600 dark:text-rose-400",
+            borderHover: "hover:border-rose-300 dark:hover:border-rose-700",
+            activeBorder: "border-rose-500 dark:border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 ring-2 ring-rose-500/20",
+            badgeBg: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+          },
+        ].map((card) => {
+          const isSelected = activeTab === card.tab;
+          return (
+            <button
+              key={card.tab}
+              type="button"
+              onClick={() => handleTabChange(card.tab)}
+              className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none text-left relative overflow-hidden group shadow-2xs ${
+                isSelected
+                  ? card.activeBorder
+                  : `border-slate-200/80 dark:border-slate-800 bg-card ${card.borderHover} hover:shadow-sm`
+              }`}
+              title={`Click to filter by ${card.title}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider truncate ${card.textColor}`}>
+                  {card.title}
+                </span>
+                {isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0 animate-pulse" />
+                )}
+              </div>
+              <div className="flex items-baseline justify-between mt-2">
+                <span className={`text-xl sm:text-2xl font-bold tabular-nums tracking-tight ${card.textColor}`}>
+                  {card.count}
+                </span>
+                {isSelected && (
+                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md ${card.badgeBg}`}>
+                    Active
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Advanced Filters Panel */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 shadow-sm space-y-4">
         {/* Segmented Status Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-900">
-          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => handleTabChange("all")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "all"
-                  ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="All egg donor management records"
-            >
-              <span>All</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "all"
-                    ? "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.all}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("APPROVED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "APPROVED"
-                  ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Approved donors: awaiting lab reports, medical insurance, or retrieval schedule"
-            >
-              <span>Approved</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "APPROVED"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.approved}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("WAITING_FORM13")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "WAITING_FORM13"
-                  ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Clinical tests & schedule complete: awaiting signed statutory Form 13"
-            >
-              <span>Waiting Form 13</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "WAITING_FORM13"
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.waitingForm13}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("FILE_COMPLETED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "FILE_COMPLETED"
-                  ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Clinical file complete with Form 13 uploaded and verified"
-            >
-              <span>File Completed</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "FILE_COMPLETED"
-                    ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.fileCompleted}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("COMPLETED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "COMPLETED"
-                  ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Donation cycle finalized and retrieval completed"
-            >
-              <span>Completed</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "COMPLETED"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.completed || 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("CANCELLED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "CANCELLED"
-                  ? "bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Cancelled registrations and aborted files"
-            >
-              <span>Cancelled</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "CANCELLED"
-                    ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.cancelled || 0}
-              </span>
-            </button>
-
-            
-
-            
-
-          
-
-            {(statusCounts.other || 0) > 0 && (
-              <button
-                type="button"
-                onClick={() => handleTabChange("other")}
-                className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === "other"
-                    ? "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-                }`}
-                title="Other statuses"
-              >
-                <span>Other Status</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                    activeTab === "other"
-                      ? "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                      : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                  }`}
-                >
-                  {statusCounts.other}
-                </span>
-              </button>
-            )}
-          </div>
-
-          
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search bar */}
           <div className="relative lg:col-span-2">
@@ -1771,7 +1733,7 @@ export default function ManageRegistrationsPage() {
                   <th className="p-3.5 whitespace-nowrap">Donor Deal</th>
                   <th className="p-3.5 whitespace-nowrap">Payout Status</th>
                   <th className="p-3.5 whitespace-nowrap">Form 13 Status</th>
-                  <th className="p-3.5 whitespace-nowrap">Schedule Dates</th>
+                  <th className="p-3.5 whitespace-nowrap">Pickup Date</th>
                   <th className="p-3.5 whitespace-nowrap">Status</th>
                   <th className="p-3.5 text-right whitespace-nowrap sticky right-0 bg-slate-50 dark:bg-slate-900 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">Actions</th>
                 </tr>
@@ -1820,11 +1782,18 @@ export default function ManageRegistrationsPage() {
                       </td>
                       <td className="p-3.5 whitespace-nowrap">
                         {reg.assignedHospital ? (
-                          <div className="font-semibold text-teal-800 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-teal-200 dark:border-teal-800 whitespace-nowrap">
-                            <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                            <span className="truncate max-w-[160px]" title={reg.assignedHospital.name}>
-                              {reg.assignedHospital.name}
-                            </span>
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-teal-800 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-teal-200 dark:border-teal-800 whitespace-nowrap">
+                              <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                              <span className="truncate max-w-[160px]" title={reg.assignedHospital.name}>
+                                {reg.assignedHospital.name}
+                              </span>
+                            </div>
+                            {Boolean(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice) && (
+                              <div className="text-[10px] font-bold text-blue-600 font-mono">
+                                Hospital Deal: ₹{Number(reg.clinicDeal?.hospitalDealPrice || (dealInfo.category === "profile" ? (reg.assignedHospital?.profiledonorDealPrice || reg.assignedHospital?.donorDealPrice) : reg.assignedHospital?.donorDealPrice)).toLocaleString()}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <Button
@@ -1934,60 +1903,86 @@ export default function ManageRegistrationsPage() {
                             </div>
                           ) : (
                             <div className="space-y-0.5">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenForm13Modal(reg)}
-                                className="inline-flex items-center gap-1 font-bold text-rose-800 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 px-2.5 py-1 rounded-full text-[10px] border border-rose-200 dark:border-rose-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
-                                title="Form 13 Not Uploaded - Click to upload Form 13 PDF (Required for completion)"
-                              >
-                                <AlertCircle className="w-3 h-3 text-rose-600" /> NOT UPLOADED
-                              </button>
+                              {(() => {
+                                const hasViralMarker = !!(reg.labReports?.viralMarkersReport?.url || (Array.isArray(reg.labReports?.viralMarkers) ? reg.labReports?.viralMarkers[0]?.url : reg.labReports?.viralMarkers?.url));
+                                const hasBloodReport = !!(reg.labReports?.bloodReport?.url);
+                                const hasInsurance = !!(reg.labReports?.insurance?.url || reg.documents?.insurance?.url || reg.labReports?.lifeInsurance?.url);
+                                const hasHealthInsurance = !!(reg.labReports?.healthInsurance?.url);
+                                const hasPickup = !!(reg.pickupDate);
+                                const canUploadForm13 = hasViralMarker && hasBloodReport && hasInsurance && hasHealthInsurance && hasPickup;
+
+                                if (!canUploadForm13) {
+                                  const missing = [
+                                    !hasViralMarker && "Viral Markers",
+                                    !hasBloodReport && "Blood Report",
+                                    !hasInsurance && "Life Insurance",
+                                    !hasHealthInsurance && "Health Insurance",
+                                    !hasPickup && "Pickup Date",
+                                  ].filter(Boolean).join(", ");
+                                  return (
+                                    <div
+                                      title={`Form 13 locked — Upload first: ${missing}`}
+                                      className="inline-flex items-center gap-1 font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full text-[10px] border border-slate-200 dark:border-slate-700 cursor-not-allowed whitespace-nowrap select-none"
+                                    >
+                                      <Lock className="w-3 h-3 text-amber-500" /> LOCKED
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenForm13Modal(reg)}
+                                    className="inline-flex items-center gap-1 font-bold text-rose-800 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 px-2.5 py-1 rounded-full text-[10px] border border-rose-200 dark:border-rose-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
+                                    title="Form 13 Not Uploaded - Click to upload Form 13 PDF (Required for completion)"
+                                  >
+                                    <AlertCircle className="w-3 h-3 text-rose-600" /> NOT UPLOADED
+                                  </button>
+                                );
+                              })()}
                               <div className="text-[9px] text-rose-600 dark:text-rose-400 font-medium whitespace-nowrap">
-                                Incomplete • Click to Upload
+                                {(reg.labReports?.viralMarkersReport?.url || reg.labReports?.bloodReport?.url || reg.labReports?.insurance?.url || reg.labReports?.healthInsurance?.url) || reg.pickupDate
+                                  ? "Incomplete • Upload pending"
+                                  : "Upload docs first"}
                               </div>
                             </div>
                           );
                         })()}
                       </td>
                       <td className="p-3.5 whitespace-nowrap">
-                        <div className="space-y-1 text-[11px]">
-                          {/* Pickup Date */}
-                          <div className="flex items-center justify-between gap-2 whitespace-nowrap">
-                            <span className="text-slate-400 font-medium text-[10px]">Pickup:</span>
-                            <div className="inline-flex items-center gap-1 font-semibold">
-                              {formatDisplayDate(reg.pickupDate) ? (
-                                <span className="text-rose-600 dark:text-rose-400 font-mono text-[10px]">
-                                  {formatDisplayDate(reg.pickupDate)}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 italic text-[10px]">Not set</span>
-                              )}
+                        <div className="space-y-1.5 text-xs">
+                          {formatDisplayDate(reg.pickupDate) ? (
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1 font-bold font-mono text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-800 whitespace-nowrap">
+                                <Calendar className="w-3 h-3 text-rose-600" />
+                                {formatDisplayDate(reg.pickupDate)}
+                              </span>
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPickupModal(reg)}
+                                  className="text-[10px] text-teal-600 hover:text-teal-800 hover:underline font-semibold cursor-pointer"
+                                >
+                                  Change Date
+                                </button>
+                              </div>
                             </div>
-                          </div>
-
-                          {/* Recruitment Date */}
-                          <div className="flex items-center justify-between gap-2 whitespace-nowrap">
-                            <span className="text-slate-400 font-medium text-[10px]">Recruit:</span>
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 text-[10px]">
-                              {formatDisplayDate(reg.recruitmentDate) || "—"}
-                            </span>
-                          </div>
-
-                          {/* Supply Date */}
-                          <div className="flex items-center justify-between gap-2 whitespace-nowrap">
-                            <span className="text-slate-400 font-medium text-[10px]">Supply:</span>
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 text-[10px]">
-                              {formatDisplayDate(reg.supplyDate) || "—"}
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleOpenPickupModal(reg)}
-                            className="text-[10px] text-teal-600 hover:text-teal-800 hover:underline font-semibold flex items-center gap-1 pt-0.5 border-t border-slate-100 dark:border-slate-800 cursor-pointer w-full whitespace-nowrap"
-                          >
-                            <Calendar className="w-2.5 h-2.5" /> Manage Dates
-                          </button>
+                          ) : (
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 whitespace-nowrap">
+                                <Clock className="w-2.5 h-2.5 text-amber-500" /> Not Set
+                              </span>
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPickupModal(reg)}
+                                  className="text-[10px] text-rose-600 hover:text-rose-800 hover:underline font-bold cursor-pointer flex items-center gap-0.5"
+                                >
+                                  + Set Pickup Date
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="p-3.5 whitespace-nowrap">
@@ -2245,70 +2240,36 @@ export default function ManageRegistrationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG 1.5: SET CLINICAL & SCHEDULE DATES */}
+      {/* DIALOG 1.5: SET OOCYTE PICKUP DATE */}
       <Dialog open={isPickupModalOpen} onOpenChange={setIsPickupModalOpen}>
         <DialogContent className="max-w-md rounded-2xl p-5">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
-              <Calendar className="w-4 h-4 text-teal-600" /> Manage Clinical &amp; Schedule Dates
+              <Calendar className="w-4 h-4 text-teal-600" /> Set Oocyte Pickup Date
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
               Donor: <span className="font-semibold text-slate-700 dark:text-slate-300">{pickupReg?.personalInfo?.fullName}</span> ({pickupReg?.registrationId})
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3.5 py-2">
+          <div className="space-y-4 py-2">
             {/* Scheduled Pickup Date */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-rose-500" />
-                Scheduled Oocyte Pickup Date:
+                Scheduled Oocyte Retrieval / Pickup Date:
               </label>
               <Input
                 type="date"
                 value={pickupDateValue}
                 onChange={(e) => setPickupDateValue(e.target.value)}
-                className="rounded-xl border-slate-200 dark:border-slate-800 text-xs"
+                className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-medium"
               />
-              <p className="text-[10px] text-slate-400">
-                Clinical retrieval date synchronized across donor and hospital registries.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Setting this clinical date is required to unlock Form 13 (Consent &amp; Fitness) upload and mark the file complete.
               </p>
             </div>
 
-            {/* Recruitment Date */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                Recruitment Date:
-              </label>
-              <Input
-                type="date"
-                value={recruitmentDateValue}
-                onChange={(e) => setRecruitmentDateValue(e.target.value)}
-                className="rounded-xl border-slate-200 dark:border-slate-800 text-xs"
-              />
-              <p className="text-[10px] text-slate-400">
-                Donor onboarding and recruitment confirmation date.
-              </p>
-            </div>
-
-            {/* Supply Date */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                Supply Date:
-              </label>
-              <Input
-                type="date"
-                value={supplyDateValue}
-                onChange={(e) => setSupplyDateValue(e.target.value)}
-                className="rounded-xl border-slate-200 dark:border-slate-800 text-xs"
-              />
-              <p className="text-[10px] text-slate-400">
-                Scheduled or completed hospital delivery / supply date.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button
                 variant="outline"
                 size="sm"
@@ -2322,9 +2283,9 @@ export default function ManageRegistrationsPage() {
                 size="sm"
                 onClick={handleSavePickupDate}
                 disabled={savingPickupDate}
-                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs"
+                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold gap-1 shadow-xs"
               >
-                {savingPickupDate ? "Saving..." : "Save Dates"}
+                {savingPickupDate ? "Saving..." : "Save Pickup Date"}
               </Button>
             </div>
           </div>
@@ -2527,50 +2488,95 @@ export default function ManageRegistrationsPage() {
             )}
 
             {/* Upload / Replace Area */}
-            <div className="space-y-2 border-t pt-3 border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {form13Reg && getForm13Info(form13Reg).isUploaded ? "Replace Form 13 PDF:" : "Upload Form 13 PDF:"}
-                </label>
-                <span className="text-[10px] text-slate-400">Supported: PDF files up to 10MB</span>
-              </div>
+            {(() => {
+              const isUploaded = !!(form13Reg && getForm13Info(form13Reg).isUploaded);
+              const { canUpload, hasViralMarker, hasBloodReport, hasInsurance, hasHealthInsurance, hasPickup } = checkCanUploadForm13(form13Reg);
 
-              <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-5 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    {uploadingForm13 ? "Uploading and processing Form 13 PDF..." : "Select the completed, signed Form 13 PDF"}
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Once uploaded, the PDF will be immediately visible here and ready to print.
-                  </p>
+              if (!isUploaded && !canUpload) {
+                return (
+                  <div className="p-4 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                        Upload Locked — Medical Documents &amp; Pickup Date Required
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      Before Form 13 can be uploaded, the following 4 clinical/insurance files and pickup date must be completed:
+                    </p>
+                    <div className="space-y-1.5 text-xs font-medium">
+                      <div className={`flex items-center gap-2 ${hasViralMarker ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasViralMarker ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 1 — Viral Markers Report (HIV, HBsAg, HCV, VDRL)
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasBloodReport ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasBloodReport ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 2 — Blood Test Report
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasInsurance ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasInsurance ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 3 — Life / Medical Insurance Policy (Rule 13)
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasHealthInsurance ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasHealthInsurance ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 4 — Health Insurance Policy
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasPickup ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasPickup ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 5 — Oocyte Retrieval Pickup Date
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2 border-t pt-3 border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {isUploaded ? "Replace Form 13 PDF:" : "Upload Form 13 PDF:"}
+                    </label>
+                    <span className="text-[10px] text-slate-400">Supported: PDF files up to 10MB</span>
+                  </div>
+
+                  <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-5 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {uploadingForm13 ? "Uploading and processing Form 13 PDF..." : "Select the completed, signed Form 13 PDF"}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Once uploaded, the PDF will be immediately visible here and ready to print.
+                      </p>
+                    </div>
+
+                    <label className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold cursor-pointer bg-teal-600 hover:bg-teal-700 text-white transition-all shadow-sm ${uploadingForm13 ? "opacity-60 pointer-events-none" : ""}`}>
+                      {uploadingForm13 ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Uploading PDF...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>{isUploaded ? "Choose Replacement PDF" : "Choose Form 13 PDF"}</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        disabled={uploadingForm13}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadForm13(file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
-
-                <label className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold cursor-pointer bg-teal-600 hover:bg-teal-700 text-white transition-all shadow-sm ${uploadingForm13 ? "opacity-60 pointer-events-none" : ""}`}>
-                  {uploadingForm13 ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Uploading PDF...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      <span>{form13Reg && getForm13Info(form13Reg).isUploaded ? "Choose Replacement PDF" : "Choose Form 13 PDF"}</span>
-                    </>
-                  )}
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    className="hidden"
-                    disabled={uploadingForm13}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUploadForm13(file);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Footer buttons */}
             <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
@@ -3144,13 +3150,13 @@ export default function ManageRegistrationsPage() {
                       )}
                     </div>
 
-                    {/* 4. Schedule Dates & Oocyte Pickup */}
+                    {/* 4. Oocyte Retrieval Pickup Date */}
                     <div className="p-4 rounded-2xl border bg-card space-y-3 shadow-xs">
                       <div className="flex items-center justify-between border-b pb-2">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-teal-600" />
                           <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            Clinical Schedule &amp; Oocyte Retrieval Date
+                            Oocyte Retrieval &amp; Pickup Date
                           </h4>
                         </div>
                         <Button
@@ -3163,33 +3169,37 @@ export default function ManageRegistrationsPage() {
                         </Button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                        <div className="p-3 rounded-xl bg-background border space-y-1">
-                          <span className="text-[10px] text-muted-foreground uppercase font-semibold">Recruitment Date</span>
-                          <div className="font-bold text-foreground">
-                            {formatDisplayDate(selectedReg.recruitmentDate) || "—"}
-                          </div>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-background border space-y-1">
-                          <span className="text-[10px] text-muted-foreground uppercase font-semibold">Supply Date</span>
-                          <div className="font-bold text-foreground">
-                            {formatDisplayDate(selectedReg.supplyDate) || "—"}
-                          </div>
-                        </div>
-
-                        <div className={`p-3 rounded-xl border space-y-1 ${
-                          selectedReg.pickupDate
-                            ? "bg-rose-50/60 dark:bg-rose-950/20 border-rose-200"
-                            : "bg-background border-dashed"
-                        }`}>
-                          <span className="text-[10px] text-rose-600 font-bold uppercase">
-                            Oocyte Pickup Date
+                      <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                        selectedReg.pickupDate
+                          ? "bg-rose-50/60 dark:bg-rose-950/20 border-rose-200"
+                          : "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 border-dashed"
+                      }`}>
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                            Scheduled Oocyte Pickup Date
                           </span>
-                          <div className="font-bold text-rose-600 text-sm">
-                            {formatDisplayDate(selectedReg.pickupDate) || "Not scheduled yet"}
+                          <div className={`text-base font-bold font-mono ${selectedReg.pickupDate ? "text-rose-600 dark:text-rose-400" : "text-amber-700 dark:text-amber-400"}`}>
+                            {formatDisplayDate(selectedReg.pickupDate) || "Date Not Set — Click button to schedule"}
                           </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {selectedReg.pickupDate
+                              ? "Oocyte pickup date is confirmed and recorded for clinical retrieval."
+                              : "Mandatory step: Oocyte pickup date must be entered before the statutory Form 13 PDF can be uploaded."}
+                          </p>
                         </div>
+
+                        <Button
+                          size="sm"
+                          onClick={() => handleOpenPickupModal(selectedReg)}
+                          className={`rounded-xl text-xs font-semibold h-8 gap-1.5 shrink-0 ${
+                            selectedReg.pickupDate
+                              ? "bg-rose-600 hover:bg-rose-700 text-white"
+                              : "bg-teal-600 hover:bg-teal-700 text-white"
+                          }`}
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          {selectedReg.pickupDate ? "Modify Date" : "Enter Pickup Date"}
+                        </Button>
                       </div>
                     </div>
 
@@ -3266,15 +3276,60 @@ export default function ManageRegistrationsPage() {
                                 Replace PDF
                               </Button>
                             </>
-                          ) : (
-                            <Button
-                              size="sm"
-                              onClick={() => handleOpenForm13Modal(selectedReg)}
-                              className="h-8 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 shadow-xs"
-                            >
-                              <Upload className="w-3.5 h-3.5" /> Upload Form 13 PDF
-                            </Button>
-                          )}
+                          ) : (() => {
+                            const hasViralMarker = !!(selectedReg.labReports?.viralMarkersReport?.url || (Array.isArray(selectedReg.labReports?.viralMarkers) ? selectedReg.labReports?.viralMarkers[0]?.url : selectedReg.labReports?.viralMarkers?.url));
+                            const hasBloodReport = !!(selectedReg.labReports?.bloodReport?.url);
+                            const hasInsurance = !!(selectedReg.labReports?.insurance?.url || selectedReg.documents?.insurance?.url || selectedReg.labReports?.lifeInsurance?.url);
+                            const hasHealthInsurance = !!(selectedReg.labReports?.healthInsurance?.url);
+                            const hasPickup = !!(selectedReg.pickupDate);
+                            const canUploadForm13 = hasViralMarker && hasBloodReport && hasInsurance && hasHealthInsurance && hasPickup;
+
+                            if (!canUploadForm13) {
+                              return (
+                                <div className="space-y-3 w-full">
+                                  <div className="p-3 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Form 13 Upload Locked</p>
+                                    </div>
+                                    <p className="text-[11px] text-amber-700 dark:text-amber-400">Complete all 4 required files &amp; pickup date before uploading Form 13:</p>
+                                    <div className="space-y-1">
+                                      <div className={`flex items-center gap-2 text-[11px] font-semibold ${ hasViralMarker ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300" }`}>
+                                        {hasViralMarker ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                                        Step 1 — Viral Markers Report (HIV, HBsAg, HCV, VDRL)
+                                      </div>
+                                      <div className={`flex items-center gap-2 text-[11px] font-semibold ${ hasBloodReport ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300" }`}>
+                                        {hasBloodReport ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                                        Step 2 — Blood Test Report
+                                      </div>
+                                      <div className={`flex items-center gap-2 text-[11px] font-semibold ${ hasInsurance ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300" }`}>
+                                        {hasInsurance ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                                        Step 3 — Life / Medical Insurance Policy (Rule 13)
+                                      </div>
+                                      <div className={`flex items-center gap-2 text-[11px] font-semibold ${ hasHealthInsurance ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300" }`}>
+                                        {hasHealthInsurance ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                                        Step 4 — Health Insurance Policy (Mandatory)
+                                      </div>
+                                      <div className={`flex items-center gap-2 text-[11px] font-semibold ${ hasPickup ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300" }`}>
+                                        {hasPickup ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                                        Step 5 — Pickup Date (via Schedule dates)
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <Button
+                                size="sm"
+                                onClick={() => handleOpenForm13Modal(selectedReg)}
+                                className="h-8 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 shadow-xs"
+                              >
+                                <Upload className="w-3.5 h-3.5" /> Upload Form 13 PDF
+                              </Button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

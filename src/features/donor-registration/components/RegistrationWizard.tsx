@@ -196,10 +196,12 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
       if (res.ok) {
         setOtpSent(true);
         setResendCountdown(30);
-        toast.success("Verification OTP sent to your phone number!");
+        toast.success(`Verification OTP sent via WhatsApp to +91 ${phoneInput}!`);
       } else {
-        setOtpError(data.error || "Failed to send OTP.");
-        toast.error(data.error || "Failed to send OTP.");
+        setOtpSent(false);
+        const errMsg = data.error || `There is an error sending OTP to this number (+91 ${phoneInput}). Please try again in some time.`;
+        setOtpError(errMsg);
+        toast.error(errMsg);
       }
     } catch (err) {
       setOtpError("Network error. Please try again.");
@@ -220,7 +222,7 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success("OTP verified successfully!");
+        toast.success("WhatsApp OTP verified successfully!");
 
         const cleanAgent = donorType === "egg"
           ? ((agentCodeInput || store.agentCode || "").trim().toUpperCase() || undefined)
@@ -740,7 +742,18 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
 
               {/* Phone */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Mobile Number *</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-700">WhatsApp Mobile Number *</label>
+                  {otpSent && (
+                    <button
+                      type="button"
+                      onClick={() => { setOtpSent(false); setOtpInput(""); setOtpError(""); }}
+                      className="text-[11px] font-bold text-teal-600 hover:underline cursor-pointer"
+                    >
+                      Change Number
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   placeholder="Enter mobile number"
@@ -783,7 +796,19 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
               {/* OTP Input */}
               {otpSent && (
                 <div className="space-y-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                  <label className="text-xs font-bold text-slate-700">6-Digit OTP sent to your phone</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-700">6-Digit WhatsApp OTP *</label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-teal-600 font-semibold truncate max-w-[140px]">Sent to +91 {phoneInput}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setOtpSent(false); setOtpInput(""); setOtpError(""); }}
+                        className="text-[10px] font-bold text-teal-600 underline cursor-pointer"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
                   <input
                      type="text"
                      placeholder="Enter OTP"
@@ -804,7 +829,7 @@ export function RegistrationWizard({ donorType, draftId }: RegistrationWizardPro
                   disabled={otpLoading || !canSendOtp}
                   className="w-full rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs h-10 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  {otpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : "Verify & Send OTP"}
+                  {otpLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : "Verify & Send WhatsApp OTP"}
                 </Button>
               ) : (
                 <div className="space-y-3">

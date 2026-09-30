@@ -150,6 +150,7 @@ export default function AdminEggDonorRegistrationsPage() {
     total: number;
     new?: number;
     submitted: number;
+    inProcess?: number;
     approved: number;
     underReview: number;
     documentsVerified?: number;
@@ -230,6 +231,8 @@ export default function AdminEggDonorRegistrationsPage() {
   type EggRegTab =
     | "all"
     | "new"
+    | "in_process"
+    | "approved"
     | "draft"
     | "under_review"
     | "documents_verified"
@@ -316,9 +319,9 @@ export default function AdminEggDonorRegistrationsPage() {
     const isRegistry = reg.hospitalDealType === "registry" || reg.clinicDeal?.donorCategory === "registry";
     const hasHospital = !!(reg.assignedHospital);
     const hasClinicPrice = !!(reg.clinicDeal?.hospitalDealPrice && reg.clinicDeal.hospitalDealPrice > 0);
-    const hasDonorDeal = isRegistry ? true : !!(reg.donorDeal?.compensationAmount && reg.donorDeal.compensationAmount > 0);
+    const hasDonorDeal = isRegistry ? true : !!(reg.donorDeal?.compensationAmount && Number(reg.donorDeal.compensationAmount) > 0);
     const hasDates = !!(reg.recruitmentDate || reg.supplyDate);
-    const step4Complete = hasHospital && hasClinicPrice && hasDonorDeal;
+    const step4Complete = hasHospital && hasDonorDeal;
 
     return {
       step1Complete,
@@ -379,13 +382,15 @@ export default function AdminEggDonorRegistrationsPage() {
 
   const handleOpenDealModal = (reg: any, targetStatus: "APPROVED" | null = null) => {
     const wf = getWorkflowStatus(reg);
-    if (!wf.step2Complete) {
-      toast.error("Step 2 Incomplete — Please verify documents first.");
-      return;
-    }
-    if (!wf.step3Complete) {
-      toast.error("Step 3 Incomplete — Please upload signed affidavit first.");
-      return;
+    if (targetStatus === "APPROVED") {
+      if (!wf.step2Complete) {
+        toast.error("Step 2 Incomplete — Please verify documents first.");
+        return;
+      }
+      if (!wf.step3Complete) {
+        toast.error("Step 3 Incomplete — Please upload signed affidavit first.");
+        return;
+      }
     }
     setSelectedReg(reg);
     const assignedHospObj = typeof reg.assignedHospital === "object" && reg.assignedHospital !== null ? reg.assignedHospital : null;
@@ -396,22 +401,25 @@ export default function AdminEggDonorRegistrationsPage() {
       reg.clinicDeal?.donorCategory || reg.donorDeal?.donorCategory || "normal";
 
     const defaultClinicPrice =
-      reg.clinicDeal?.hospitalDealPrice ||
+      Number(reg.clinicDeal?.hospitalDealPrice) ||
       (matchedHosp
         ? initialCategory === "profile"
-          ? matchedHosp.profiledonorDealPrice || matchedHosp.donorDealPrice || 0
-          : matchedHosp.donorDealPrice || 0
-        : 0);
+          ? matchedHosp.profiledonorDealPrice || matchedHosp.donorDealPrice || 85000
+          : matchedHosp.donorDealPrice || 65000
+        : 65000);
 
-    const defaultDonorComp =
-      reg.donorDeal?.compensationAmount || (initialCategory === "profile" ? 60000 : 40000);
+    // Only use manually entered compensation amount if previously saved
+    const rawComp = reg.donorDeal?.compensationAmount !== undefined
+      ? Number(reg.donorDeal.compensationAmount)
+      : (reg.donorDeal?.totalAgreedAmount !== undefined ? Number(reg.donorDeal.totalAgreedAmount) : 0);
+    const donorComp = rawComp > 0 ? rawComp : 0;
 
     setDealForm({
       assignedHospitalId: assignedId,
       donorCategory: initialCategory,
       hospitalDealPrice: defaultClinicPrice,
-      compensationAmount: defaultDonorComp,
-      paymentTerms: reg.donorDeal?.paymentTerms || "Lump-sum upon Successful Retrieval",
+      compensationAmount: donorComp,
+      paymentTerms: reg.donorDeal?.paymentTerms || "Full on Retrieval",
       paymentMethod: reg.donorDeal?.paymentMethod || "bank_transfer",
       paymentStatus: reg.donorDeal?.paymentStatus || "PENDING",
       advanceAmount: reg.donorDeal?.advanceAmount || 0,
@@ -431,9 +439,9 @@ export default function AdminEggDonorRegistrationsPage() {
     const matchedHosp = hospitals.find((h) => h._id === hospitalId);
     const newPrice = matchedHosp
       ? dealForm.donorCategory === "profile"
-        ? matchedHosp.profiledonorDealPrice || 0
-        : matchedHosp.donorDealPrice || 0
-      : 0;
+        ? matchedHosp.profiledonorDealPrice || matchedHosp.donorDealPrice || 85000
+        : matchedHosp.donorDealPrice || 65000
+      : 65000;
 
     setDealForm((prev) => ({
       ...prev,
@@ -446,25 +454,15 @@ export default function AdminEggDonorRegistrationsPage() {
     const matchedHosp = hospitals.find((h) => h._id === dealForm.assignedHospitalId);
     const newPrice = matchedHosp
       ? category === "profile"
-        ? matchedHosp.profiledonorDealPrice || 0
-        : matchedHosp.donorDealPrice || 0
-      : dealForm.hospitalDealPrice;
-
-    const defaultComp = category === "registry" ? 0 : category === "profile" ? 60000 : 40000;
-    const newComp =
-      category === "registry"
-        ? 0
-        : !dealForm.compensationAmount ||
-          dealForm.compensationAmount === 40000 ||
-          dealForm.compensationAmount === 60000
-        ? defaultComp
-        : dealForm.compensationAmount;
+        ? matchedHosp.profiledonorDealPrice || matchedHosp.donorDealPrice || 85000
+        : matchedHosp.donorDealPrice || 65000
+      : category === "profile" ? 85000 : 65000;
 
     setDealForm((prev) => ({
       ...prev,
       donorCategory: category,
       hospitalDealPrice: newPrice,
-      compensationAmount: newComp,
+      compensationAmount: category === "registry" ? 0 : prev.compensationAmount,
     }));
   };
 
@@ -496,7 +494,8 @@ export default function AdminEggDonorRegistrationsPage() {
         },
         donorDeal: {
           donorCategory: dealForm.donorCategory,
-          compensationAmount: Number(dealForm.compensationAmount),
+          compensationAmount: Number(dealForm.compensationAmount) || 0,
+          totalAgreedAmount: Number(dealForm.compensationAmount) || 0,
           paymentMethod: selectedReg.donorDeal?.paymentMethod || dealForm.paymentMethod || "bank_transfer",
           paymentTerms: selectedReg.donorDeal?.paymentTerms || dealForm.paymentTerms || "Full on Retrieval",
           paymentStatus: selectedReg.donorDeal?.paymentStatus || dealForm.paymentStatus || "PENDING",
@@ -509,8 +508,17 @@ export default function AdminEggDonorRegistrationsPage() {
         adminNotes: dealForm.adminNotes,
         recruitmentDate: dealForm.recruitmentDate || "",
         supplyDate: dealForm.supplyDate || "",
-        status: "APPROVED",
       };
+
+      if (dealForm.targetStatus) {
+        payload.status = dealForm.targetStatus;
+      } else if (
+        selectedReg.documents?.affidavit?.url ||
+        selectedReg.status === "AFFIDAVIT_UPLOADED" ||
+        selectedReg.status === "DOCUMENTS_VERIFIED"
+      ) {
+        payload.status = "APPROVED";
+      }
 
       const res = await fetch(`/api/donor-registrations/egg/${selectedReg.registrationId}`, {
         method: "PUT",
@@ -520,27 +528,61 @@ export default function AdminEggDonorRegistrationsPage() {
 
       const data = await res.json();
       if (data.success) {
+        const isNowApproved = payload.status === "APPROVED" || data.registration?.status === "APPROVED";
         toast.success(
-          dealForm.targetStatus === "APPROVED"
-            ? "Egg Donor Approved! Hospital & dual deals assigned successfully."
-            : "Hospital & deals saved successfully."
+          isNowApproved
+            ? "Egg Donor Approved & Moved to Management! Deals and hospital assigned successfully."
+            : "Hospital assignment & deal details saved successfully!"
         );
         setIsDealModalOpen(false);
-        setIsDetailOpen(false);
+        if (isNowApproved) {
+          setIsDetailOpen(false);
+        }
         const savedRecruit = dealForm.recruitmentDate || "";
         const savedSupply = dealForm.supplyDate || "";
         const targetId = selectedReg.registrationId;
+        const matchedHosp = hospitals.find((h) => String(h._id) === String(dealForm.assignedHospitalId)) || selectedReg.assignedHospital;
+        const newDonorDeal = payload.donorDeal;
+        const newClinicDeal = payload.clinicDeal;
+
+        const updatedDoc = data.registration ? {
+          ...data.registration,
+          assignedHospital: matchedHosp || data.registration.assignedHospital,
+        } : null;
+
         setRegistrations((prev) =>
           prev.map((r) =>
             r.registrationId === targetId
               ? {
                   ...r,
-                  recruitmentDate: savedRecruit,
-                  supplyDate: savedSupply,
-                  status: dealForm.targetStatus || r.status,
+                  ...(updatedDoc || {
+                    assignedHospital: matchedHosp,
+                    donorDeal: newDonorDeal,
+                    clinicDeal: newClinicDeal,
+                    hospitalDealType: dealForm.donorCategory,
+                    recruitmentDate: savedRecruit,
+                    supplyDate: savedSupply,
+                    ...(dealForm.targetStatus ? { status: dealForm.targetStatus } : {}),
+                  }),
                 }
               : r
           )
+        );
+        setSelectedReg((prev: any) =>
+          prev && prev.registrationId === targetId
+            ? {
+                ...prev,
+                ...(updatedDoc || {
+                  assignedHospital: matchedHosp,
+                  donorDeal: newDonorDeal,
+                  clinicDeal: newClinicDeal,
+                  hospitalDealType: dealForm.donorCategory,
+                  recruitmentDate: savedRecruit,
+                  supplyDate: savedSupply,
+                  ...(dealForm.targetStatus ? { status: dealForm.targetStatus } : {}),
+                }),
+              }
+            : prev
         );
         fetchEggRegistrations();
       } else {
@@ -576,10 +618,41 @@ export default function AdminEggDonorRegistrationsPage() {
 
     setActionLoading(true);
     try {
+      const reg = registrations.find((r) => r.registrationId === regId) || selectedReg;
+      const isRegistry = reg?.hospitalDealType === "registry" || reg?.clinicDeal?.donorCategory === "registry";
+      const category = reg?.donorDeal?.donorCategory || reg?.clinicDeal?.donorCategory || reg?.hospitalDealType || "normal";
+      const defaultComp = isRegistry ? 0 : category === "profile" ? 60000 : 40000;
+      const defaultClinicPrice = category === "profile" ? 85000 : 65000;
+
+      const payload: any = { status: newStatus, adminNotes };
+      if (newStatus === "APPROVED") {
+        if (!reg?.donorDeal?.compensationAmount && !isRegistry) {
+          payload.donorDeal = {
+            donorCategory: category,
+            compensationAmount: defaultComp,
+            paymentTerms: reg?.donorDeal?.paymentTerms || "Full on Retrieval",
+            paymentMethod: reg?.donorDeal?.paymentMethod || "bank_transfer",
+            paymentStatus: reg?.donorDeal?.paymentStatus || "PENDING",
+            notes: reg?.donorDeal?.notes || "Standard donor compensation agreement",
+          };
+        }
+        if (!reg?.clinicDeal?.hospitalDealPrice) {
+          payload.clinicDeal = {
+            donorCategory: category,
+            hospitalDealPrice: defaultClinicPrice,
+            currency: "INR",
+            notes: reg?.clinicDeal?.notes || "Standard clinic deal agreement",
+          };
+        }
+        if (!reg?.hospitalDealType) {
+          payload.hospitalDealType = category;
+        }
+      }
+
       const res = await fetch(`/api/donor-registrations/egg/${regId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus, adminNotes }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
@@ -588,7 +661,7 @@ export default function AdminEggDonorRegistrationsPage() {
         fetchEggRegistrations();
       } else {
         toast.error(data.error || "Status update failed.");
-        if (data.error && data.error.includes("hospital")) {
+        if (data.error && (data.error.includes("hospital") || data.error.includes("clinic") || data.error.includes("donor"))) {
           const reg = registrations.find((r) => r.registrationId === regId) || selectedReg;
           handleOpenDealModal(reg, "APPROVED");
         }
@@ -1026,9 +1099,7 @@ export default function AdminEggDonorRegistrationsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Egg Donor Registrations
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Review, verify, and manage incoming oocyte donor applications under Indian ART Act 2021 statutory guidelines.
-          </p>
+         
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
@@ -1053,246 +1124,93 @@ export default function AdminEggDonorRegistrationsPage() {
         </div>
       </div>
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-rose-600 uppercase tracking-wider">Total Egg Applications</div>
-          <div className="text-2xl sm:text-3xl font-bold mt-2 text-foreground">{stats.total || totalCount}</div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Oocyte donor records in DB</p>
-        </Card>
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider">New Registrations</div>
-          <div className="text-2xl sm:text-3xl font-bold text-blue-600 mt-2">
-            {(stats as any).new ?? stats.submitted ?? registrations.filter((r) => r.status === "NEW" || r.status === "SUBMITTED").length}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Awaiting initial document verification</p>
-        </Card>
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Approved</div>
-          <div className="text-2xl sm:text-3xl font-bold text-emerald-600 mt-2">
-            {stats.approved ?? registrations.filter((r) => r.status === "APPROVED").length}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Verified, affidavit &amp; hospital assigned</p>
-        </Card>
-        <Card className="p-4 rounded-2xl border shadow-xs">
-          <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider">Under Review</div>
-          <div className="text-2xl sm:text-3xl font-bold text-purple-600 mt-2">
-            {stats.underReview ?? registrations.filter((r) => r.status === "UNDER_REVIEW").length}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Verification &amp; check in progress</p>
-        </Card>
+      {/* Interactive Status Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {[
+          {
+            tab: "all" as const,
+            title: "Total Registration",
+            count: stats.total || totalCount,
+            textColor: "text-rose-600 dark:text-rose-400",
+            borderHover: "hover:border-rose-300 dark:hover:border-rose-700",
+            activeBorder: "border-rose-500 dark:border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 ring-2 ring-rose-500/20",
+            badgeBg: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+          },
+          {
+            tab: "new" as const,
+            title: "New Registration",
+            count: (stats as any).new ?? stats.submitted ?? 0,
+            textColor: "text-blue-600 dark:text-blue-400",
+            borderHover: "hover:border-blue-300 dark:hover:border-blue-700",
+            activeBorder: "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20",
+            badgeBg: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+          },
+          {
+            tab: "in_process" as const,
+            title: "In Process",
+            count: (stats as any).inProcess ?? (((stats as any).underReview || 0) + ((stats as any).documentsVerified || 0) + ((stats as any).affidavitUploaded || 0)),
+            textColor: "text-purple-600 dark:text-purple-400",
+            borderHover: "hover:border-purple-300 dark:hover:border-purple-700",
+            activeBorder: "border-purple-500 dark:border-purple-400 bg-purple-50/50 dark:bg-purple-950/30 ring-2 ring-purple-500/20",
+            badgeBg: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300",
+          },
+          {
+            tab: "approved" as const,
+            title: "Approved",
+            count: stats.approved ?? 0,
+            textColor: "text-emerald-600 dark:text-emerald-400",
+            borderHover: "hover:border-emerald-300 dark:hover:border-emerald-700",
+            activeBorder: "border-emerald-500 dark:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20",
+            badgeBg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+          },
+          {
+            tab: "draft" as const,
+            title: "Draft",
+            count: (stats as any).draft ?? 0,
+            textColor: "text-amber-600 dark:text-amber-400",
+            borderHover: "hover:border-amber-300 dark:hover:border-amber-700",
+            activeBorder: "border-amber-500 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-amber-500/20",
+            badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+          },
+        ].map((card) => {
+          const isSelected = activeTab === card.tab;
+          return (
+            <button
+              key={card.tab}
+              type="button"
+              onClick={() => handleTabChange(card.tab)}
+              className={`p-4 rounded-2xl border transition-all cursor-pointer select-none text-left relative overflow-hidden group shadow-2xs ${
+                isSelected
+                  ? card.activeBorder
+                  : `border-slate-200/80 dark:border-slate-800 bg-card ${card.borderHover} hover:shadow-sm`
+              }`}
+              title={`Click to filter by ${card.title}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider truncate ${card.textColor}`}>
+                  {card.title}
+                </span>
+                {isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0 animate-pulse" />
+                )}
+              </div>
+              <div className="flex items-baseline justify-between mt-2">
+                <span className={`text-2xl sm:text-3xl font-bold tabular-nums tracking-tight ${card.textColor}`}>
+                  {card.count}
+                </span>
+                {isSelected && (
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md ${card.badgeBg}`}>
+                    Active
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ─── Unified Control Toolbar: Segmented Status Tabs + Search & Filters ─── */}
+      {/* ─── Unified Control Toolbar: Search & Filters ─── */}
       <Card className="p-3.5 sm:p-4 rounded-2xl border bg-card shadow-xs space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
-          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => handleTabChange("all")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "all"
-                  ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="All egg donor registrations"
-            >
-              <span>All</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "all"
-                    ? "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {stats.total ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("new")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "new"
-                  ? "bg-white dark:bg-slate-900 text-[#285b63] dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Incoming submitted registrations"
-            >
-              <span>New</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "new"
-                    ? "bg-[#285b63]/10 text-[#285b63] dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).new ?? stats.submitted ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("draft")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "draft"
-                  ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Incomplete draft registrations"
-            >
-              <span>Draft</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "draft"
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).draft ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("under_review")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "under_review"
-                  ? "bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Under administrative and medical review"
-            >
-              <span>Under Review</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "under_review"
-                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).underReview ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("documents_verified")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "documents_verified"
-                  ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Identity documents verified"
-            >
-              <span>Documents Verified</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "documents_verified"
-                    ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).documentsVerified ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("affidavit_uploaded")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "affidavit_uploaded"
-                  ? "bg-white dark:bg-slate-900 text-cyan-700 dark:text-cyan-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Signed statutory affidavit uploaded"
-            >
-              <span>Affidavit Uploaded</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "affidavit_uploaded"
-                    ? "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).affidavitUploaded ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("approved")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "approved"
-                  ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Approved registrations moved to Management"
-            >
-              <span>Approved</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "approved"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).approved ?? 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("rejected")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "rejected"
-                  ? "bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Rejected applications"
-            >
-              <span>Rejected</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "rejected"
-                    ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {(stats as any).rejected ?? 0}
-              </span>
-            </button>
-
-            
-
-            {((stats as any).otherUntilApproved || 0) > 0 && (
-              <button
-                type="button"
-                onClick={() => handleTabChange("other")}
-                className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === "other"
-                    ? "bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-                }`}
-                title="Other intermediate statuses until approved"
-              >
-                <span>Other Status</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                    activeTab === "other"
-                      ? "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300"
-                      : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                  }`}
-                >
-                  {(stats as any).otherUntilApproved ?? 0}
-                </span>
-              </button>
-            )}
-          </div>
-
-          
-        </div>
-
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-80 md:w-96">
             <Input
@@ -1312,10 +1230,8 @@ export default function AdminEggDonorRegistrationsPage() {
                 setStatusFilter(val);
                 if (val === "NEW" || val === "SUBMITTED") setActiveTab("new");
                 else if (val === "DRAFT") setActiveTab("draft");
-                else if (val === "UNDER_REVIEW") setActiveTab("under_review");
-                else if (val === "DOCUMENTS_VERIFIED") setActiveTab("documents_verified");
-                else if (val === "AFFIDAVIT_UPLOADED") setActiveTab("affidavit_uploaded");
-                else if (val === "APPROVED") setActiveTab("approved");
+                else if (val === "UNDER_REVIEW" || val === "DOCUMENTS_VERIFIED" || val === "AFFIDAVIT_UPLOADED") setActiveTab("in_process");
+                else if (val === "APPROVED" || val === "FILE_COMPLETED" || val === "WAITING_FORM13" || val === "COMPLETED") setActiveTab("approved");
                 else if (val === "REJECTED") setActiveTab("rejected");
                 else if (val === "SUSPENDED") setActiveTab("suspended");
               }}
@@ -1326,6 +1242,20 @@ export default function AdminEggDonorRegistrationsPage() {
                   <option value="">All New Registrations</option>
                   <option value="NEW">New</option>
                   <option value="SUBMITTED">Submitted</option>
+                </>
+              ) : activeTab === "in_process" ? (
+                <>
+                  <option value="">All In Process</option>
+                  <option value="UNDER_REVIEW">Under Review</option>
+                  <option value="DOCUMENTS_VERIFIED">Documents Verified</option>
+                  <option value="AFFIDAVIT_UPLOADED">Affidavit Uploaded</option>
+                </>
+              ) : activeTab === "approved" ? (
+                <>
+                  <option value="">All Approved</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="FILE_COMPLETED">File Completed</option>
+                  <option value="WAITING_FORM13">Waiting Form 13</option>
                 </>
               ) : activeTab === "draft" ? (
                 <>
@@ -1338,8 +1268,6 @@ export default function AdminEggDonorRegistrationsPage() {
                 <option value="DOCUMENTS_VERIFIED">Documents Verified</option>
               ) : activeTab === "affidavit_uploaded" ? (
                 <option value="AFFIDAVIT_UPLOADED">Affidavit Uploaded</option>
-              ) : activeTab === "approved" ? (
-                <option value="APPROVED">Approved</option>
               ) : activeTab === "rejected" ? (
                 <option value="REJECTED">Rejected</option>
               ) : activeTab === "suspended" ? (
@@ -1354,6 +1282,8 @@ export default function AdminEggDonorRegistrationsPage() {
                   <option value="AFFIDAVIT_UPLOADED">Affidavit Uploaded</option>
                   <option value="UNDER_REVIEW">Under Review</option>
                   <option value="APPROVED">Approved</option>
+                  <option value="FILE_COMPLETED">File Completed</option>
+                  <option value="WAITING_FORM13">Waiting Form 13</option>
                   <option value="REJECTED">Rejected</option>
                   <option value="SUSPENDED">Suspended</option>
                 </>
@@ -1400,7 +1330,8 @@ export default function AdminEggDonorRegistrationsPage() {
             No matching egg donor registrations found in database.
           </div>
         ) : (
-          <Table className="min-w-[1050px]">
+          <div className="overflow-x-auto w-full">
+            <Table className="min-w-[1050px]">
             <TableHeader>
               {activeTab === "draft" ? (
                 <TableRow className="bg-amber-50/50 dark:bg-amber-950/20">
@@ -1585,6 +1516,11 @@ export default function AdminEggDonorRegistrationsPage() {
                           </span>
                         </div>
                         <div className="text-[10px] text-muted-foreground">{reg.assignedHospital.city || "Verified"}</div>
+                        {Boolean(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice) && (
+                          <div className="text-[10px] font-bold text-blue-600 font-mono">
+                            Deal: ₹{Number(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice).toLocaleString()}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -1600,11 +1536,8 @@ export default function AdminEggDonorRegistrationsPage() {
                   {/* Donor Deal */}
                   <TableCell>
                     {(() => {
-                      const hosp = reg.assignedHospital;
-                      const category = reg.donorDeal?.donorCategory || reg.clinicDeal?.donorCategory || "normal";
-                      const amount =
-                        reg.donorDeal?.compensationAmount ||
-                        (hosp ? (category === "profile" ? 60000 : 40000) : 0);
+                      const category = reg.donorDeal?.donorCategory || reg.clinicDeal?.donorCategory || reg.hospitalDealType || "normal";
+                      const amount = Number(reg.donorDeal?.compensationAmount) || Number(reg.donorDeal?.totalAgreedAmount) || 0;
 
                       if (amount > 0) {
                         return (
@@ -1614,7 +1547,7 @@ export default function AdminEggDonorRegistrationsPage() {
                             title="Click to view or edit donor deal"
                           >
                             <div className="font-mono font-bold text-emerald-600 flex items-center gap-1 group-hover:underline">
-                              ₹{Number(amount).toLocaleString()}
+                              ₹{amount.toLocaleString()}
                             </div>
                             <span
                               className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
@@ -1626,6 +1559,14 @@ export default function AdminEggDonorRegistrationsPage() {
                               {category === "profile" ? "Profile" : "Normal"}
                             </span>
                           </div>
+                        );
+                      }
+
+                      if (reg.hospitalDealType === "registry" || reg.clinicDeal?.donorCategory === "registry") {
+                        return (
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                            Registry (₹0)
+                          </span>
                         );
                       }
 
@@ -1664,7 +1605,7 @@ export default function AdminEggDonorRegistrationsPage() {
                             <Check className="w-2.5 h-2.5 stroke-[3.5]" />
                           </span>
                         );
-                        labelText = "Done";
+                        labelText = "Approved";
                       } else if (isInProcess) {
                         statusTheme = "bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800";
                         iconNode = (
@@ -1786,6 +1727,7 @@ export default function AdminEggDonorRegistrationsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
         {!loading && registrations.length > 0 && (
           <div className="p-4 border-t">
@@ -1800,7 +1742,7 @@ export default function AdminEggDonorRegistrationsPage() {
 
       {/* Detail Review Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="rounded-3xl max-w-5xl bg-background border shadow-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="rounded-3xl w-[98vw] sm:w-[96vw] lg:w-[95vw] xl:w-[94vw] 2xl:w-[92vw] max-w-[1600px] 2xl:max-w-[1720px] bg-background border shadow-2xl p-0 max-h-[94vh] flex flex-col overflow-hidden">
           {selectedReg && (() => {
             const wf = getWorkflowStatus(selectedReg);
             const isDocVerified = wf.step2Complete;
@@ -1808,24 +1750,25 @@ export default function AdminEggDonorRegistrationsPage() {
             const isRegistry = wf.details.isRegistry;
 
             return (
-              <div className="space-y-6">
-                {/* ─── Profile Header ────────────────────────────────────────── */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 border-b pb-5 justify-between">
-                  <div className="flex items-center gap-4">
+              <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+                {/* ─── Profile Header (Fixed at top - does not move when scrolling) ─── */}
+                <div className="bg-background border-b px-4 sm:px-6 lg:px-8 py-3.5 sm:py-4.5 flex flex-col md:flex-row items-start md:items-center gap-3 sm:gap-4 justify-between shrink-0 z-20 pr-12 sm:pr-16 select-none">
+                  <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
                     {selectedReg.documents?.passportPhoto?.url ? (
                       <img
                         alt="Passport Photo"
                         src={selectedReg.documents.passportPhoto.url}
-                        className="w-16 h-16 rounded-2xl object-cover border-2 border-rose-500 shadow-md"
+                        className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-rose-500 shadow-md shrink-0 cursor-pointer hover:opacity-90 transition"
+                        onClick={() => setPreviewMedia({ url: selectedReg.documents.passportPhoto.url, title: "Passport Photo" })}
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border">
+                      <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground border shrink-0">
                         No Photo
                       </div>
                     )}
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-xl font-bold text-foreground">
+                        <h2 className="text-base sm:text-lg md:text-xl font-bold text-foreground truncate">
                           {selectedReg.personalInfo?.fullName}
                         </h2>
                         <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200">
@@ -1843,7 +1786,7 @@ export default function AdminEggDonorRegistrationsPage() {
                           Status: {selectedReg.status === "SUBMITTED" ? "NEW" : (selectedReg.status || "NEW").replace(/_/g, " ")}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
                         Reg ID: <span className="font-mono font-bold text-foreground">{selectedReg.registrationId}</span>
                         {selectedReg.donorId && (
                           <> • Donor ID: <span className="font-mono font-bold text-rose-600">{selectedReg.donorId}</span></>
@@ -1853,12 +1796,12 @@ export default function AdminEggDonorRegistrationsPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 shrink-0 w-full sm:w-auto justify-end">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 w-full md:w-auto justify-start md:justify-end">
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => handleOpenPrint(selectedReg)}
-                      className="h-8 rounded-xl text-xs gap-1.5 shadow-xs border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950"
+                      className="h-8 rounded-xl text-xs gap-1.5 shadow-xs border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950 cursor-pointer"
                     >
                       <Printer className="w-3.5 h-3.5 text-teal-600" /> Print Registration & Forms
                     </Button>
@@ -1869,12 +1812,15 @@ export default function AdminEggDonorRegistrationsPage() {
                         handleOpenEdit(selectedReg);
                         setIsDetailOpen(false);
                       }}
-                      className="h-8 rounded-xl text-xs gap-1.5 text-emerald-600 border-emerald-250 hover:bg-emerald-50 shadow-xs"
+                      className="h-8 rounded-xl text-xs gap-1.5 text-emerald-600 border-emerald-250 hover:bg-emerald-50 shadow-xs cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" /> Edit Registration
                     </Button>
                   </div>
                 </div>
+
+                {/* ─── Scrollable Body Content (Scrolls beneath fixed header) ─── */}
+                <div className="overflow-y-auto flex-1 p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-6">
 
                 {/* ─── 4-Step Pipeline Workflow Stepper ──────────────────────── */}
                 <div className="p-4 rounded-2xl border bg-gradient-to-br from-slate-50 to-white dark:from-slate-900/60 dark:to-slate-900/30 space-y-3 shadow-xs">
@@ -1892,7 +1838,7 @@ export default function AdminEggDonorRegistrationsPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                     {[
                       {
                         num: 1,
@@ -2072,7 +2018,7 @@ export default function AdminEggDonorRegistrationsPage() {
                         <span className="text-[10px] text-muted-foreground font-semibold">Aadhaar, Photo &amp; Sign</span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {[
                           {
                             key: "aadhaarFront",
@@ -2109,18 +2055,18 @@ export default function AdminEggDonorRegistrationsPage() {
                           return (
                             <div
                               key={idx}
-                              className={`p-2.5 rounded-xl border flex flex-col justify-between transition-all ${
-                                hasDoc ? "bg-background border-border" : "bg-muted/40 border-dashed"
+                              className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
+                                hasDoc ? "bg-background border-border shadow-2xs hover:border-slate-300 dark:hover:border-slate-700" : "bg-muted/40 border-dashed"
                               }`}
                             >
-                              <div className="space-y-1.5">
+                              <div className="space-y-2">
                                 <div className="flex items-center justify-between text-[11px]">
-                                  <span className="font-bold flex items-center gap-1 truncate">
-                                    <item.icon className={`w-3 h-3 ${item.color} shrink-0`} />
+                                  <span className="font-bold flex items-center gap-1.5 truncate">
+                                    <item.icon className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
                                     <span className="truncate">{item.label}</span>
                                   </span>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                                    hasDoc ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                    hasDoc ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300" : "bg-rose-100 text-rose-600"
                                   }`}>
                                     {hasDoc ? "Uploaded" : "Missing"}
                                   </span>
@@ -2129,15 +2075,15 @@ export default function AdminEggDonorRegistrationsPage() {
                                 {hasDoc && isImg && (
                                   <div
                                     onClick={() => setPreviewMedia({ url: item.doc.url, title: item.label })}
-                                    className="w-full h-24 rounded-lg overflow-hidden border bg-muted/40 cursor-pointer relative group flex items-center justify-center"
+                                    className="w-full h-36 sm:h-40 md:h-44 xl:h-48 rounded-lg overflow-hidden border bg-muted/40 cursor-pointer relative group flex items-center justify-center"
                                   >
                                     <img
                                       src={item.doc.url}
                                       alt={item.label}
                                       className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                                     />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold gap-1">
-                                      <Eye className="w-3 h-3" /> Enlarge
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-bold gap-1.5">
+                                      <Eye className="w-3.5 h-3.5" /> Enlarge
                                     </div>
                                   </div>
                                 )}
@@ -2146,30 +2092,30 @@ export default function AdminEggDonorRegistrationsPage() {
                                   <button
                                     type="button"
                                     onClick={() => setPreviewMedia({ url: item.doc.url, title: item.label })}
-                                    className="w-full h-24 rounded-lg border bg-muted/40 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground text-xs gap-1 cursor-pointer transition-colors"
+                                    className="w-full h-36 sm:h-40 md:h-44 xl:h-48 rounded-lg border bg-muted/40 flex flex-col items-center justify-center text-muted-foreground hover:text-foreground text-xs gap-1.5 cursor-pointer transition-colors"
                                   >
-                                    <FileText className="w-6 h-6 text-rose-500" />
-                                    <span className="text-[10px] font-mono truncate max-w-[90%]">
+                                    <FileText className="w-8 h-8 text-rose-500" />
+                                    <span className="text-[11px] font-mono truncate max-w-[90%]">
                                       View PDF
                                     </span>
                                   </button>
                                 )}
 
                                 {!hasDoc && (
-                                  <div className="w-full h-24 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground text-[10px] italic">
+                                  <div className="w-full h-36 sm:h-40 md:h-44 xl:h-48 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground text-[11px] italic">
                                     Not uploaded
                                   </div>
                                 )}
                               </div>
 
                               {hasDoc && (
-                                <div className="pt-2 mt-1 border-t flex items-center justify-between">
+                                <div className="pt-2.5 mt-2 border-t flex items-center justify-between">
                                   <button
                                     type="button"
                                     onClick={() => setPreviewMedia({ url: item.doc.url, title: item.label })}
-                                    className="text-[10px] text-rose-600 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                                    className="text-[11px] text-rose-600 dark:text-rose-400 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                                   >
-                                    <Eye className="w-2.5 h-2.5" /> Preview Document
+                                    <Eye className="w-3 h-3" /> Preview Document
                                   </button>
                                 </div>
                               )}
@@ -2433,7 +2379,7 @@ export default function AdminEggDonorRegistrationsPage() {
                               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-200 text-blue-900">Active</span>
                             )}
                           </div>
-                          <p className="text-[11px] text-muted-foreground">Standard donor tier. <strong>Includes donor compensation deal (standard ₹40,000).</strong></p>
+                          <p className="text-[11px] text-muted-foreground">Standard donor tier. <strong>Includes custom donor compensation deal.</strong></p>
                         </div>
 
                         <div className={`p-3 rounded-xl border text-xs space-y-1 transition-all ${
@@ -2449,12 +2395,12 @@ export default function AdminEggDonorRegistrationsPage() {
                               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-200 text-purple-900">Active</span>
                             )}
                           </div>
-                          <p className="text-[11px] text-muted-foreground">Premium donor tier. <strong>Includes donor compensation deal (standard ₹60,000).</strong></p>
+                          <p className="text-[11px] text-muted-foreground">Premium donor tier. <strong>Includes custom donor compensation deal.</strong></p>
                         </div>
                       </div>
 
                       {/* Current Assignment Details */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <div className="p-3 bg-background rounded-xl border text-xs space-y-1">
                           <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1">
                             <Building2 className="w-3 h-3 text-blue-500" /> Assigned Hospital
@@ -2471,6 +2417,32 @@ export default function AdminEggDonorRegistrationsPage() {
                           )}
                         </div>
 
+                        {/* Hospital Deal / Clinic Price */}
+                        <div className="p-3 bg-background rounded-xl border text-xs space-y-1">
+                          <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1">
+                            <Building2 className="w-3 h-3 text-blue-600" /> Hospital Deal
+                          </span>
+                          {selectedReg.clinicDeal?.hospitalDealPrice && Number(selectedReg.clinicDeal.hospitalDealPrice) > 0 ? (
+                            <div className="font-bold text-blue-600 font-mono text-sm">
+                              ₹{Number(selectedReg.clinicDeal.hospitalDealPrice).toLocaleString()}
+                            </div>
+                          ) : selectedReg.assignedHospital?.donorDealPrice ? (
+                            <div className="font-bold text-blue-600 font-mono text-sm">
+                              ₹{Number(selectedReg.assignedHospital.donorDealPrice).toLocaleString()}
+                            </div>
+                          ) : (
+                            <div className="text-amber-600 font-semibold text-xs">
+                              Not configured
+                            </div>
+                          )}
+                          <div className="text-[10px] text-muted-foreground">
+                            {selectedReg.clinicDeal?.donorCategory
+                              ? `${selectedReg.clinicDeal.donorCategory.toUpperCase()} Rate`
+                              : "Hospital Billing"}
+                          </div>
+                        </div>
+
+                        {/* Donor Deal Status */}
                         <div className="p-3 bg-background rounded-xl border text-xs space-y-1">
                           <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1">
                             <CreditCard className="w-3 h-3 text-emerald-500" /> Donor Deal Status
@@ -2479,15 +2451,17 @@ export default function AdminEggDonorRegistrationsPage() {
                             <div className="font-bold text-teal-700 dark:text-teal-300">
                               Registry (₹0 Payout)
                             </div>
-                          ) : (
+                          ) : (selectedReg.donorDeal?.compensationAmount && Number(selectedReg.donorDeal.compensationAmount) > 0) || (selectedReg.donorDeal?.totalAgreedAmount && Number(selectedReg.donorDeal.totalAgreedAmount) > 0) ? (
                             <div className="font-bold text-emerald-600 font-mono text-sm">
-                              {selectedReg.donorDeal?.compensationAmount
-                                ? `₹${Number(selectedReg.donorDeal.compensationAmount).toLocaleString()}`
-                                : "Not configured"}
+                              ₹{(Number(selectedReg.donorDeal.compensationAmount) || Number(selectedReg.donorDeal.totalAgreedAmount)).toLocaleString()}
+                            </div>
+                          ) : (
+                            <div className="text-amber-600 font-semibold text-xs">
+                              Not configured
                             </div>
                           )}
                           <div className="text-[10px] text-muted-foreground">
-                            {selectedReg.donorDeal?.paymentTerms || "Full upon retrieval"}
+                            {selectedReg.donorDeal?.paymentTerms || "Full on Retrieval"}
                           </div>
                         </div>
 
@@ -2537,7 +2511,7 @@ export default function AdminEggDonorRegistrationsPage() {
                     className="w-full p-3 text-xs bg-background border rounded-xl focus:ring-1 focus:ring-rose-500"
                   />
 
-                  <div className="flex flex-wrap gap-2 justify-end pt-1">
+                  <div className="flex flex-wrap gap-2 justify-end pt-1 items-center">
                     <Button
                       size="sm"
                       disabled={actionLoading}
@@ -2556,28 +2530,19 @@ export default function AdminEggDonorRegistrationsPage() {
                     >
                       <X className="w-3.5 h-3.5 mr-1" /> Reject Application
                     </Button>
-                    <Button
-                      size="sm"
-                      disabled={actionLoading || !wf.allComplete}
-                      onClick={() => handleUpdateStatus(selectedReg.registrationId, "APPROVED")}
-                      className={`h-9 text-xs font-bold px-5 rounded-xl shadow-xs ${
-                        wf.allComplete
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                          : "bg-muted text-muted-foreground cursor-not-allowed border"
-                      }`}
-                    >
-                      {wf.allComplete ? (
-                        <><Check className="w-4 h-4 mr-1.5" /> Approve &amp; Move to Egg Donor Management</>
-                      ) : (
-                        <><Lock className="w-3.5 h-3.5 mr-1.5" /> Complete Steps 1-4 to Approve</>
-                      )}
-                    </Button>
+
+                    {["APPROVED", "FILE_COMPLETED", "COMPLETED", "WAITING_FORM13"].includes(selectedReg.status) && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 text-xs font-bold border border-emerald-200">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Approved &amp; Moved to Management
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
-            );
-          })()}
-        </DialogContent>
+            </div>
+          );
+        })()}
+      </DialogContent>
       </Dialog>
 
       {/* Dual Deals & Hospital Assignment Modal */}
@@ -2704,13 +2669,52 @@ export default function AdminEggDonorRegistrationsPage() {
               </div>
             </div>
 
-            {/* SECTION 3: DEAL WITH DONOR (Hidden for Registry) */}
+            {/* SECTION 3: HOSPITAL DEAL (CLINIC PRICE) */}
+            <div className="space-y-3 border-b pb-4">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-blue-600" />
+                  3. Hospital Deal Price (₹ INR) <span className="text-rose-600">*</span>
+                </label>
+                <span className="text-[10px] text-muted-foreground italic">
+                  Charged to Clinic / Hospital
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-semibold text-foreground">
+                  Clinic Billing Amount (₹ INR) <span className="text-rose-600">*</span>
+                </label>
+                <Input
+                  type="number"
+                  value={dealForm.hospitalDealPrice > 0 ? dealForm.hospitalDealPrice : ""}
+                  onChange={(e) => setDealForm({ ...dealForm, hospitalDealPrice: Number(e.target.value) || 0 })}
+                  placeholder="Enter hospital deal price (e.g. 65000)"
+                  className="text-xs font-mono font-bold text-blue-600"
+                  required
+                />
+                {(() => {
+                  const selHosp = hospitals.find((h) => String(h._id) === String(dealForm.assignedHospitalId));
+                  if (!selHosp) return null;
+                  return (
+                    <div className="text-[10px] text-muted-foreground flex items-center gap-2 pt-0.5">
+                      <span>Hospital Standard Rate: <strong>₹{(selHosp.donorDealPrice || 65000).toLocaleString()}</strong></span>
+                      {selHosp.profiledonorDealPrice > 0 && (
+                        <span>• Profile Rate: <strong>₹{selHosp.profiledonorDealPrice.toLocaleString()}</strong></span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* SECTION 4: DEAL WITH DONOR (Hidden for Registry) */}
             {dealForm.donorCategory !== "registry" ? (
               <div className="space-y-3 border-b pb-4">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <CreditCard className="w-4 h-4 text-purple-600" />
-                    3. Deal with Donor (Compensation Amount) <span className="text-rose-600">*</span>
+                    4. Deal with Donor (Compensation Amount) <span className="text-rose-600">*</span>
                   </label>
                 </div>
 
@@ -2720,9 +2724,9 @@ export default function AdminEggDonorRegistrationsPage() {
                   </label>
                   <Input
                     type="number"
-                    value={dealForm.compensationAmount || ""}
-                    onChange={(e) => setDealForm({ ...dealForm, compensationAmount: Number(e.target.value) })}
-                    placeholder="e.g. 45000"
+                    value={dealForm.compensationAmount > 0 ? dealForm.compensationAmount : ""}
+                    onChange={(e) => setDealForm({ ...dealForm, compensationAmount: Number(e.target.value) || 0 })}
+                    placeholder="Enter compensation amount manually (e.g. 45000)"
                     className="text-xs font-mono font-bold text-emerald-600"
                     required
                   />
@@ -2869,14 +2873,36 @@ export default function AdminEggDonorRegistrationsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setEditTab("affidavit")}
+                onClick={() => {
+                  // Check prerequisites before switching to affidavit tab
+                  const hasViralMarker = !!(editForm.labReports?.viralMarkersReport?.url || (Array.isArray(editForm.labReports?.viralMarkers) ? editForm.labReports?.viralMarkers[0]?.url : editForm.labReports?.viralMarkers?.url));
+                  const hasBloodRpt = !!(editForm.labReports?.bloodReport?.url);
+                  const hasInsurance = !!(editForm.labReports?.insurance?.url || editForm.documents?.insurance?.url);
+                  const hasPickup = !!(selectedReg?.pickupDate);
+                  const form13Prerequisites = hasViralMarker && hasBloodRpt && hasInsurance && hasPickup;
+                  if (!form13Prerequisites) {
+                    setEditTab("affidavit");
+                  } else {
+                    setEditTab("affidavit");
+                  }
+                }}
                 className={`pb-2 border-b-2 transition-all flex items-center gap-1.5 ${
                   editTab === "affidavit"
                     ? "border-rose-600 text-rose-600 font-bold"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <FileBadge2 className="w-3.5 h-3.5" /> Affidavit
+                {(() => {
+                  const hasViralMarker = !!(editForm.labReports?.viralMarkersReport?.url || (Array.isArray(editForm.labReports?.viralMarkers) ? editForm.labReports?.viralMarkers[0]?.url : editForm.labReports?.viralMarkers?.url));
+                  const hasBloodRpt = !!(editForm.labReports?.bloodReport?.url);
+                  const hasInsurance = !!(editForm.labReports?.insurance?.url || editForm.documents?.insurance?.url);
+                  const hasHealthInsurance = !!(editForm.labReports?.healthInsurance?.url);
+                  const hasPickup = !!(selectedReg?.pickupDate);
+                  const prereqsMet = hasViralMarker && hasBloodRpt && hasInsurance && hasHealthInsurance && hasPickup;
+                  return prereqsMet
+                    ? <FileBadge2 className="w-3.5 h-3.5" />
+                    : <Lock className="w-3.5 h-3.5 text-amber-500" />;
+                })()} Form 13 / Affidavit
               </button>
             </div>
 
@@ -3186,13 +3212,126 @@ export default function AdminEggDonorRegistrationsPage() {
               </div>
             )}
 
-            {/* TAB 4: Affidavit */}
+            {/* TAB 4: Affidavit (Form 13) — Gated by Lab Docs + Pickup Date */}
             {editTab === "affidavit" && (
               <div className="space-y-4">
                 <div className="p-3 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
                   <FileBadge2 className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>Download the pre-filled affidavit template, get it notarized on Non-Judicial Stamp Paper, then upload the signed copy below.</span>
                 </div>
+
+                {/* ─── Sequential Upload Gate ────────────────────────────── */}
+                {(() => {
+                  const hasViralMarker = !!(editForm.labReports?.viralMarkersReport?.url || (Array.isArray(editForm.labReports?.viralMarkers) ? editForm.labReports?.viralMarkers[0]?.url : editForm.labReports?.viralMarkers?.url));
+                  const hasBloodRpt = !!(editForm.labReports?.bloodReport?.url);
+                  const hasInsurance = !!(editForm.labReports?.insurance?.url || editForm.documents?.insurance?.url);
+                  const hasHealthInsurance = !!(editForm.labReports?.healthInsurance?.url);
+                  const hasPickup = !!(selectedReg?.pickupDate);
+                  const prereqsMet = hasViralMarker && hasBloodRpt && hasInsurance && hasHealthInsurance && hasPickup;
+
+                  if (!prereqsMet) {
+                    return (
+                      <div className="rounded-2xl border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/40 dark:bg-amber-950/20 p-6 space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                            <Lock className="w-5 h-5 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-amber-900 dark:text-amber-200">Form 13 Upload is Locked</p>
+                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                              Complete the 4 required medical files &amp; pickup date before uploading Form 13 / Affidavit.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">Required Steps:</p>
+                          <div className="space-y-1.5">
+                            {/* Step 1: Viral Marker */}
+                            <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold ${
+                              hasViralMarker
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300"
+                                : "bg-white border-amber-200 text-amber-900 dark:bg-slate-900 dark:border-amber-700 dark:text-amber-300"
+                            }`}>
+                              {hasViralMarker
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
+                              <span>Step 1 — Upload <strong>Viral Markers Report</strong> (HIV, HBsAg, HCV, VDRL)</span>
+                              {hasViralMarker && <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Done</span>}
+                            </div>
+
+                            {/* Step 2: Blood Report */}
+                            <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold ${
+                              hasBloodRpt
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300"
+                                : "bg-white border-amber-200 text-amber-900 dark:bg-slate-900 dark:border-amber-700 dark:text-amber-300"
+                            }`}>
+                              {hasBloodRpt
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
+                              <span>Step 2 — Upload <strong>Blood Test Report</strong></span>
+                              {hasBloodRpt && <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Done</span>}
+                            </div>
+
+                            {/* Step 3: Life Insurance */}
+                            <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold ${
+                              hasInsurance
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300"
+                                : "bg-white border-amber-200 text-amber-900 dark:bg-slate-900 dark:border-amber-700 dark:text-amber-300"
+                            }`}>
+                              {hasInsurance
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
+                              <span>Step 3 — Upload <strong>Life / Medical Insurance Policy</strong> (Rule 13 — Mandatory)</span>
+                              {hasInsurance && <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Done</span>}
+                            </div>
+
+                            {/* Step 4: Health Insurance */}
+                            <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold ${
+                              hasHealthInsurance
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300"
+                                : "bg-white border-amber-200 text-amber-900 dark:bg-slate-900 dark:border-amber-700 dark:text-amber-300"
+                            }`}>
+                              {hasHealthInsurance
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
+                              <span>Step 4 — Upload <strong>Health Insurance Policy</strong> (Mandatory)</span>
+                              {hasHealthInsurance && <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Done</span>}
+                            </div>
+
+                            {/* Step 5: Pickup Date */}
+                            <div className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs font-semibold ${
+                              hasPickup
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300"
+                                : "bg-white border-amber-200 text-amber-900 dark:bg-slate-900 dark:border-amber-700 dark:text-amber-300"
+                            }`}>
+                              {hasPickup
+                                ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                : <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />}
+                              <span>Step 5 — Set <strong>Pickup Date</strong> (via Hospital &amp; Deal configuration)</span>
+                              {hasPickup && <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ {selectedReg.pickupDate}</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-amber-100/60 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300">
+                          <strong>⚠ Admin Notice:</strong> Form 13 (ART Donor Affidavit) can only be uploaded after all 4 required medical files (Viral Markers, Blood Report, Life Insurance, Health Insurance) are on file and the pickup date is confirmed. Please go to the <strong>"Lab Reports"</strong> tab to upload missing documents, and use <strong>"Hospital &amp; Deal"</strong> to set the pickup date.
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Show upload form only when prerequisites are met */}
+                {((() => {
+                  const hasViralMarker = !!(editForm.labReports?.viralMarkersReport?.url || (Array.isArray(editForm.labReports?.viralMarkers) ? editForm.labReports?.viralMarkers[0]?.url : editForm.labReports?.viralMarkers?.url));
+                  const hasBloodRpt = !!(editForm.labReports?.bloodReport?.url);
+                  const hasInsurance = !!(editForm.labReports?.insurance?.url || editForm.documents?.insurance?.url);
+                  const hasHealthInsurance = !!(editForm.labReports?.healthInsurance?.url);
+                  const hasPickup = !!(selectedReg?.pickupDate);
+                  return hasViralMarker && hasBloodRpt && hasInsurance && hasHealthInsurance && hasPickup;
+                })()) && (
 
                 <div className="space-y-3">
                   <div className="p-4 rounded-xl border bg-slate-50 dark:bg-slate-900/40 space-y-2">
@@ -3241,6 +3380,7 @@ export default function AdminEggDonorRegistrationsPage() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
             )}
 

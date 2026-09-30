@@ -89,6 +89,7 @@ const getDonorDealInfo = (reg: any) => {
 
   const rawAmount =
     reg.donorDeal?.compensationAmount ??
+    reg.donorDeal?.totalAgreedAmount ??
     reg.donorDeal?.amount;
 
   const defaultComp = category === "profile" ? 10000 : 5000;
@@ -1164,9 +1165,7 @@ export default function ManageSpermRegistrationsPage() {
             <Dna className="w-6 h-6 text-teal-600" />
             Sperm Donor Management
           </h1>
-          <p className="text-xs text-slate-500">
-            Manage approved sperm donors, upload semen analysis &amp; viral screening reports, track donor compensation, set sample collection dates, and collect statutory Form 13.
-          </p>
+          
         </div>
         <div className="flex gap-2">
           <Button
@@ -1180,146 +1179,94 @@ export default function ManageSpermRegistrationsPage() {
         </div>
       </div>
 
+      {/* Interactive Status Metrics */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[
+          {
+            tab: "all" as const,
+            title: "Total Records",
+            count: statusCounts.all || 0,
+            textColor: "text-teal-600 dark:text-teal-400",
+            borderHover: "hover:border-teal-300 dark:hover:border-teal-700",
+            activeBorder: "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 ring-2 ring-teal-500/20",
+            badgeBg: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
+          },
+          {
+            tab: "APPROVED" as const,
+            title: "Approved Donors",
+            count: statusCounts.approved || 0,
+            textColor: "text-emerald-600 dark:text-emerald-400",
+            borderHover: "hover:border-emerald-300 dark:hover:border-emerald-700",
+            activeBorder: "border-emerald-500 dark:border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30 ring-2 ring-emerald-500/20",
+            badgeBg: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+          },
+          {
+            tab: "WAITING_FORM13" as const,
+            title: "Waiting Form 13",
+            count: statusCounts.waitingForm13 || 0,
+            textColor: "text-amber-600 dark:text-amber-400",
+            borderHover: "hover:border-amber-300 dark:hover:border-amber-700",
+            activeBorder: "border-amber-500 dark:border-amber-400 bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-amber-500/20",
+            badgeBg: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+          },
+          {
+            tab: "FILE_COMPLETED" as const,
+            title: "File Completed",
+            count: statusCounts.fileCompleted || 0,
+            textColor: "text-blue-600 dark:text-blue-400",
+            borderHover: "hover:border-blue-300 dark:hover:border-blue-700",
+            activeBorder: "border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-500/20",
+            badgeBg: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+          },
+          {
+            tab: "CANCELLED" as const,
+            title: "Cancelled / Inactive",
+            count: statusCounts.cancelled || 0,
+            textColor: "text-rose-600 dark:text-rose-400",
+            borderHover: "hover:border-rose-300 dark:hover:border-rose-700",
+            activeBorder: "border-rose-500 dark:border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 ring-2 ring-rose-500/20",
+            badgeBg: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+          },
+        ].map((card) => {
+          const isSelected = activeTab === card.tab;
+          return (
+            <button
+              key={card.tab}
+              type="button"
+              onClick={() => handleTabChange(card.tab)}
+              className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none text-left relative overflow-hidden group shadow-2xs ${
+                isSelected
+                  ? card.activeBorder
+                  : `border-slate-200/80 dark:border-slate-800 bg-card ${card.borderHover} hover:shadow-sm`
+              }`}
+              title={`Click to filter by ${card.title}`}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider truncate ${card.textColor}`}>
+                  {card.title}
+                </span>
+                {isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 shrink-0 animate-pulse" />
+                )}
+              </div>
+              <div className="flex items-baseline justify-between mt-2">
+                <span className={`text-xl sm:text-2xl font-bold tabular-nums tracking-tight ${card.textColor}`}>
+                  {card.count}
+                </span>
+                {isSelected && (
+                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md ${card.badgeBg}`}>
+                    Active
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Advanced Filters Panel */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 shadow-sm space-y-4">
         {/* Segmented Status Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-900">
-          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => handleTabChange("all")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "all"
-                  ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="All sperm donor management records"
-            >
-              <span>All</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "all"
-                    ? "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.all}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("APPROVED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "APPROVED"
-                  ? "bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Approved donors: awaiting semen analysis, viral markers, or sample collection schedule"
-            >
-              <span>Approved</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "APPROVED"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.approved}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("WAITING_FORM13")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "WAITING_FORM13"
-                  ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Clinical tests & schedule complete: awaiting signed statutory Form 13"
-            >
-              <span>Waiting Form 13</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "WAITING_FORM13"
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.waitingForm13}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("FILE_COMPLETED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "FILE_COMPLETED"
-                  ? "bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Clinical file complete with Form 13 uploaded and verified"
-            >
-              <span>File Completed</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "FILE_COMPLETED"
-                    ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.fileCompleted}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("CANCELLED")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "CANCELLED"
-                  ? "bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Cancelled sperm donor registrations"
-            >
-              <span>Cancelled</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "CANCELLED"
-                    ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.cancelled || 0}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabChange("other")}
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === "other"
-                  ? "bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-400 shadow-xs border border-slate-200/90 dark:border-slate-700"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-slate-800 border border-transparent"
-              }`}
-              title="Other statuses (Completed, Under Review, Suspended, Rejected)"
-            >
-              <span>Other Status</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                  activeTab === "other"
-                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300"
-                    : "bg-slate-200/70 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                }`}
-              >
-                {statusCounts.other}
-              </span>
-            </button>
-          </div>
-
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search bar */}
           <div className="relative lg:col-span-2">
@@ -1562,6 +1509,11 @@ export default function ManageSpermRegistrationsPage() {
                                 {reg.assignedHospital.name}
                               </span>
                             </div>
+                            {Boolean(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice) && (
+                              <div className="text-[10px] font-bold text-blue-600 font-mono">
+                                Hospital Deal: ₹{Number(reg.clinicDeal?.hospitalDealPrice || (dealInfo.category === "profile" ? (reg.assignedHospital?.profiledonorDealPrice || reg.assignedHospital?.donorDealPrice) : reg.assignedHospital?.donorDealPrice)).toLocaleString()}
+                              </div>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleOpenAssignModal(reg)}
