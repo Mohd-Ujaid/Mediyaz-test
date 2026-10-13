@@ -203,8 +203,15 @@ export function DonorPrintModal({
     const sectionsParam =
       effectiveSections.length > 0 ? `&sections=${effectiveSections.join(",")}` : "";
 
-    const affidavitTypeParam = `&affidavitType=${affidavitType}`;
-    const printUrl = `/admin/manage-registrations/${regId}/print?withHeader=${useHeader}${sectionsParam}${affidavitTypeParam}`;
+    const affidavitTypeParam = affidavitType ? `&affidavitType=${affidavitType}` : "";
+    const overridesObj: Record<string, any> = {};
+    if (currentReg.assignedDoctor) overridesObj.assignedDoctor = currentReg.assignedDoctor;
+    if (currentReg.assignedBranch) overridesObj.assignedBranch = currentReg.assignedBranch;
+    const overridesParam = Object.keys(overridesObj).length > 0
+      ? `&overrides=${encodeURIComponent(JSON.stringify(overridesObj))}`
+      : "";
+
+    const printUrl = `/admin/manage-registrations/${regId}/print?withHeader=${useHeader}${sectionsParam}${affidavitTypeParam}${overridesParam}`;
     window.open(printUrl, "_blank");
     onClose();
   };

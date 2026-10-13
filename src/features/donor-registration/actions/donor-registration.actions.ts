@@ -80,6 +80,9 @@ export async function getAdminRegistrationsAction(filters: {
   status?: string;
   bloodGroup?: string;
   hospital?: string;
+  branch?: string;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   limit?: number;
 }) {

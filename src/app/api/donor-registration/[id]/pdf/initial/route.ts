@@ -58,6 +58,7 @@ export async function GET(
       );
       if (hospitalObj) {
         plainRegistration.assignedHospitalDetails = hospitalObj.toObject();
+        plainRegistration.assignedHospital = hospitalObj.toObject();
       }
     }
 

@@ -30,6 +30,8 @@ import {
   MoreHorizontal,
   Dna,
   Receipt,
+  Percent,
+  Stethoscope,
 } from "lucide-react";
 import { CompletedFileInvoiceModal } from "./CompletedFileInvoiceModal";
 import { Button } from "@/components/ui/button";
@@ -166,6 +168,10 @@ export function CompletedFilesDirectory({
   const [paymentForm, setPaymentForm] = useState<any>({
     registrationId: "",
     hospitalDealPrice: 0,
+    serviceCharge: 5000,
+    totalAmount: 0,
+    tdsPercentage: 2,
+    tdsAmount: 0,
     hospitalPaymentStatus: "PENDING",
     isHospitalPaymentReceived: false,
     hospitalReceivedAmount: 0,
@@ -528,13 +534,64 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
   // Open Payment Update Modal
   const handleOpenPaymentModal = (reg: any) => {
     setSelectedReg(reg);
-    const hospDealPrice = Number(reg.clinicDeal?.hospitalDealPrice || 0);
+    const hosp = typeof reg.assignedHospital === "object" ? reg.assignedHospital : null;
+    const isSperm = (reg.donorType || donorTypeFilter) === "sperm";
+    const category = reg.clinicDeal?.donorCategory || reg.donorDeal?.donorCategory || "normal";
+    const defaultHospPrice = hosp
+      ? isSperm
+        ? category === "profile"
+          ? hosp.spermProfileDonorDealPrice || 25000
+          : hosp.spermDonorDealPrice || 15000
+        : category === "profile"
+        ? hosp.eggProfileDonorDealPrice || hosp.profiledonorDealPrice || 85000
+        : hosp.eggDonorDealPrice || hosp.donorDealPrice || 65000
+      : isSperm
+      ? (category === "profile" ? 25000 : 15000)
+      : (category === "profile" ? 85000 : 65000);
+
+    const totalAmount = Number(
+      reg.clinicDeal?.totalAmount ||
+      reg.clinicDeal?.hospitalDealPrice ||
+      defaultHospPrice
+    );
+    const serviceCharge = Number(
+      reg.clinicDeal?.serviceCharge !== undefined && reg.clinicDeal?.serviceCharge !== null
+        ? reg.clinicDeal.serviceCharge
+        : hosp?.serviceCharge || 5000
+    );
+    const donorReimbursement = Number(
+      reg.clinicDeal?.donorReimbursement !== undefined && reg.clinicDeal?.donorReimbursement !== null
+        ? reg.clinicDeal.donorReimbursement
+        : Math.max(0, totalAmount - serviceCharge)
+    );
+
     const isHospReceived = reg.clinicDeal?.isPaymentReceived || reg.clinicDeal?.paymentStatus === "RECEIVED";
-    const hospReceivedAmount = Number(reg.clinicDeal?.receivedAmount || (isHospReceived ? hospDealPrice : 0));
+    const tdsPct = Number(
+      reg.clinicDeal?.tdsPercentage !== undefined && reg.clinicDeal?.tdsPercentage !== null
+        ? reg.clinicDeal.tdsPercentage
+        : hosp?.tdsPercentage !== undefined && hosp?.tdsPercentage !== null
+        ? hosp.tdsPercentage
+        : 2
+    );
+    const tdsAmt = Math.round(totalAmount * (tdsPct / 100));
+    const gstAmt = Math.round(serviceCharge * 0.18);
+    const netReceivable = Math.max(0, totalAmount - tdsAmt + gstAmt);
+    const hospReceivedAmount = Number(
+      reg.clinicDeal?.receivedAmount !== undefined && reg.clinicDeal?.receivedAmount !== null
+        ? reg.clinicDeal.receivedAmount
+        : isHospReceived
+        ? netReceivable
+        : 0
+    );
 
     setPaymentForm({
       registrationId: reg.registrationId,
-      hospitalDealPrice: hospDealPrice,
+      hospitalDealPrice: totalAmount,
+      serviceCharge: serviceCharge,
+      donorReimbursement: donorReimbursement,
+      totalAmount: totalAmount,
+      tdsPercentage: tdsPct,
+      tdsAmount: tdsAmt,
       hospitalPaymentStatus: isHospReceived ? "RECEIVED" : (reg.clinicDeal?.paymentStatus || "PENDING"),
       isHospitalPaymentReceived: isHospReceived,
       hospitalReceivedAmount: hospReceivedAmount,
@@ -558,19 +615,39 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
     setActionLoading(true);
     try {
       const isReceived = paymentForm.hospitalPaymentStatus === "RECEIVED";
+      const totalAmount = Number(paymentForm.totalAmount || paymentForm.hospitalDealPrice) || 0;
+      const serviceCharge = Number(paymentForm.serviceCharge) || 0;
+      const donorReimb = Math.max(0, totalAmount - serviceCharge);
+      const tdsPct = Math.max(0, Math.min(30, Number(paymentForm.tdsPercentage) || 0));
+      const tdsAmt = Math.round(totalAmount * (tdsPct / 100));
+      const gstAmt = Math.round(serviceCharge * 0.18);
+      const netReceivable = Math.max(0, totalAmount - tdsAmt + gstAmt);
+
+      const receivedAmt = isReceived
+        ? (Number(paymentForm.hospitalReceivedAmount) > 0 ? Number(paymentForm.hospitalReceivedAmount) : netReceivable)
+        : Number(paymentForm.hospitalReceivedAmount) || 0;
+
       const payload = {
         registrationId: selectedReg.registrationId,
         donorType: selectedReg.donorType || donorTypeFilter || "egg",
         clinicDeal: {
-          hospitalDealPrice: Number(paymentForm.hospitalDealPrice) || Number(selectedReg.clinicDeal?.hospitalDealPrice) || 0,
+          hospitalDealPrice: totalAmount,
+          serviceCharge: serviceCharge,
+          donorReimbursement: donorReimb,
+          totalAmount: totalAmount,
+          tdsPercentage: tdsPct,
+          tdsAmount: tdsAmt,
+          gstAmount: gstAmt,
+          netReceivableAmount: netReceivable,
           paymentStatus: paymentForm.hospitalPaymentStatus,
           isPaymentReceived: isReceived,
-          receivedAmount: isReceived
-            ? Number(paymentForm.hospitalReceivedAmount) || Number(paymentForm.hospitalDealPrice) || 0
-            : Number(paymentForm.hospitalReceivedAmount) || 0,
+          receivedAmount: receivedAmt,
           receivedAt: paymentForm.hospitalReceivedAt ? new Date(paymentForm.hospitalReceivedAt) : null,
           paymentReference: paymentForm.hospitalPaymentRef || "",
           notes: paymentForm.hospitalNotes || "",
+        },
+        donorDeal: {
+          compensationAmount: donorReimb,
         },
       };
 
@@ -1064,7 +1141,17 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                             <div className="text-[11px] text-muted-foreground mt-0.5">
                               {hosp.city ? `${hosp.city}, ` : ""}{hosp.state || "India"}
                             </div>
-                            {hosp.contactPerson && (
+                            {reg.assignedDoctor ? (
+                              <div className="mt-1 flex items-center gap-1 text-[10px] text-purple-700 dark:text-purple-300 font-semibold bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-200/60 w-fit">
+                                <Stethoscope className="w-3 h-3 text-purple-600 shrink-0" />
+                                <span>{reg.assignedDoctor.startsWith("Dr.") ? reg.assignedDoctor : `Dr. ${reg.assignedDoctor}`}</span>
+                              </div>
+                            ) : hosp.doctorName ? (
+                              <div className="text-[10px] text-slate-500 mt-0.5">
+                                Dr: {hosp.doctorName}
+                              </div>
+                            ) : null}
+                            {hosp.contactPerson && !reg.assignedDoctor && (
                               <div className="text-[10px] text-muted-foreground">
                                 Contact: {hosp.contactPerson}
                               </div>
@@ -1100,9 +1187,37 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                             {isHospPaid ? "Payment Received" : reg.clinicDeal?.paymentStatus === "PARTIALLY_RECEIVED" ? "Partially Rec'd" : "Payment Pending"}
                           </span>
                         </div>
+
+                        {/* Invoice Status & Generation Indicator */}
+                        <div className="mt-1.5">
+                          {reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200">
+                              <Receipt className="w-2.5 h-2.5" />
+                              Inv #{reg.clinicDeal?.invoiceNumber || reg.invoiceNumber}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInvoiceModal(reg)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 transition-colors cursor-pointer"
+                              title="Invoice pending. Click to create invoice and record in Clinic Ledger"
+                            >
+                              <Receipt className="w-2.5 h-2.5" />
+                              Invoice Pending
+                            </button>
+                          )}
+                        </div>
+
                         {isHospPaid ? (
-                          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                            Collected: ₹{(reg.clinicDeal?.receivedAmount || reg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
+                          <div className="space-y-0.5 mt-0.5">
+                            <div className="text-[10px] text-emerald-600 font-bold">
+                              Collected: ₹{(reg.clinicDeal?.receivedAmount || reg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
+                            </div>
+                            {reg.clinicDeal?.tdsPercentage !== undefined && Number(reg.clinicDeal.tdsPercentage) > 0 ? (
+                              <div className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">
+                                TDS: ₹{(reg.clinicDeal?.tdsAmount || Math.round((reg.clinicDeal?.hospitalDealPrice || 0) * (reg.clinicDeal.tdsPercentage / 100))).toLocaleString("en-IN")} ({reg.clinicDeal.tdsPercentage}%)
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </td>
@@ -1318,136 +1433,349 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
             </DialogDescription>
           </DialogHeader>
 
-          {selectedReg && (
-            <form onSubmit={handleSaveHospitalPayment} className="space-y-4 pt-2">
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
-                <Lock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-                <p>
-                  <strong>Fixed Scope:</strong> Only Hospital Payment collection can be changed here. Donor compensation, donor payouts, hospital assignment, and retrieval schedule dates are managed under <strong>Registration Management</strong>.
-                </p>
-              </div>
+          {selectedReg && (() => {
+            const currentTotal = Number(paymentForm.totalAmount || paymentForm.hospitalDealPrice || 0);
+            const currentServ = Number(paymentForm.serviceCharge !== undefined ? paymentForm.serviceCharge : 5000);
+            const currentReimb = Math.max(0, currentTotal - currentServ);
+            const currentGstAmt = Math.round(currentServ * 0.18);
+            const currentTdsPct = Math.max(0, Math.min(10, Number(paymentForm.tdsPercentage !== undefined ? paymentForm.tdsPercentage : 2)));
+            const currentTdsAmt = Math.round(currentTotal * (currentTdsPct / 100));
+            const currentNetReceivable = Math.max(0, currentTotal - currentTdsAmt + currentGstAmt);
+            const enteredRecvAmt = Number(paymentForm.hospitalReceivedAmount || 0);
+            const pendingBal = Math.max(0, currentNetReceivable - enteredRecvAmt);
 
-              <div className="bg-muted/40 p-3.5 rounded-xl border space-y-2 text-xs">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Registration ID</span>
-                    <span className="font-bold text-foreground">{selectedReg.registrationId}</span>
+            return (
+              <form onSubmit={handleSaveHospitalPayment} className="space-y-4 pt-2">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                  <Lock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                  <p>
+                    <strong>Fixed Scope:</strong> Only Hospital Payment collection can be changed here. Donor compensation, donor payouts, hospital assignment, and retrieval schedule dates are managed under <strong>Registration Management</strong>.
+                  </p>
+                </div>
+
+                <div className="bg-muted/40 p-3.5 rounded-xl border space-y-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Registration ID</span>
+                      <span className="font-bold text-foreground">{selectedReg.registrationId}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Donor ID</span>
+                      <span className="font-mono font-bold text-teal-600">{selectedReg.donorId || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Donor Name</span>
+                      <span className="font-bold text-foreground">{selectedReg.personalInfo?.fullName || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Assigned Hospital</span>
+                      <span className="font-bold text-foreground">
+                        {typeof selectedReg.assignedHospital === "object" ? selectedReg.assignedHospital?.name : "Unassigned"}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Donor ID</span>
-                    <span className="font-mono font-bold text-teal-600">{selectedReg.donorId || "N/A"}</span>
+                </div>
+
+                {/* 1. SEPARATE HOSPITAL DEAL & SERVICE CHARGE, THEN TOTAL */}
+                <div className="p-3.5 rounded-xl border bg-slate-50 dark:bg-slate-800/50 space-y-3">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-teal-600" />
+                      Hospital Billing Breakdown
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-300">
+                      Reimbursement = Deal - Service Charge
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Donor Name</span>
-                    <span className="font-bold text-foreground">{selectedReg.personalInfo?.fullName || "N/A"}</span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+                        <span>Total Deal Price (₹)</span>
+                        <span className="text-[10px] text-teal-600 font-semibold">Gross</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={currentTotal}
+                        onChange={(e) => {
+                          const newTotal = Number(e.target.value) || 0;
+                          const newTdsAmt = Math.round(newTotal * (currentTdsPct / 100));
+                          const newNetRec = Math.max(0, newTotal - newTdsAmt + currentGstAmt);
+                          const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
+                          setPaymentForm({
+                            ...paymentForm,
+                            hospitalDealPrice: newTotal,
+                            totalAmount: newTotal,
+                            donorReimbursement: Math.max(0, newTotal - currentServ),
+                            tdsAmount: newTdsAmt,
+                            hospitalReceivedAmount: isRec ? newNetRec : paymentForm.hospitalReceivedAmount,
+                          });
+                        }}
+                        className="h-9 text-xs font-bold"
+                        placeholder="e.g. 60000"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+                        <span>Service Charge (₹)</span>
+                        <span className="text-[10px] text-blue-600 font-semibold">Bank Fee</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={currentServ}
+                        onChange={(e) => {
+                          const newServ = Number(e.target.value) || 0;
+                          const newGst = Math.round(newServ * 0.18);
+                          const newNetRec = Math.max(0, currentTotal - currentTdsAmt + newGst);
+                          const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
+                          setPaymentForm({
+                            ...paymentForm,
+                            serviceCharge: newServ,
+                            donorReimbursement: Math.max(0, currentTotal - newServ),
+                            hospitalReceivedAmount: isRec ? newNetRec : paymentForm.hospitalReceivedAmount,
+                          });
+                        }}
+                        className="h-9 text-xs font-bold"
+                        placeholder="e.g. 5000"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+                        <span>Donor Reimb. (₹)</span>
+                        <span className="text-[10px] text-amber-600 font-semibold">Exempt</span>
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={currentReimb}
+                        readOnly
+                        className="h-9 text-xs font-bold bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Assigned Hospital</span>
-                    <span className="font-bold text-foreground">
-                      {typeof selectedReg.assignedHospital === "object" ? selectedReg.assignedHospital?.name : "Unassigned"}
+
+                  {/* Highlighted Total Box */}
+                  <div className="p-2.5 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold block">Deal Breakdown Formula:</span>
+                      <span className="text-xs text-muted-foreground">
+                        Reimbursement ₹{currentReimb.toLocaleString("en-IN")} + Service ₹{currentServ.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <span className="text-base font-black text-teal-700 dark:text-teal-300">
+                      = ₹{currentTotal.toLocaleString("en-IN")} Deal
                     </span>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t flex items-center justify-between">
-                  <span className="text-muted-foreground font-semibold">Agreed Clinic Deal Price:</span>
-                  <span className="font-black text-sm text-teal-700 dark:text-teal-300">
-                    ₹{(paymentForm.hospitalDealPrice || selectedReg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
+                {/* TDS Percentage Deduction Section (0% to 10%) */}
+                <div className="p-3.5 rounded-xl border bg-amber-500/5 border-amber-500/25 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Hospital TDS Deduction (0% to 10%)</span>
+                    </label>
+                    <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                      -₹{currentTdsAmt.toLocaleString("en-IN")} (@{currentTdsPct}%)
+                    </span>
+                  </div>
 
-              <div className="space-y-3 p-4 rounded-xl border bg-teal-500/5 border-teal-500/20">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground flex items-center justify-between">
-                    <span>Payment Received Status</span>
-                    <span className="text-[10px] text-teal-600 font-semibold">Required</span>
-                  </label>
-                  <select
-                    value={paymentForm.hospitalPaymentStatus}
-                    onChange={(e) => {
-                      const newStatus = e.target.value;
-                      const isRec = newStatus === "RECEIVED";
-                      setPaymentForm({
-                        ...paymentForm,
-                        hospitalPaymentStatus: newStatus,
-                        isHospitalPaymentReceived: isRec,
-                        hospitalReceivedAmount: isRec ? paymentForm.hospitalDealPrice : paymentForm.hospitalReceivedAmount,
-                        hospitalReceivedAt: isRec && !paymentForm.hospitalReceivedAt ? new Date().toISOString().split("T")[0] : paymentForm.hospitalReceivedAt,
-                      });
-                    }}
-                    className="w-full h-10 px-3 rounded-xl border bg-background text-xs font-bold focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="PENDING">Pending Payment (Not Received)</option>
-                    <option value="RECEIVED">Payment Received (Full)</option>
-                    <option value="PARTIALLY_RECEIVED">Partially Received</option>
-                  </select>
-                </div>
+                  {/* Preset Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[
+                      { label: "0% (No TDS)", value: 0 },
+                      { label: "2% (Standard)", value: 2 },
+                      { label: "5%", value: 5 },
+                      { label: "7.5%", value: 7.5 },
+                      { label: "10%", value: 10 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => {
+                          const newRate = preset.value;
+                          const newTdsAmt = Math.round(currentTotal * (newRate / 100));
+                          const newNetReceivable = Math.max(0, currentTotal - newTdsAmt + currentGstAmt);
+                          const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
+                          setPaymentForm({
+                            ...paymentForm,
+                            tdsPercentage: newRate,
+                            tdsAmount: newTdsAmt,
+                            hospitalReceivedAmount: isRec ? newNetReceivable : paymentForm.hospitalReceivedAmount,
+                          });
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                          currentTdsPct === preset.value
+                            ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                            : "bg-background border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-muted"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-muted-foreground">Amount Received (₹)</label>
+                  {/* Custom Rate Input */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">Custom TDS Rate (%):</span>
                     <Input
                       type="number"
-                      value={paymentForm.hospitalReceivedAmount}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, hospitalReceivedAmount: Number(e.target.value) })}
-                      className="h-9 rounded-lg text-xs font-bold"
-                      placeholder="e.g. 65000"
+                      min={0}
+                      max={10}
+                      step={0.1}
+                      value={paymentForm.tdsPercentage}
+                      onChange={(e) => {
+                        const val = Math.max(0, Math.min(10, Number(e.target.value) || 0));
+                        const newTdsAmt = Math.round(currentTotal * (val / 100));
+                        const newNetReceivable = Math.max(0, currentTotal - newTdsAmt + currentGstAmt);
+                        const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
+                        setPaymentForm({
+                          ...paymentForm,
+                          tdsPercentage: val,
+                          tdsAmount: newTdsAmt,
+                          hospitalReceivedAmount: isRec ? newNetReceivable : paymentForm.hospitalReceivedAmount,
+                        });
+                      }}
+                      className="h-8 w-24 text-xs font-bold"
+                    />
+                    <span className="text-[10px] text-muted-foreground">Range: 0% to 10%</span>
+                  </div>
+
+                  {/* Financial Settlement Breakdown Card */}
+                  <div className="bg-background/90 p-3 rounded-lg border text-[11px] space-y-1">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Hospital Deal Price (Gross):</span>
+                      <span className="font-semibold text-foreground">₹{currentTotal.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Bank Service Charge (Facilitation Fee):</span>
+                      <span className="font-semibold text-foreground">₹{currentServ.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Donor Reimbursement (Pure Expense):</span>
+                      <span className="font-semibold text-foreground">₹{currentReimb.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                      <span>Add GST (+18% on Service Charge):</span>
+                      <span className="font-semibold">+₹{currentGstAmt.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                      <span>Less TDS Withheld (-{currentTdsPct}% on Deal):</span>
+                      <span className="font-semibold">-₹{currentTdsAmt.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-teal-700 dark:text-teal-300 border-t pt-1">
+                      <span>Net Remittance Receivable:</span>
+                      <span>₹{currentNetReceivable.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between pt-0.5">
+                      <span className="text-muted-foreground">Actual Bank Remittance Entered:</span>
+                      <span className="font-bold text-emerald-600">₹{enteredRecvAmt.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between font-bold pt-0.5">
+                      <span className="text-muted-foreground">Remaining Balance Pending:</span>
+                      <span className={pendingBal > 0 ? "text-rose-600" : "text-emerald-600"}>
+                        ₹{pendingBal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 p-4 rounded-xl border bg-teal-500/5 border-teal-500/20">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Payment Received Status</span>
+                      <span className="text-[10px] text-teal-600 font-semibold">Required</span>
+                    </label>
+                    <select
+                      value={paymentForm.hospitalPaymentStatus}
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        const isRec = newStatus === "RECEIVED";
+                        setPaymentForm({
+                          ...paymentForm,
+                          hospitalPaymentStatus: newStatus,
+                          isHospitalPaymentReceived: isRec,
+                          hospitalReceivedAmount: isRec ? currentNetReceivable : paymentForm.hospitalReceivedAmount,
+                          hospitalReceivedAt: isRec && !paymentForm.hospitalReceivedAt ? new Date().toISOString().split("T")[0] : paymentForm.hospitalReceivedAt,
+                        });
+                      }}
+                      className="w-full h-10 px-3 rounded-xl border bg-background text-xs font-bold focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="PENDING">Pending Payment (Not Received)</option>
+                      <option value="RECEIVED">Payment Received (Full)</option>
+                      <option value="PARTIALLY_RECEIVED">Partially Received</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-muted-foreground">Amount Received in Bank (₹)</label>
+                      <Input
+                        type="number"
+                        value={paymentForm.hospitalReceivedAmount}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, hospitalReceivedAmount: Number(e.target.value) })}
+                        className="h-9 rounded-lg text-xs font-bold"
+                        placeholder="e.g. 58500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-muted-foreground">Payment Received Date</label>
+                      <Input
+                        type="date"
+                        value={paymentForm.hospitalReceivedAt}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, hospitalReceivedAt: e.target.value })}
+                        className="h-9 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Payment Reference / UTR Number</label>
+                    <Input
+                      value={paymentForm.hospitalPaymentRef}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, hospitalPaymentRef: e.target.value })}
+                      className="h-9 rounded-lg text-xs"
+                      placeholder="NEFT / RTGS / UTR / Cheque Reference"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-muted-foreground">Payment Received Date</label>
+                    <label className="text-[11px] font-semibold text-muted-foreground">Collection Remarks / Notes</label>
                     <Input
-                      type="date"
-                      value={paymentForm.hospitalReceivedAt}
-                      onChange={(e) => setPaymentForm({ ...paymentForm, hospitalReceivedAt: e.target.value })}
+                      value={paymentForm.hospitalNotes}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, hospitalNotes: e.target.value })}
                       className="h-9 rounded-lg text-xs"
+                      placeholder="e.g. Cleared by Apollo Fertility accounts dept."
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-muted-foreground">Payment Reference / UTR Number</label>
-                  <Input
-                    value={paymentForm.hospitalPaymentRef}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, hospitalPaymentRef: e.target.value })}
-                    className="h-9 rounded-lg text-xs"
-                    placeholder="NEFT / RTGS / UTR / Cheque Reference"
-                  />
+                <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsPaymentModalOpen(false)}
+                    className="rounded-xl text-xs h-9 px-4"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-xs h-9 px-5 gap-1.5 shadow-md"
+                  >
+                    {actionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    Save Payment Status
+                  </Button>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-muted-foreground">Collection Remarks / Notes</label>
-                  <Input
-                    value={paymentForm.hospitalNotes}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, hospitalNotes: e.target.value })}
-                    className="h-9 rounded-lg text-xs"
-                    placeholder="e.g. Cleared by Apollo Fertility accounts dept."
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsPaymentModalOpen(false)}
-                  className="rounded-xl text-xs h-9 px-4"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-xs h-9 px-5 gap-1.5 shadow-md"
-                >
-                  {actionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                  Save Payment Status
-                </Button>
-              </div>
-            </form>
-          )}
+              </form>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -2195,6 +2523,7 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
         <CompletedFileInvoiceModal
           isOpen={isInvoiceModalOpen}
           onClose={() => setIsInvoiceModalOpen(false)}
+          onInvoiceSaved={loadCompletedFiles}
           registration={selectedReg}
           donorType={
             selectedReg.donorType === "sperm" || donorTypeFilter === "sperm"

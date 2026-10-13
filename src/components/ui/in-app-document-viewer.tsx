@@ -28,7 +28,15 @@ import { cn } from "@/lib/utils";
 
 const ReactPdfViewer = dynamic(
   () => import("@/features/pdf-preview/components/ReactPdfViewer"),
-  { ssr: false }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center w-full h-full min-h-[350px] gap-2">
+        <Loader2 className="w-7 h-7 animate-spin text-rose-600" />
+        <p className="text-xs font-semibold text-muted-foreground">Loading preview...</p>
+      </div>
+    ),
+  }
 );
 
 export interface VerificationData {
@@ -73,8 +81,6 @@ export function InAppDocumentViewer({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, posX: 0, posY: 0 });
-
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -209,23 +215,34 @@ export function InAppDocumentViewer({
       return;
     }
 
-    const iframe = iframeRef.current;
-    if (iframe && iframe.contentWindow) {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        return;
-      } catch (err) {
-        console.warn("Direct iframe print failed, falling back:", err);
+    try {
+      const existingIframe = document.getElementById("print-pdf-viewer-hidden-iframe");
+      if (existingIframe) {
+        existingIframe.remove();
       }
-    }
+      const printIframe = document.createElement("iframe");
+      printIframe.id = "print-pdf-viewer-hidden-iframe";
+      printIframe.style.position = "fixed";
+      printIframe.style.top = "-9999px";
+      printIframe.style.left = "-9999px";
+      printIframe.style.width = "1px";
+      printIframe.style.height = "1px";
+      printIframe.style.border = "none";
+      printIframe.style.opacity = "0";
+      printIframe.src = internalProxyUrl;
 
-    const printWin = window.open(internalProxyUrl, "_blank");
-    if (printWin) {
-      printWin.onload = () => {
-        printWin.focus();
-        printWin.print();
+      printIframe.onload = () => {
+        try {
+          printIframe.contentWindow?.focus();
+          printIframe.contentWindow?.print();
+        } catch {
+          window.open(internalProxyUrl, "_blank");
+        }
       };
+
+      document.body.appendChild(printIframe);
+    } catch {
+      window.open(internalProxyUrl, "_blank");
     }
   };
 
@@ -406,14 +423,14 @@ export function InAppDocumentViewer({
                 : "flex-1 h-full min-h-[450px]"
             )}
           >
-            {loading && !hasError && (
+            {isImage && loading && !hasError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/85 backdrop-blur-2xs z-20">
                 <Loader2 className="w-7 h-7 animate-spin text-rose-600" />
                 <p className="text-xs font-semibold text-muted-foreground">Loading preview...</p>
               </div>
             )}
 
-            {hasError && (
+            {isImage && hasError && (
               <div className="flex flex-col items-center justify-center gap-3 p-5 text-center max-w-sm bg-white dark:bg-slate-900 rounded-2xl border border-red-200 shadow-xs z-10">
                 <AlertCircle className="w-8 h-8 text-red-500" />
                 <div>
@@ -429,9 +446,6 @@ export function InAppDocumentViewer({
                     onClick={() => {
                       setHasError(false);
                       setLoading(true);
-                      if (iframeRef.current) {
-                        iframeRef.current.src = internalProxyUrl;
-                      }
                     }}
                     className="rounded-lg text-xs gap-1"
                   >
@@ -453,6 +467,11 @@ export function InAppDocumentViewer({
                   title={title}
                   fileName={resolvedName}
                   embedded={true}
+                  onLoadSuccess={() => setLoading(false)}
+                  onLoadError={() => {
+                    setLoading(false);
+                    setHasError(true);
+                  }}
                 />
               </div>
             ) : (

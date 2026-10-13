@@ -49,6 +49,8 @@ import {
   MoreHorizontal,
   XCircle,
   Lock,
+  GitBranch,
+  Stethoscope,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -155,9 +157,11 @@ export default function ManageRegistrationsPage() {
   // Search & Filters State
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("APPROVED");
   const [donorTypeFilter, setDonorTypeFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [fromDateFilter, setFromDateFilter] = useState("");
+  const [toDateFilter, setToDateFilter] = useState("");
   const [sortField, setSortField] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -223,11 +227,32 @@ export default function ManageRegistrationsPage() {
   const [hospitalSearch, setHospitalSearch] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [tempSelectedHospitalId, setTempSelectedHospitalId] = useState<string | null>(null);
+  const [tempSelectedBranch, setTempSelectedBranch] = useState<{
+    branchId: string;
+    branchName: string;
+    doctorName?: string;
+  } | null>(null);
+  const [expandedHospitalIds, setExpandedHospitalIds] = useState<string[]>([]);
+  
+  // Dedicated Doctor Assignment State
+  const [isAssignDoctorOpen, setIsAssignDoctorOpen] = useState(false);
+  const [doctorAssignReg, setDoctorAssignReg] = useState<any | null>(null);
+  const [selectedDoctorName, setSelectedDoctorName] = useState("");
+  const [customDoctorInput, setCustomDoctorInput] = useState("");
+  const [doctorModalBranchId, setDoctorModalBranchId] = useState("");
+
+  // Bulk Doctor Assignment State
+  const [isBulkAssignDoctorOpen, setIsBulkAssignDoctorOpen] = useState(false);
+  const [bulkDoctorName, setBulkDoctorName] = useState("");
+  const [bulkCustomDoctorInput, setBulkCustomDoctorInput] = useState("");
+  const [bulkDoctorHospitalId, setBulkDoctorHospitalId] = useState("");
+  const [bulkDoctorBranchId, setBulkDoctorBranchId] = useState("");
 
   // Edit Oocyte Pickup Date Modal
   const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
   const [pickupReg, setPickupReg] = useState<any | null>(null);
   const [pickupDateValue, setPickupDateValue] = useState("");
+  const [pickupLocationValue, setPickupLocationValue] = useState("");
   const [savingPickupDate, setSavingPickupDate] = useState(false);
 
   // In-App Document Viewer State
@@ -299,6 +324,10 @@ export default function ManageRegistrationsPage() {
   const handleOpenPickupModal = (reg: any) => {
     setPickupReg(reg);
     setPickupDateValue(formatDateForInput(reg.pickupDate));
+    const hospName = typeof reg.assignedHospital === "object" ? reg.assignedHospital?.name : "";
+    const hospCity = typeof reg.assignedHospital === "object" ? reg.assignedHospital?.city : "";
+    const fallbackLoc = hospName ? (hospCity ? `${hospName}, ${hospCity}` : hospName) : "";
+    setPickupLocationValue(reg.opuLocation || reg.pickupLocation || fallbackLoc || "");
     setIsPickupModalOpen(true);
   };
 
@@ -308,15 +337,20 @@ export default function ManageRegistrationsPage() {
     try {
       const targetId = pickupReg.registrationId || pickupReg._id;
       const cleanPickup = (pickupDateValue || "").trim();
+      const cleanLocation = (pickupLocationValue || "").trim();
       const updatedSim = {
         ...pickupReg,
         pickupDate: cleanPickup,
+        pickupLocation: cleanLocation,
+        opuLocation: cleanLocation,
       };
       const autoStatus = computeEggDonorManagementStatus(updatedSim).status;
 
       // 1. Direct atomic patch for guaranteed persistence
       const patchRes = await patchAdminRegistrationFieldsAction(targetId, {
         pickupDate: cleanPickup,
+        pickupLocation: cleanLocation,
+        opuLocation: cleanLocation,
         status: autoStatus,
       });
 
@@ -324,16 +358,18 @@ export default function ManageRegistrationsPage() {
       const statusRes = await updateAdminRegistrationStatusAction({
         registrationId: targetId,
         pickupDate: cleanPickup,
+        pickupLocation: cleanLocation,
+        opuLocation: cleanLocation,
         status: autoStatus,
       }).catch((e: any) => ({ success: false, error: e?.message }));
 
       if (patchRes.success || statusRes.success) {
         if (autoStatus === "WAITING_FORM13") {
-          toast.success("Oocyte pickup date saved! Status automatically advanced to WAITING FORM 13.");
+          toast.success("Oocyte pickup date & OPU location saved! Status automatically advanced to WAITING FORM 13.");
         } else if (autoStatus === "FILE_COMPLETED") {
-          toast.success("Oocyte pickup date saved! Status is FILE COMPLETED.");
+          toast.success("Oocyte pickup date & OPU location saved! Status is FILE COMPLETED.");
         } else {
-          toast.success("Oocyte pickup date saved successfully!");
+          toast.success("Oocyte pickup date & OPU location saved successfully!");
         }
         setIsPickupModalOpen(false);
         const updatedPickup = cleanPickup;
@@ -345,6 +381,8 @@ export default function ManageRegistrationsPage() {
               ? {
                   ...r,
                   pickupDate: updatedPickup,
+                  pickupLocation: cleanLocation,
+                  opuLocation: cleanLocation,
                   status: autoStatus,
                 }
               : r
@@ -356,6 +394,8 @@ export default function ManageRegistrationsPage() {
               ? {
                   ...prev,
                   pickupDate: updatedPickup,
+                  pickupLocation: cleanLocation,
+                  opuLocation: cleanLocation,
                   status: autoStatus,
                 }
               : null
@@ -836,6 +876,13 @@ export default function ManageRegistrationsPage() {
   // Bulk Operations Modals
   const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
   const [bulkHospitalSearch, setBulkHospitalSearch] = useState("");
+  const [bulkSelectedHospitalId, setBulkSelectedHospitalId] = useState<string | null>(null);
+  const [bulkSelectedBranch, setBulkSelectedBranch] = useState<{
+    branchId: string;
+    branchName: string;
+    doctorName?: string;
+  } | null>(null);
+  const [bulkExpandedHospitalIds, setBulkExpandedHospitalIds] = useState<string[]>([]);
 
   // Fetch Approved Registrations (Egg Donors Only)
   async function loadRegistrations() {
@@ -848,13 +895,26 @@ export default function ManageRegistrationsPage() {
         donorType: "egg",
         status: statusFilter || undefined,
         hospital: hospitalFilter || undefined,
+        branch: branchFilter || undefined,
+        startDate: fromDateFilter || undefined,
+        endDate: toDateFilter || undefined,
       })) as any;
       if (data.success && data.registrations) {
         // Strictly exclude any sperm donor records and auto-sync status for egg donors in management
         const eggOnly = (data.registrations || [])
-          .filter(
-            (r: any) => r.donorType !== "sperm" && !r.registrationId?.startsWith("MED-SD") && !r.registrationId?.startsWith("SPM")
-          )
+          .filter((r: any) => {
+            if (r.donorType === "sperm" || r.registrationId?.startsWith("MED-SD") || r.registrationId?.startsWith("SPM")) {
+              return false;
+            }
+            if (hospitalFilter) {
+              const hId = typeof r.assignedHospital === "object" ? r.assignedHospital?._id : r.assignedHospital;
+              if (hId && hId !== hospitalFilter) return false;
+            }
+            if (branchFilter && r.assignedBranch !== branchFilter) {
+              return false;
+            }
+            return true;
+          })
           .map((r: any) => {
             const computed = computeEggDonorManagementStatus(r).status;
             if (["APPROVED", "WAITING_FORM13", "FILE_COMPLETED"].includes(r.status) && computed !== r.status) {
@@ -912,7 +972,7 @@ export default function ManageRegistrationsPage() {
 
   useEffect(() => {
     loadRegistrations();
-  }, [search, hospitalFilter, statusFilter, donorTypeFilter, currentPage]);
+  }, [search, hospitalFilter, branchFilter, statusFilter, donorTypeFilter, fromDateFilter, toDateFilter, currentPage]);
 
   useEffect(() => {
     loadHospitals();
@@ -942,8 +1002,33 @@ export default function ManageRegistrationsPage() {
     }
   }, [selectedReg, detailTab]);
 
+  const openAssignHospitalModal = (reg: any) => {
+    setSelectedReg(reg);
+    const currentHospId = reg.assignedHospital?._id || reg.assignedHospital || null;
+    setTempSelectedHospitalId(currentHospId);
+    if (reg.assignedBranch) {
+      setTempSelectedBranch({
+        branchName: reg.assignedBranch,
+        branchId: reg.assignedBranchId || "",
+        doctorName: reg.assignedDoctor || ""
+      });
+    } else {
+      setTempSelectedBranch(null);
+    }
+    if (currentHospId) {
+      setExpandedHospitalIds([currentHospId]);
+    } else {
+      setExpandedHospitalIds([]);
+    }
+    setHospitalSearch("");
+    setIsAssignOpen(true);
+  };
+
   // Update Hospital Assignment
-  const handleAssignHospital = async (hospitalId: string | null) => {
+  const handleAssignHospital = async (
+    hospitalId: string | null,
+    branchInfo?: { branchName: string; branchId: string; doctorName?: string } | null
+  ) => {
     if (!selectedReg) return;
 
     setActionLoading(true);
@@ -951,20 +1036,43 @@ export default function ManageRegistrationsPage() {
       const data = await updateAdminRegistrationStatusAction({
         registrationId: selectedReg.registrationId,
         assignedHospitalId: hospitalId,
+        assignedBranch: branchInfo?.branchName || "",
+        assignedBranchId: branchInfo?.branchId || "",
+        assignedDoctor: branchInfo?.doctorName || "",
       });
       if (data.success) {
-        toast.success(hospitalId ? "Hospital mapped successfully!" : "Hospital mapping cleared.");
+        toast.success(
+          hospitalId
+            ? (branchInfo?.branchName ? `Mapped to ${branchInfo.branchName} successfully!` : "Hospital mapped successfully!")
+            : "Hospital mapping cleared."
+        );
         setIsAssignOpen(false);
         const mappedHosp = hospitals.find((h) => h._id === hospitalId) || null;
         setRegistrations((prev) =>
           prev.map((r) =>
             r.registrationId === selectedReg.registrationId
-              ? { ...r, assignedHospital: mappedHosp }
+              ? {
+                  ...r,
+                  assignedHospital: mappedHosp,
+                  assignedBranch: branchInfo?.branchName || "",
+                  assignedBranchId: branchInfo?.branchId || "",
+                  assignedDoctor: branchInfo?.doctorName || ""
+                }
               : r
           )
         );
         if (selectedReg) {
-          setSelectedReg((prev: any) => prev ? { ...prev, assignedHospital: mappedHosp } : null);
+          setSelectedReg((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  assignedHospital: mappedHosp,
+                  assignedBranch: branchInfo?.branchName || "",
+                  assignedBranchId: branchInfo?.branchId || "",
+                  assignedDoctor: branchInfo?.doctorName || ""
+                }
+              : null
+          );
         }
         await loadRegistrations();
       } else {
@@ -978,7 +1086,10 @@ export default function ManageRegistrationsPage() {
   };
 
   // Bulk Assignment
-  const handleBulkAssign = async (hospitalId: string) => {
+  const handleBulkAssign = async (
+    hospitalId: string,
+    branchInfo?: { branchName: string; branchId: string; doctorName?: string } | null
+  ) => {
     if (selectedIds.length === 0) return;
 
     setActionLoading(true);
@@ -991,6 +1102,9 @@ export default function ManageRegistrationsPage() {
         const data = await updateAdminRegistrationStatusAction({
           registrationId: reg.registrationId,
           assignedHospitalId: hospitalId,
+          assignedBranch: branchInfo?.branchName || "",
+          assignedBranchId: branchInfo?.branchId || "",
+          assignedDoctor: branchInfo?.doctorName || "",
         });
         if (data.success) {
           successCount++;
@@ -1000,9 +1114,99 @@ export default function ManageRegistrationsPage() {
       toast.success(`Bulk assignment complete! Mapped ${successCount} registrations.`);
       setIsBulkAssignOpen(false);
       setSelectedIds([]);
+      setBulkSelectedHospitalId(null);
+      setBulkSelectedBranch(null);
       loadRegistrations();
     } catch (error) {
       toast.error("Network error during bulk assignment.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Dedicated Doctor Assignment Handlers
+  const openAssignDoctorModal = (reg: any) => {
+    setDoctorAssignReg(reg);
+    setSelectedDoctorName(reg.assignedDoctor ? `Dr. ${reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}` : "");
+    setCustomDoctorInput("");
+    setDoctorModalBranchId(reg.assignedBranchId || reg.assignedBranch || "");
+    setIsAssignDoctorOpen(true);
+  };
+
+  const handleAssignDoctor = async (docName: string, branchInfo?: { branchName: string; branchId: string }) => {
+    if (!doctorAssignReg) return;
+    const finalDoc = docName.trim();
+    setActionLoading(true);
+    try {
+      const payload: any = {
+        registrationId: doctorAssignReg.registrationId,
+        assignedDoctor: finalDoc,
+      };
+      if (branchInfo?.branchName) {
+        payload.assignedBranch = branchInfo.branchName;
+        payload.assignedBranchId = branchInfo.branchId;
+      }
+      const data = await updateAdminRegistrationStatusAction(payload);
+      if (data.success) {
+        toast.success(finalDoc ? `Doctor updated to Dr. ${finalDoc.replace(/^Dr\.?\s*/i, "")}` : "Doctor unassigned.");
+        setIsAssignDoctorOpen(false);
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.registrationId === doctorAssignReg.registrationId
+              ? {
+                  ...r,
+                  assignedDoctor: finalDoc,
+                  ...(branchInfo?.branchName ? { assignedBranch: branchInfo.branchName, assignedBranchId: branchInfo.branchId } : {}),
+                }
+              : r
+          )
+        );
+        if (selectedReg && selectedReg.registrationId === doctorAssignReg.registrationId) {
+          setSelectedReg((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  assignedDoctor: finalDoc,
+                  ...(branchInfo?.branchName ? { assignedBranch: branchInfo.branchName, assignedBranchId: branchInfo.branchId } : {}),
+                }
+              : null
+          );
+        }
+        setDoctorAssignReg(null);
+        await loadRegistrations();
+      } else {
+        toast.error(data.error || "Failed to update doctor assignment.");
+      }
+    } catch {
+      toast.error("Network error during doctor update.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBulkAssignDoctor = async (docName: string) => {
+    const finalDoc = docName.trim();
+    if (selectedIds.length === 0 || !finalDoc) return;
+    setActionLoading(true);
+    let successCount = 0;
+    try {
+      for (const regId of selectedIds) {
+        const data = await updateAdminRegistrationStatusAction({
+          registrationId: regId,
+          assignedDoctor: finalDoc,
+        });
+        if (data.success) {
+          successCount++;
+        }
+      }
+      toast.success(`Assigned Dr. ${finalDoc.replace(/^Dr\.?\s*/i, "")} to ${successCount} registrations.`);
+      setIsBulkAssignDoctorOpen(false);
+      setSelectedIds([]);
+      setBulkDoctorName("");
+      setBulkCustomDoctorInput("");
+      await loadRegistrations();
+    } catch {
+      toast.error("Error updating bulk doctor assignment.");
     } finally {
       setActionLoading(false);
     }
@@ -1354,20 +1558,48 @@ export default function ManageRegistrationsPage() {
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds([]);
-  }, [search, hospitalFilter, dateFilter, statusFilter]);
+  }, [search, hospitalFilter, branchFilter, fromDateFilter, toDateFilter, statusFilter]);
+
+  // Selected hospital and available branches for filtering
+  const selectedHospitalObj = hospitals.find((h) => h._id === hospitalFilter);
+  const availableBranches = selectedHospitalObj
+    ? (selectedHospitalObj.branches || [])
+    : hospitals.flatMap((h) => (h.branches || []).map((b: any) => ({ ...b, hospitalName: h.name })));
 
   // Filtered hospitals lists
-  const filteredHospitals = hospitals.filter(h =>
-    h.status === "ACTIVE" &&
-    (h.name.toLowerCase().includes(hospitalSearch.toLowerCase()) ||
-     h.address.toLowerCase().includes(hospitalSearch.toLowerCase()))
-  );
+  const filteredHospitals = hospitals.filter(h => {
+    if (h.status && h.status !== "ACTIVE") return false;
+    const term = hospitalSearch.trim().toLowerCase();
+    if (!term) return true;
+    const matchName = h.name?.toLowerCase().includes(term);
+    const matchShort = h.shortName?.toLowerCase().includes(term);
+    const matchAddress = h.address?.toLowerCase().includes(term);
+    const matchCity = h.city?.toLowerCase().includes(term);
+    const matchBranch = Array.isArray(h.branches) && h.branches.some((b: any) =>
+      b.branchName?.toLowerCase().includes(term) ||
+      b.branchCode?.toLowerCase().includes(term) ||
+      b.city?.toLowerCase().includes(term) ||
+      b.doctorName?.toLowerCase().includes(term)
+    );
+    return Boolean(matchName || matchShort || matchAddress || matchCity || matchBranch);
+  });
 
-  const bulkFilteredHospitals = hospitals.filter(h =>
-    h.status === "ACTIVE" &&
-    (h.name.toLowerCase().includes(bulkHospitalSearch.toLowerCase()) ||
-     h.address.toLowerCase().includes(bulkHospitalSearch.toLowerCase()))
-  );
+  const bulkFilteredHospitals = hospitals.filter(h => {
+    if (h.status && h.status !== "ACTIVE") return false;
+    const term = bulkHospitalSearch.trim().toLowerCase();
+    if (!term) return true;
+    const matchName = h.name?.toLowerCase().includes(term);
+    const matchShort = h.shortName?.toLowerCase().includes(term);
+    const matchAddress = h.address?.toLowerCase().includes(term);
+    const matchCity = h.city?.toLowerCase().includes(term);
+    const matchBranch = Array.isArray(h.branches) && h.branches.some((b: any) =>
+      b.branchName?.toLowerCase().includes(term) ||
+      b.branchCode?.toLowerCase().includes(term) ||
+      b.city?.toLowerCase().includes(term) ||
+      b.doctorName?.toLowerCase().includes(term)
+    );
+    return Boolean(matchName || matchShort || matchAddress || matchCity || matchBranch);
+  });
 
   return (
     <div className="space-y-6 pb-12 text-xs">
@@ -1505,12 +1737,33 @@ export default function ManageRegistrationsPage() {
           <div>
             <select
               value={hospitalFilter}
-              onChange={(e) => setHospitalFilter(e.target.value)}
-              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
+              onChange={(e) => {
+                setHospitalFilter(e.target.value);
+                setBranchFilter("");
+              }}
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500 font-medium"
             >
-              <option value="">All Affiliated Hospitals</option>
-              {hospitals.map(h => (
-                <option key={h._id} value={h._id}>{h.name}</option>
+              <option value="">All Hospitals</option>
+              {hospitals.map((h) => (
+                <option key={h._id} value={h._id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Branch Filter */}
+          <div>
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500 font-medium"
+            >
+              <option value="">All Branches</option>
+              {availableBranches.map((b: any, bIdx: number) => (
+                <option key={b._id || `${b.branchName}-${bIdx}`} value={b.branchName}>
+                  {b.branchName} {b.city ? `(${b.city})` : ""} {!selectedHospitalObj && b.hospitalName ? `• ${b.hospitalName}` : ""}
+                </option>
               ))}
             </select>
           </div>
@@ -1574,50 +1827,78 @@ export default function ManageRegistrationsPage() {
               )}
             </select>
           </div>
-
-          {/* Date Filter */}
-          <div>
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
-            />
-          </div>
         </div>
 
-        {/* Sorting options */}
-        <div className="flex flex-wrap items-center justify-between gap-4 text-xs pt-1 border-t border-slate-100 dark:border-slate-900">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="font-semibold text-slate-500">Sort by:</span>
-            <button 
-              onClick={() => { setSortField("createdAt"); setSortOrder(sortOrder === "desc" ? "asc" : "desc"); }}
-              className={`px-3 py-1 rounded-lg ${sortField === "createdAt" ? "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400 font-bold" : "text-slate-600"}`}
-            >
-              Approved Date {sortField === "createdAt" && (sortOrder === "desc" ? "↓" : "↑")}
-            </button>
-            <button 
-              onClick={() => { setSortField("fullName"); setSortOrder(sortOrder === "desc" ? "asc" : "desc"); }}
-              className={`px-3 py-1 rounded-lg ${sortField === "fullName" ? "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400 font-bold" : "text-slate-600"}`}
-            >
-              Patient Name {sortField === "fullName" && (sortOrder === "desc" ? "↓" : "↑")}
-            </button>
+        {/* Date Range & Sorting Options */}
+        <div className="flex flex-wrap items-center justify-between gap-4 text-xs pt-3 border-t border-slate-100 dark:border-slate-900">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-slate-500">Date Range:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">From:</span>
+              <input
+                type="date"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">To:</span>
+              <input
+                type="date"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            {(fromDateFilter || toDateFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFromDateFilter("");
+                  setToDateFilter("");
+                }}
+                className="text-[11px] text-rose-500 hover:text-rose-600 underline font-medium"
+              >
+                Clear Dates
+              </button>
+            )}
           </div>
 
-          {(search || hospitalFilter || statusFilter !== "APPROVED" || dateFilter || activeTab !== "APPROVED") && (
-            <button
-              onClick={() => {
-                setSearch("");
-                setHospitalFilter("");
-                setDateFilter("");
-                handleTabChange("APPROVED");
-              }}
-              className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 font-semibold underline flex items-center gap-1 cursor-pointer"
-            >
-              <X className="w-3 h-3" />
-              Reset All Filters
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-500">Sort by:</span>
+              <button 
+                onClick={() => { setSortField("createdAt"); setSortOrder(sortOrder === "desc" ? "asc" : "desc"); }}
+                className={`px-3 py-1 rounded-lg ${sortField === "createdAt" ? "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400 font-bold" : "text-slate-600"}`}
+              >
+                Approved Date {sortField === "createdAt" && (sortOrder === "desc" ? "↓" : "↑")}
+              </button>
+              <button 
+                onClick={() => { setSortField("fullName"); setSortOrder(sortOrder === "desc" ? "asc" : "desc"); }}
+                className={`px-3 py-1 rounded-lg ${sortField === "fullName" ? "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400 font-bold" : "text-slate-600"}`}
+              >
+                Patient Name {sortField === "fullName" && (sortOrder === "desc" ? "↓" : "↑")}
+              </button>
+            </div>
+
+            {(search || hospitalFilter || branchFilter || statusFilter !== "APPROVED" || fromDateFilter || toDateFilter || activeTab !== "APPROVED") && (
+              <button
+                onClick={() => {
+                  setSearch("");
+                  setHospitalFilter("");
+                  setBranchFilter("");
+                  setFromDateFilter("");
+                  setToDateFilter("");
+                  handleTabChange("APPROVED");
+                }}
+                className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 font-semibold underline flex items-center gap-1 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                Reset All Filters
+              </button>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -1630,9 +1911,19 @@ export default function ManageRegistrationsPage() {
           <div className="flex items-center gap-2">
             <Button
               onClick={() => setIsBulkAssignOpen(true)}
-              className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 py-1 px-3 h-8"
+              className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 py-1 px-3 h-8 cursor-pointer"
             >
               <Building2 className="w-3.5 h-3.5" /> Assign Hospital
+            </Button>
+            <Button
+              onClick={() => {
+                setBulkDoctorName("");
+                setBulkCustomDoctorInput("");
+                setIsBulkAssignDoctorOpen(true);
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1 py-1 px-3 h-8 cursor-pointer shadow-xs"
+            >
+              <Stethoscope className="w-3.5 h-3.5" /> Assign Doctor
             </Button>
             <Button
               onClick={handleBulkPrint}
@@ -1729,6 +2020,7 @@ export default function ManageRegistrationsPage() {
                   <th className="p-3.5 whitespace-nowrap">Donor ID</th>
                   <th className="p-3.5 whitespace-nowrap">Donor Name</th>
                   <th className="p-3.5 whitespace-nowrap">Assigned Hospital</th>
+                  <th className="p-3.5 whitespace-nowrap">Treating Doctor</th>
                   <th className="p-3.5 whitespace-nowrap">Approved By</th>
                   <th className="p-3.5 whitespace-nowrap">Donor Deal</th>
                   <th className="p-3.5 whitespace-nowrap">Payout Status</th>
@@ -1782,16 +2074,26 @@ export default function ManageRegistrationsPage() {
                       </td>
                       <td className="p-3.5 whitespace-nowrap">
                         {reg.assignedHospital ? (
-                          <div className="space-y-0.5">
-                            <div className="font-semibold text-teal-800 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-teal-200 dark:border-teal-800 whitespace-nowrap">
+                          <div className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => openAssignHospitalModal(reg)}
+                              className="font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-950/60 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-teal-200 dark:border-teal-800 whitespace-nowrap cursor-pointer transition-colors"
+                              title="Click to view or change hospital/branch"
+                            >
                               <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                              <span className="truncate max-w-[160px]" title={reg.assignedHospital.name}>
+                              <span className="truncate max-w-[150px]" title={reg.assignedHospital.name}>
                                 {reg.assignedHospital.name}
                               </span>
-                            </div>
-                            {Boolean(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice) && (
-                              <div className="text-[10px] font-bold text-blue-600 font-mono">
-                                Hospital Deal: ₹{Number(reg.clinicDeal?.hospitalDealPrice || (dealInfo.category === "profile" ? (reg.assignedHospital?.profiledonorDealPrice || reg.assignedHospital?.donorDealPrice) : reg.assignedHospital?.donorDealPrice)).toLocaleString()}
+                            </button>
+
+                            {/* Branch Indicator */}
+                            {reg.assignedBranch && (
+                              <div className="flex items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400 pl-1">
+                                <GitBranch className="w-3 h-3 text-teal-600 shrink-0" />
+                                <span className="truncate max-w-[150px]" title={reg.assignedBranch}>
+                                  {reg.assignedBranch}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -1799,14 +2101,34 @@ export default function ManageRegistrationsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              setSelectedReg(reg);
-                              setTempSelectedHospitalId(null);
-                              setIsAssignOpen(true);
-                            }}
-                            className="h-6 text-[10px] text-teal-600 border-teal-200 hover:bg-teal-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap"
+                            onClick={() => openAssignHospitalModal(reg)}
+                            className="h-6 text-[10px] text-teal-600 border-teal-200 hover:bg-teal-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
                           >
                             + Assign Hospital
+                          </Button>
+                        )}
+                      </td>
+                      <td className="p-3.5 whitespace-nowrap">
+                        {reg.assignedDoctor ? (
+                          <button
+                            type="button"
+                            onClick={() => openAssignDoctorModal(reg)}
+                            className="font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-950/60 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-purple-200 dark:border-purple-800 whitespace-nowrap cursor-pointer transition-colors"
+                            title="Click to change treating doctor"
+                          >
+                            <Stethoscope className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span className="truncate max-w-[150px]" title={reg.assignedDoctor}>
+                              Dr. {reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}
+                            </span>
+                          </button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openAssignDoctorModal(reg)}
+                            className="h-6 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
+                          >
+                            + Assign Doctor
                           </Button>
                         )}
                       </td>
@@ -2141,100 +2463,360 @@ export default function ManageRegistrationsPage() {
         )}
       </Card>
 
-      {/* DIALOG 1: MAP HOSPITAL */}
+      {/* DIALOG 1: MAP HOSPITAL & BRANCH */}
       <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-xl rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-              <Building2 className="w-5 h-5 text-teal-600" /> Map Partner Clinic
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base">
+              <Building2 className="w-5 h-5 text-teal-600" /> Map Partner Hospital & Branch
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Assign registration: <span className="font-mono font-bold">{selectedReg?.registrationId}</span> to an active hospital.
+              Assign registration: <span className="font-mono font-bold">{selectedReg?.registrationId}</span> to a partner hospital and choose the specific branch center.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Show Current Hospital */}
+          <div className="space-y-4 py-2 text-xs">
+            {/* Show Current Hospital & Branch Assignment */}
             {selectedReg?.assignedHospital && (
-              <div className="p-3.5 bg-teal-50/50 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900 rounded-xl space-y-1">
-                <div className="text-[10px] text-teal-700 font-bold uppercase">Currently Assigned to:</div>
-                <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedReg.assignedHospital.name}</div>
-                <div className="text-xs text-slate-500">{selectedReg.assignedHospital.address}</div>
-                <Button
-                  onClick={() => handleAssignHospital(null)}
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-7 bg-white text-red-600 hover:text-red-700 text-[10px] rounded-lg border-slate-200 hover:bg-red-50"
-                  disabled={actionLoading}
-                >
-                  Unassign Hospital mapping
-                </Button>
+              <div className="p-3.5 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-teal-700 dark:text-teal-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Currently Assigned
+                  </span>
+                  <Button
+                    onClick={() => handleAssignHospital(null, null)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-[10px] rounded-lg p-1 px-2 cursor-pointer"
+                    disabled={actionLoading}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" /> Unassign Clinic
+                  </Button>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span>{selectedReg.assignedHospital.name}</span>
+                  </div>
+                  
+                  {selectedReg.assignedBranch ? (
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 pl-6">
+                      <GitBranch className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                      <span>Branch: {selectedReg.assignedBranch}</span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 pl-6">
+                      Branch: Main / Single Center
+                    </div>
+                  )}
+
+                  {selectedReg.assignedDoctor && (
+                    <div className="text-[11px] text-purple-700 dark:text-purple-300 font-medium pl-6 flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3 text-purple-600 shrink-0" />
+                      <span>Treating Doctor: Dr. {selectedReg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}</span>
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-slate-500 pl-6">
+                    {selectedReg.assignedHospital.address}
+                  </div>
+                </div>
               </div>
             )}
 
-
-
-            {/* Search Clinics */}
-            <div className="space-y-2">
-              <label className="font-bold text-slate-700">Select Partner Hospital:</label>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filter active clinics by name or city..."
-                  value={hospitalSearch}
-                  onChange={(e) => setHospitalSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                />
+            {/* Professional Step-by-Step Dropdown Mapping */}
+            <div className="space-y-4 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300 pb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Choose Partner Clinic & Designated Branch</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  {hospitals.length} partner clinics available
+                </span>
               </div>
 
-              {/* Clinic list */}
-              <div className="max-h-40 overflow-y-auto border border-slate-100 dark:border-slate-900 rounded-xl divide-y divide-slate-50 dark:divide-slate-900">
-                {hospitalsLoading ? (
-                  <div className="p-8 text-center text-xs text-slate-400">Loading clinics...</div>
-                ) : filteredHospitals.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400">No active clinics available.</div>
-                ) : (
-                  filteredHospitals.map(h => (
-                    <button
-                      key={h._id}
-                      type="button"
-                      onClick={() => setTempSelectedHospitalId(h._id)}
-                      className={`w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-900 flex justify-between items-center group text-xs ${tempSelectedHospitalId === h._id ? "bg-teal-50/50 dark:bg-teal-950/20" : ""}`}
-                      disabled={actionLoading}
-                    >
-                      <div className="space-y-0.5">
-                        <div className={`font-semibold text-slate-800 dark:text-slate-200 group-hover:text-teal-600 ${tempSelectedHospitalId === h._id ? "text-teal-600 font-bold" : ""}`}>{h.name}</div>
-                        <div className="text-[10px] text-slate-500">{h.city}, {h.state}</div>
-                      </div>
-                      {tempSelectedHospitalId === h._id && (
-                        <Check className="w-4 h-4 text-teal-600 shrink-0 font-bold" />
+              {/* 1. Hospital Dropdown */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>1. Select Hospital / Clinic: <span className="text-red-500">*</span></span>
+                  {tempSelectedHospitalId && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Selected
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={tempSelectedHospitalId || ""}
+                  onChange={(e) => {
+                    const hospId = e.target.value;
+                    setTempSelectedHospitalId(hospId || null);
+                    if (!hospId) {
+                      setTempSelectedBranch(null);
+                      return;
+                    }
+                    const hosp = hospitals.find(h => h._id === hospId);
+                    if (hosp?.branches && hosp.branches.length > 0) {
+                      const firstB = hosp.branches[0];
+                      const firstDoc = firstB.doctors && firstB.doctors.length > 0
+                        ? (typeof firstB.doctors[0] === "string" ? firstB.doctors[0] : firstB.doctors[0].name)
+                        : (firstB.doctorName || "");
+                      setTempSelectedBranch({
+                        branchId: firstB._id || "branch_0",
+                        branchName: firstB.branchName,
+                        doctorName: firstDoc
+                      });
+                    } else {
+                      setTempSelectedBranch({
+                        branchId: "main",
+                        branchName: "Main Center",
+                        doctorName: hosp?.doctorName || ""
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                >
+                  <option value="">-- Choose Partner Hospital / ART Clinic --</option>
+                  {hospitals.map(h => (
+                    <option key={h._id} value={h._id}>
+                      {h.name} {h.shortName ? `(${h.shortName})` : ""} {h.city ? `• ${h.city}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2 & 3: Branch and Treatment Doctor (enabled once hospital is picked) */}
+              {tempSelectedHospitalId && (() => {
+                const hosp = hospitals.find(h => h._id === tempSelectedHospitalId);
+                const hasBranches = Array.isArray(hosp?.branches) && hosp.branches.length > 0;
+                const branches = hosp?.branches || [];
+                const currentBranchObj = branches.find((b: any) => 
+                  b._id === tempSelectedBranch?.branchId || b.branchName === tempSelectedBranch?.branchName
+                ) || (branches.length > 0 ? branches[0] : null);
+
+                return (
+                  <div className="space-y-3.5 p-3.5 rounded-2xl bg-teal-50/40 dark:bg-slate-900/60 border border-teal-200/60 dark:border-slate-800">
+                    {/* Branch Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <GitBranch className="w-3.5 h-3.5 text-teal-600" />
+                          <span>2. Select Branch Center: <span className="text-red-500">*</span></span>
+                        </span>
+                        {hasBranches && (
+                          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">
+                            {branches.length} {branches.length === 1 ? "branch available" : "branches available"}
+                          </span>
+                        )}
+                      </label>
+
+                      {hasBranches ? (
+                        <select
+                          value={tempSelectedBranch?.branchId || currentBranchObj?._id || ""}
+                          onChange={(e) => {
+                            const bId = e.target.value;
+                            const b = branches.find((item: any, idx: number) => (item._id || `branch_${idx}`) === bId || item._id === bId);
+                            if (b) {
+                              const doc = b.doctors && b.doctors.length > 0
+                                ? (typeof b.doctors[0] === "string" ? b.doctors[0] : b.doctors[0].name)
+                                : (b.doctorName || "");
+                              setTempSelectedBranch({
+                                branchId: b._id || bId,
+                                branchName: b.branchName,
+                                doctorName: doc
+                              });
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                        >
+                          {branches.map((b: any, bIdx: number) => {
+                            const idVal = b._id || `branch_${bIdx}`;
+                            const locStr = [b.city, b.state].filter(Boolean).join(", ");
+                            return (
+                              <option key={idVal} value={idVal}>
+                                {b.branchName} {b.branchCode ? `(${b.branchCode})` : ""} {locStr ? `• ${locStr}` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <div className="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span>Single / Main Center (All operations based at main facility)</span>
+                        </div>
                       )}
-                    </button>
-                  ))
+                    </div>
+
+                    {/* Branch Info Card (Reg No, GST, Address) */}
+                    {currentBranchObj && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5 shadow-xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {currentBranchObj.registrationNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 text-[10px] font-semibold">
+                              Reg No: {currentBranchObj.registrationNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.gstNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 text-[10px] font-semibold">
+                              GSTIN: {currentBranchObj.gstNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.pickupLocation && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-medium">
+                              OPU: {currentBranchObj.pickupLocation}
+                            </span>
+                          )}
+                        </div>
+
+                        {(currentBranchObj.addressLine1 || currentBranchObj.city || currentBranchObj.state) && (
+                          <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 text-[11px] pt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>
+                              {[currentBranchObj.addressLine1, currentBranchObj.city, currentBranchObj.state, currentBranchObj.pincode].filter(Boolean).join(", ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Step 3: Treatment Doctor Dropdown */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                          <span>3. Treatment Doctor:</span>
+                        </span>
+                        {tempSelectedBranch?.doctorName && (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                            Dr. {tempSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}
+                          </span>
+                        )}
+                      </label>
+
+                      {currentBranchObj?.doctors && currentBranchObj.doctors.length > 0 ? (
+                        <div className="space-y-2">
+                          <select
+                            value={
+                              currentBranchObj.doctors.some((d: any) => {
+                                const dName = typeof d === "string" ? d : d.name;
+                                return (tempSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                              })
+                                ? (tempSelectedBranch?.doctorName || "")
+                                : "__custom__"
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                setTempSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: ""
+                                }));
+                              } else {
+                                setTempSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }
+                            }}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                          >
+                            {currentBranchObj.doctors.map((d: any, dIdx: number) => {
+                              const dName = typeof d === "string" ? d : d.name;
+                              return (
+                                <option key={dIdx} value={dName}>
+                                  Dr. {dName.replace(/^Dr\.?\s*/i, "")}
+                                </option>
+                              );
+                            })}
+                            <option value="__custom__">+ Enter Custom Doctor Name...</option>
+                          </select>
+
+                          {/* Custom doctor name text input if custom selected or none match */}
+                          {(!currentBranchObj.doctors.some((d: any) => {
+                            const dName = typeof d === "string" ? d : d.name;
+                            return (tempSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                          })) && (
+                            <input
+                              type="text"
+                              placeholder="Type Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                              value={tempSelectedBranch?.doctorName || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setTempSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Enter Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                          value={tempSelectedBranch?.doctorName || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTempSelectedBranch(prev => ({
+                              branchId: prev?.branchId || currentBranchObj?._id || "branch_0",
+                              branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                              doctorName: val
+                            }));
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex items-center justify-between gap-3 pt-3 border-t">
+              <div className="text-[11px] text-slate-500 truncate">
+                {tempSelectedHospitalId ? (
+                  <span>
+                    Selected: <strong className="text-teal-700 dark:text-teal-300">
+                      {hospitals.find(h => h._id === tempSelectedHospitalId)?.name}
+                    </strong>
+                    {tempSelectedBranch?.branchName && (
+                      <> → <span className="font-semibold">{tempSelectedBranch.branchName}</span></>
+                    )}
+                    {tempSelectedBranch?.doctorName && (
+                      <> • <span className="text-purple-600 dark:text-purple-400 font-semibold">Dr. {tempSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}</span></>
+                    )}
+                  </span>
+                ) : (
+                  <span>No hospital selected</span>
                 )}
               </div>
-            </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-3 justify-end pt-3 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsAssignOpen(false)}
-                className="rounded-xl text-xs"
-                disabled={actionLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleAssignHospital(tempSelectedHospitalId)}
-                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1"
-                disabled={actionLoading}
-              >
-                Confirm Mapping
-              </Button>
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAssignOpen(false)}
+                  className="rounded-xl text-xs cursor-pointer"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleAssignHospital(tempSelectedHospitalId, tempSelectedBranch)}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer font-bold"
+                  disabled={!tempSelectedHospitalId || actionLoading}
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Confirm Mapping
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -2264,8 +2846,23 @@ export default function ManageRegistrationsPage() {
                 onChange={(e) => setPickupDateValue(e.target.value)}
                 className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-medium"
               />
+            </div>
+
+            {/* Donor OPU Location */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-teal-600" />
+                Donor OPU / Pickup Location:
+              </label>
+              <Input
+                type="text"
+                placeholder="e.g. Apollo Fertility, OT Room / City Clinic"
+                value={pickupLocationValue}
+                onChange={(e) => setPickupLocationValue(e.target.value)}
+                className="rounded-xl border-slate-200 dark:border-slate-800 text-xs font-medium"
+              />
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Setting this clinical date is required to unlock Form 13 (Consent &amp; Fitness) upload and mark the file complete.
+                Hospital/center operation theatre or clinic where donor OPU retrieval is conducted (appears in Clinic Ledger).
               </p>
             </div>
 
@@ -2700,12 +3297,23 @@ export default function ManageRegistrationsPage() {
                           Status: {(autoInfo.status || selectedReg.status || "").replace(/_/g, " ")}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        ID: <span className="font-mono font-bold text-foreground">{selectedReg.registrationId}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5 flex items-center flex-wrap gap-1.5">
+                        <span>ID: <strong className="font-mono text-foreground">{selectedReg.registrationId}</strong></span>
                         {selectedReg.donorId && (
-                          <> • Donor ID: <span className="font-mono font-bold text-rose-600">{selectedReg.donorId}</span></>
+                          <span>• Donor ID: <strong className="font-mono text-rose-600">{selectedReg.donorId}</strong></span>
                         )}
-                        {" "}• Hospital: <span className="font-semibold text-foreground">{selectedReg.assignedHospital?.name || "Unassigned"}</span>
+                        <span>• Hospital: <strong className="text-foreground">{selectedReg.assignedHospital?.name || "Unassigned"}</strong></span>
+                        {selectedReg.assignedHospital && selectedReg.assignedBranch && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200/60">
+                            <GitBranch className="w-3 h-3 text-teal-600" />
+                            {selectedReg.assignedBranch}
+                            {selectedReg.assignedDoctor && (
+                              <span className="text-slate-400 font-normal">
+                                • Dr. {selectedReg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -2936,6 +3544,151 @@ export default function ManageRegistrationsPage() {
                       </div>
 
                       {/* Certificate (Rule 10) Status & Issuance Bar */}
+                      {/* {(() => {
+                        const viralCheck = checkViralMarkersEntered(selectedReg);
+                        if (viralCheck.certificateIssued) {
+                          return (
+                            <div className="p-3 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <div>
+                                  <span className="font-bold text-xs text-emerald-900 dark:text-emerald-200">
+                                    Certificate (Rule 10) Officially Issued
+                                  </span>
+                                  <p className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                                    Verified screening negative for HIV, HBV, HCV, and VDRL (Syphilis) under ART Rules, 2022.
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsPrintOpen(true)}
+                                className="h-7 text-xs border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 rounded-lg gap-1 font-semibold shrink-0"
+                              >
+                                <Printer className="w-3.5 h-3.5" /> Print Certificate
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        if (viralCheck.isEntered) {
+                          return (
+                            <div className="p-3 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                <div>
+                                  <span className="font-bold text-xs text-amber-900 dark:text-amber-200">
+                                    Viral Markers Entered • Certificate (Rule 10) Ready to Issue
+                                  </span>
+                                  <p className="text-[10px] text-amber-800 dark:text-amber-300">
+                                    Viral markers are present. Click Issue Certificate to enable Rule 10 certification for printing.
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const regId = selectedReg.registrationId || selectedReg._id;
+                                    await patchAdminRegistrationFieldsAction(regId, {
+                                      certificateIssued: true,
+                                      certificateIssuedAt: new Date(),
+                                      certificateIssuedBy: "Admin",
+                                    });
+                                    const updated = { ...selectedReg, certificateIssued: true, certificateIssuedAt: new Date() };
+                                    setSelectedReg(updated);
+                                    setRegistrations((prev: any[]) => prev.map((r) => r.registrationId === regId ? { ...r, certificateIssued: true } : r));
+                                    toast.success("Certificate in term of Rule 10 issued successfully!");
+                                  } catch (e: any) {
+                                    toast.error("Failed to issue certificate: " + (e as any)?.message);
+                                  }
+                                }}
+                                className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg gap-1 font-bold shadow-xs shrink-0"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Issue Certificate (Rule 10)
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="p-2.5 rounded-xl border border-dashed text-[11px] text-muted-foreground flex items-center gap-2 bg-muted/20">
+                            <AlertCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <span>
+                              Enter/upload Viral Markers Report (HIV, HBsAg, HCV, VDRL) to enable Certificate (Rule 10) issuance.
+                            </span>
+                          </div>
+                        );
+                      })()} */}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {managementDocs.map((item, idx) => {
+                          const hasDoc = !!item.doc?.url;
+                          const Icon = item.icon;
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
+                                hasDoc
+                                  ? "bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
+                                  : "bg-amber-50/40 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 border-dashed"
+                              }`}
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
+                                    <Icon className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
+                                    <span className="truncate">{item.label}</span>
+                                  </span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                    hasDoc
+                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                      : "bg-amber-100 text-amber-800 border border-amber-200"
+                                  }`}>
+                                    {hasDoc ? "Uploaded ✓" : "Missing ✗"}
+                                  </span>
+                                </div>
+
+                                {hasDoc ? (
+                                  <div className="flex items-center justify-between pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => openInAppViewer(item.label, item.doc.url, item.doc.fileName || `${item.key}.pdf`, selectedReg)}
+                                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                                    >
+                                      <Eye className="w-3 h-3" /> View Uploaded Report
+                                    </button>
+                                    {item.doc.fileName && (
+                                      <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
+                                        {item.doc.fileName}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-[11px] text-muted-foreground italic">
+                                    Document has not been uploaded yet.
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="pt-2 mt-2 border-t border-border/50">
+                                <FileUploadField
+                                  label={hasDoc ? "Replace Document" : "Upload Document"}
+                                  value={(item.doc as any) || undefined}
+                                  folder="labReports"
+                                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                                  onChange={(fileRef: any) => handleManagementDocUpload(item.key, fileRef)}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Certificate (Rule 10) Status & Issuance Bar */}
                       {(() => {
                         const viralCheck = checkViralMarkersEntered(selectedReg);
                         if (viralCheck.certificateIssued) {
@@ -3013,72 +3766,6 @@ export default function ManageRegistrationsPage() {
                           </div>
                         );
                       })()}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {managementDocs.map((item, idx) => {
-                          const hasDoc = !!item.doc?.url;
-                          const Icon = item.icon;
-
-                          return (
-                            <div
-                              key={idx}
-                              className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
-                                hasDoc
-                                  ? "bg-emerald-50/40 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
-                                  : "bg-amber-50/40 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 border-dashed"
-                              }`}
-                            >
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
-                                    <Icon className={`w-3.5 h-3.5 ${item.color} shrink-0`} />
-                                    <span className="truncate">{item.label}</span>
-                                  </span>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                                    hasDoc
-                                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                      : "bg-amber-100 text-amber-800 border border-amber-200"
-                                  }`}>
-                                    {hasDoc ? "Uploaded ✓" : "Missing ✗"}
-                                  </span>
-                                </div>
-
-                                {hasDoc ? (
-                                  <div className="flex items-center justify-between pt-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => openInAppViewer(item.label, item.doc.url, item.doc.fileName || `${item.key}.pdf`, selectedReg)}
-                                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
-                                    >
-                                      <Eye className="w-3 h-3" /> View Uploaded Report
-                                    </button>
-                                    {item.doc.fileName && (
-                                      <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
-                                        {item.doc.fileName}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <p className="text-[11px] text-muted-foreground italic">
-                                    Document has not been uploaded yet.
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="pt-2 mt-2 border-t border-border/50">
-                                <FileUploadField
-                                  label={hasDoc ? "Replace Document" : "Upload Document"}
-                                  value={(item.doc as any) || undefined}
-                                  folder="labReports"
-                                  accept=".pdf,.png,.jpg,.jpeg,.webp"
-                                  onChange={(fileRef: any) => handleManagementDocUpload(item.key, fileRef)}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
 
                     {/* 3. Donor Compensation & Payment Card */}
                     <div className="p-4 rounded-2xl border bg-card space-y-3 shadow-xs">
@@ -3480,52 +4167,764 @@ export default function ManageRegistrationsPage() {
         }}
       />
 
-      {/* DIALOG 4: BULK ASSIGN HOSPITAL */}
+      {/* DIALOG 4: BULK ASSIGN HOSPITAL & BRANCH */}
       <Dialog open={isBulkAssignOpen} onOpenChange={setIsBulkAssignOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-xl rounded-2xl p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-              <Building2 className="w-5 h-5 text-teal-600" /> Bulk Clinic Mapping
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Building2 className="w-5 h-5 text-teal-600" /> Bulk Clinic & Branch Mapping
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Assign <span className="font-bold">{selectedIds.length}</span> selected applications to a single clinic.
+              Assign <strong className="text-teal-700 dark:text-teal-300 font-bold">{selectedIds.length}</strong> selected applications to a single clinic and designated branch.
             </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="font-bold text-slate-700">Select Affiliate Clinic:</label>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search clinics..."
-                  value={bulkHospitalSearch}
-                  onChange={(e) => setBulkHospitalSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                />
+            {/* Professional Step-by-Step Dropdown Mapping for Bulk Assignment */}
+            <div className="space-y-4 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300 pb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Choose Destination Clinic & Branch</span>
+                </span>
+                <span className="text-[10px] text-teal-700 dark:text-teal-300 font-bold">
+                  Targeting {selectedIds.length} donors
+                </span>
               </div>
 
-              <div className="max-h-40 overflow-y-auto border border-slate-100 dark:border-slate-900 rounded-xl divide-y divide-slate-50 dark:divide-slate-900">
-                {hospitalsLoading ? (
-                  <div className="p-8 text-center text-xs text-slate-400">Loading clinics...</div>
-                ) : bulkFilteredHospitals.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400">No active clinics match search.</div>
-                ) : (
-                  bulkFilteredHospitals.map(h => (
-                    <button
-                      key={h._id}
-                      onClick={() => handleBulkAssign(h._id)}
-                      className="w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-900 flex justify-between items-center group text-xs"
-                      disabled={actionLoading}
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-teal-600">{h.name}</div>
-                        <div className="text-[10px] text-slate-500">{h.city}, {h.state}</div>
+              {/* 1. Hospital Dropdown */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>1. Select Hospital / Clinic: <span className="text-red-500">*</span></span>
+                  {bulkSelectedHospitalId && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Selected
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={bulkSelectedHospitalId || ""}
+                  onChange={(e) => {
+                    const hospId = e.target.value;
+                    setBulkSelectedHospitalId(hospId || null);
+                    if (!hospId) {
+                      setBulkSelectedBranch(null);
+                      return;
+                    }
+                    const hosp = hospitals.find(h => h._id === hospId);
+                    if (hosp?.branches && hosp.branches.length > 0) {
+                      const firstB = hosp.branches[0];
+                      const firstDoc = firstB.doctors && firstB.doctors.length > 0
+                        ? (typeof firstB.doctors[0] === "string" ? firstB.doctors[0] : firstB.doctors[0].name)
+                        : (firstB.doctorName || "");
+                      setBulkSelectedBranch({
+                        branchId: firstB._id || "branch_0",
+                        branchName: firstB.branchName,
+                        doctorName: firstDoc
+                      });
+                    } else {
+                      setBulkSelectedBranch({
+                        branchId: "main",
+                        branchName: "Main Center",
+                        doctorName: hosp?.doctorName || ""
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                >
+                  <option value="">-- Choose Partner Hospital / ART Clinic --</option>
+                  {hospitals.map(h => (
+                    <option key={h._id} value={h._id}>
+                      {h.name} {h.shortName ? `(${h.shortName})` : ""} {h.city ? `• ${h.city}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2 & 3: Branch and Treatment Doctor for Bulk */}
+              {bulkSelectedHospitalId && (() => {
+                const hosp = hospitals.find(h => h._id === bulkSelectedHospitalId);
+                const hasBranches = Array.isArray(hosp?.branches) && hosp.branches.length > 0;
+                const branches = hosp?.branches || [];
+                const currentBranchObj = branches.find((b: any) => 
+                  b._id === bulkSelectedBranch?.branchId || b.branchName === bulkSelectedBranch?.branchName
+                ) || (branches.length > 0 ? branches[0] : null);
+
+                return (
+                  <div className="space-y-3.5 p-3.5 rounded-2xl bg-teal-50/40 dark:bg-slate-900/60 border border-teal-200/60 dark:border-slate-800">
+                    {/* Branch Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <GitBranch className="w-3.5 h-3.5 text-teal-600" />
+                          <span>2. Select Branch Center: <span className="text-red-500">*</span></span>
+                        </span>
+                        {hasBranches && (
+                          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">
+                            {branches.length} {branches.length === 1 ? "branch available" : "branches available"}
+                          </span>
+                        )}
+                      </label>
+
+                      {hasBranches ? (
+                        <select
+                          value={bulkSelectedBranch?.branchId || currentBranchObj?._id || ""}
+                          onChange={(e) => {
+                            const bId = e.target.value;
+                            const b = branches.find((item: any, idx: number) => (item._id || `branch_${idx}`) === bId || item._id === bId);
+                            if (b) {
+                              const doc = b.doctors && b.doctors.length > 0
+                                ? (typeof b.doctors[0] === "string" ? b.doctors[0] : b.doctors[0].name)
+                                : (b.doctorName || "");
+                              setBulkSelectedBranch({
+                                branchId: b._id || bId,
+                                branchName: b.branchName,
+                                doctorName: doc
+                              });
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                        >
+                          {branches.map((b: any, bIdx: number) => {
+                            const idVal = b._id || `branch_${bIdx}`;
+                            const locStr = [b.city, b.state].filter(Boolean).join(", ");
+                            return (
+                              <option key={idVal} value={idVal}>
+                                {b.branchName} {b.branchCode ? `(${b.branchCode})` : ""} {locStr ? `• ${locStr}` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <div className="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span>Single / Main Center (All operations based at main facility)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Branch Info Card (Reg No, GST, Address) */}
+                    {currentBranchObj && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5 shadow-xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {currentBranchObj.registrationNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 text-[10px] font-semibold">
+                              Reg No: {currentBranchObj.registrationNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.gstNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 text-[10px] font-semibold">
+                              GSTIN: {currentBranchObj.gstNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.pickupLocation && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-medium">
+                              OPU: {currentBranchObj.pickupLocation}
+                            </span>
+                          )}
+                        </div>
+
+                        {(currentBranchObj.addressLine1 || currentBranchObj.city || currentBranchObj.state) && (
+                          <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 text-[11px] pt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>
+                              {[currentBranchObj.addressLine1, currentBranchObj.city, currentBranchObj.state, currentBranchObj.pincode].filter(Boolean).join(", ")}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    </button>
-                  ))
+                    )}
+
+                    {/* Step 3: Treatment Doctor Dropdown for Bulk */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                          <span>3. Treatment Doctor for Selected Applications:</span>
+                        </span>
+                        {bulkSelectedBranch?.doctorName && (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                            Dr. {bulkSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}
+                          </span>
+                        )}
+                      </label>
+
+                      {currentBranchObj?.doctors && currentBranchObj.doctors.length > 0 ? (
+                        <div className="space-y-2">
+                          <select
+                            value={
+                              currentBranchObj.doctors.some((d: any) => {
+                                const dName = typeof d === "string" ? d : d.name;
+                                return (bulkSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                              })
+                                ? (bulkSelectedBranch?.doctorName || "")
+                                : "__custom__"
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                setBulkSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: ""
+                                }));
+                              } else {
+                                setBulkSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }
+                            }}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                          >
+                            {currentBranchObj.doctors.map((d: any, dIdx: number) => {
+                              const dName = typeof d === "string" ? d : d.name;
+                              return (
+                                <option key={dIdx} value={dName}>
+                                  Dr. {dName.replace(/^Dr\.?\s*/i, "")}
+                                </option>
+                              );
+                            })}
+                            <option value="__custom__">+ Enter Custom Doctor Name...</option>
+                          </select>
+
+                          {/* Custom doctor name text input if custom selected or none match */}
+                          {(!currentBranchObj.doctors.some((d: any) => {
+                            const dName = typeof d === "string" ? d : d.name;
+                            return (bulkSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                          })) && (
+                            <input
+                              type="text"
+                              placeholder="Type Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                              value={bulkSelectedBranch?.doctorName || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBulkSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Enter Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                          value={bulkSelectedBranch?.doctorName || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setBulkSelectedBranch(prev => ({
+                              branchId: prev?.branchId || currentBranchObj?._id || "branch_0",
+                              branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                              doctorName: val
+                            }));
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex items-center justify-between gap-3 pt-3 border-t">
+              <div className="text-[11px] text-slate-500 truncate">
+                {bulkSelectedHospitalId ? (
+                  <span>
+                    Selected: <strong className="text-teal-700 dark:text-teal-300">
+                      {hospitals.find(h => h._id === bulkSelectedHospitalId)?.name}
+                    </strong>
+                    {bulkSelectedBranch?.branchName && (
+                      <> → <span className="font-semibold">{bulkSelectedBranch.branchName}</span></>
+                    )}
+                    {bulkSelectedBranch?.doctorName && (
+                      <> • <span className="text-purple-600 dark:text-purple-400 font-semibold">Dr. {bulkSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}</span></>
+                    )}
+                  </span>
+                ) : (
+                  <span>No hospital selected</span>
                 )}
               </div>
+
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsBulkAssignOpen(false)}
+                  className="rounded-xl text-xs cursor-pointer"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (bulkSelectedHospitalId) {
+                      handleBulkAssign(bulkSelectedHospitalId, bulkSelectedBranch);
+                    }
+                  }}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer font-bold"
+                  disabled={!bulkSelectedHospitalId || actionLoading}
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Confirm Bulk Assignment ({selectedIds.length})
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ASSIGN TREATING DOCTOR (STRICTLY ISOLATED TO ASSIGNED HOSPITAL & BRANCH) */}
+      <Dialog open={isAssignDoctorOpen} onOpenChange={setIsAssignDoctorOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Stethoscope className="w-5 h-5 text-purple-600" /> Assign Treating Doctor
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Assign treating doctor for donor{" "}
+              <strong className="text-purple-700 dark:text-purple-300 font-bold">
+                {doctorAssignReg?.personalInfo?.fullName || doctorAssignReg?.donorId || doctorAssignReg?.registrationId}
+              </strong>
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Hospital & Branch Context - Isolated to assigned hospital & branch */}
+            {(() => {
+              const hospId = doctorAssignReg?.assignedHospital?._id 
+                || doctorAssignReg?.assignedHospitalId 
+                || (typeof doctorAssignReg?.assignedHospital === "string" && doctorAssignReg?.assignedHospital.length === 24 ? doctorAssignReg?.assignedHospital : null);
+              const hospName = doctorAssignReg?.assignedHospital?.name 
+                || (typeof doctorAssignReg?.assignedHospital === "string" ? doctorAssignReg?.assignedHospital : "");
+
+              const matchedHosp = hospitals.find(h => 
+                (hospId && (h._id === hospId || String(h._id) === String(hospId))) ||
+                (hospName && h.name?.toLowerCase().trim() === hospName.toLowerCase().trim())
+              );
+
+              const hasBranches = Array.isArray(matchedHosp?.branches) && matchedHosp.branches.length > 0;
+              const currentBranch = hasBranches 
+                ? (matchedHosp.branches.find((b: any) => 
+                    b._id === doctorModalBranchId ||
+                    b.branchName === doctorModalBranchId ||
+                    b.branchName === doctorAssignReg?.assignedBranch ||
+                    b._id === doctorAssignReg?.assignedBranchId
+                  ) || matchedHosp.branches[0])
+                : null;
+
+              // Extract doctors strictly from this single branch / hospital (NO MERGING with other branches or hospitals!)
+              const branchDocs: string[] = [];
+              const addDocName = (raw: string) => {
+                if (!raw) return;
+                raw.split(/[,;\/]+|\band\b/i).forEach(p => {
+                  const clean = p.replace(/^Dr\.?\s*/i, "").trim();
+                  if (clean && !branchDocs.some(d => d.toLowerCase() === clean.toLowerCase())) {
+                    branchDocs.push(clean);
+                  }
+                });
+              };
+
+              if (currentBranch) {
+                if (Array.isArray(currentBranch.doctors)) {
+                  currentBranch.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (currentBranch.doctorName) {
+                  addDocName(currentBranch.doctorName);
+                }
+              } else if (matchedHosp && (!matchedHosp.branches || matchedHosp.branches.length === 0)) {
+                if (Array.isArray(matchedHosp.doctors)) {
+                  matchedHosp.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (matchedHosp.doctorName) {
+                  addDocName(matchedHosp.doctorName);
+                }
+              }
+
+              return (
+                <div className="space-y-3">
+                  {matchedHosp ? (
+                    <div className="p-3 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-xl space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300">
+                        <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <span>{matchedHosp.name}</span>
+                      </div>
+
+                      {hasBranches ? (
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-teal-700 dark:text-teal-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <GitBranch className="w-3 h-3 text-teal-600" />
+                            <span>Branch:</span>
+                          </label>
+                          <select
+                            value={currentBranch?._id || currentBranch?.branchName || ""}
+                            onChange={(e) => {
+                              const bId = e.target.value;
+                              setDoctorModalBranchId(bId);
+                              const newB = matchedHosp.branches.find((b: any) => b._id === bId || b.branchName === bId);
+                              if (newB) {
+                                const newDocs: string[] = [];
+                                const addN = (raw: string) => {
+                                  if (!raw) return;
+                                  raw.split(/[,;\/]+|\band\b/i).forEach(p => {
+                                    const c = p.replace(/^Dr\.?\s*/i, "").trim();
+                                    if (c && !newDocs.some(d => d.toLowerCase() === c.toLowerCase())) newDocs.push(c);
+                                  });
+                                };
+                                if (Array.isArray(newB.doctors)) newB.doctors.forEach((d: any) => addN(typeof d === "string" ? d : d?.name));
+                                if (newB.doctorName) addN(newB.doctorName);
+                                if (newDocs.length > 0) {
+                                  setSelectedDoctorName(`Dr. ${newDocs[0]}`);
+                                  setCustomDoctorInput("");
+                                }
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500"
+                          >
+                            {matchedHosp.branches.map((b: any, bIdx: number) => (
+                              <option key={b._id || bIdx} value={b._id || b.branchName}>
+                                {b.branchName} {b.city ? `• ${b.city}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-[11px] text-teal-700 dark:text-teal-400 pl-5">
+                          <span>Main Center Facility</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl space-y-1 text-amber-800 dark:text-amber-300">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>No Hospital Assigned</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                        Please assign a hospital &amp; branch to this donor first to view affiliated doctors, or enter doctor name manually below.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Available Doctors (STRICTLY for this branch) */}
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                      <span>Treating Doctor:</span>
+                      {selectedDoctorName && (
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                          Dr. {selectedDoctorName.replace(/^Dr\.?\s*/i, "")}
+                        </span>
+                      )}
+                    </label>
+
+                    {branchDocs.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                          <Stethoscope className="w-3 h-3 text-purple-600" />
+                          <span>Doctors available at {currentBranch?.branchName || matchedHosp?.name} ({branchDocs.length}):</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {branchDocs.map((doc, idx) => {
+                            const isSelected = selectedDoctorName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase() === doc.trim().toLowerCase();
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDoctorName(`Dr. ${doc}`);
+                                  setCustomDoctorInput("");
+                                }}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isSelected
+                                    ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                    : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                                }`}
+                              >
+                                <Stethoscope className={`w-3 h-3 ${isSelected ? "text-white" : "text-purple-600"}`} />
+                                Dr. {doc}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : matchedHosp ? (
+                      <div className="text-[11px] text-slate-500 italic p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                        No doctors currently registered specifically for {currentBranch?.branchName ? `"${currentBranch.branchName}"` : matchedHosp.name}. Type doctor name below.
+                      </div>
+                    ) : null}
+
+                    {/* Manual doctor name input */}
+                    <div className="pt-1">
+                      <input
+                        type="text"
+                        placeholder="Type doctor name (e.g. Dr. Sonia Malik)..."
+                        value={customDoctorInput || (selectedDoctorName ? `Dr. ${selectedDoctorName.replace(/^Dr\.?\s*/i, "")}` : "")}
+                        onChange={(e) => {
+                          setCustomDoctorInput(e.target.value);
+                          setSelectedDoctorName(e.target.value);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Actions */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t">
+              <div>
+                {doctorAssignReg?.assignedDoctor && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleAssignDoctor("")}
+                    disabled={actionLoading}
+                    className="h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs rounded-xl cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Unassign Doctor
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAssignDoctorOpen(false)}
+                  disabled={actionLoading}
+                  className="rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const hospId = doctorAssignReg?.assignedHospital?._id || doctorAssignReg?.assignedHospitalId || (typeof doctorAssignReg?.assignedHospital === "string" && doctorAssignReg?.assignedHospital.length === 24 ? doctorAssignReg?.assignedHospital : null);
+                    const hospName = doctorAssignReg?.assignedHospital?.name || (typeof doctorAssignReg?.assignedHospital === "string" ? doctorAssignReg?.assignedHospital : "");
+                    const matchedHosp = hospitals.find(h => (hospId && (h._id === hospId || String(h._id) === String(hospId))) || (hospName && h.name?.toLowerCase().trim() === hospName.toLowerCase().trim()));
+                    const bObj = matchedHosp?.branches?.find((b: any) => b._id === doctorModalBranchId || b.branchName === doctorModalBranchId);
+                    handleAssignDoctor(selectedDoctorName, bObj ? { branchName: bObj.branchName, branchId: bObj._id } : undefined);
+                  }}
+                  disabled={actionLoading || !selectedDoctorName.trim()}
+                  className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1 font-bold cursor-pointer"
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Save Doctor
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: BULK ASSIGN TREATING DOCTOR (STRICTLY ISOLATED BY HOSPITAL & BRANCH) */}
+      <Dialog open={isBulkAssignDoctorOpen} onOpenChange={setIsBulkAssignDoctorOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Stethoscope className="w-5 h-5 text-purple-600" /> Bulk Assign Treating Doctor
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Assign a treating doctor to <strong className="text-purple-700 dark:text-purple-300 font-bold">{selectedIds.length}</strong> selected registrations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Step 1: Select Hospital */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span>1. Select Hospital / Clinic:</span>
+              </label>
+              <select
+                value={bulkDoctorHospitalId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBulkDoctorHospitalId(val);
+                  const h = hospitals.find(item => item._id === val);
+                  if (h?.branches && h.branches.length > 0) {
+                    setBulkDoctorBranchId(h.branches[0]._id || h.branches[0].branchName);
+                  } else {
+                    setBulkDoctorBranchId("");
+                  }
+                  setBulkDoctorName("");
+                  setBulkCustomDoctorInput("");
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-500 shadow-xs"
+              >
+                <option value="">-- Choose Hospital to view branch doctors --</option>
+                {hospitals.map(h => (
+                  <option key={h._id} value={h._id}>
+                    {h.name} {h.shortName ? `(${h.shortName})` : ""} {h.city ? `• ${h.city}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Step 2: Select Branch & Doctors for that branch */}
+            {bulkDoctorHospitalId && (() => {
+              const hosp = hospitals.find(h => h._id === bulkDoctorHospitalId);
+              const hasBranches = Array.isArray(hosp?.branches) && hosp.branches.length > 0;
+              const selectedBranch = hasBranches
+                ? (hosp.branches.find((b: any) => b._id === bulkDoctorBranchId || b.branchName === bulkDoctorBranchId) || hosp.branches[0])
+                : null;
+
+              // Extract doctors strictly from this single branch (or standalone hospital)
+              const branchDocs: string[] = [];
+              const addDocName = (raw: string) => {
+                if (!raw) return;
+                raw.split(/[,;\/]+|\band\b/i).forEach(p => {
+                  const clean = p.replace(/^Dr\.?\s*/i, "").trim();
+                  if (clean && !branchDocs.some(d => d.toLowerCase() === clean.toLowerCase())) {
+                    branchDocs.push(clean);
+                  }
+                });
+              };
+
+              if (selectedBranch) {
+                if (Array.isArray(selectedBranch.doctors)) {
+                  selectedBranch.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (selectedBranch.doctorName) {
+                  addDocName(selectedBranch.doctorName);
+                }
+              } else if (hosp && (!hosp.branches || hosp.branches.length === 0)) {
+                if (Array.isArray(hosp.doctors)) {
+                  hosp.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (hosp.doctorName) {
+                  addDocName(hosp.doctorName);
+                }
+              }
+
+              return (
+                <div className="space-y-3.5 p-3 rounded-xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/60">
+                  {hasBranches && (
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <GitBranch className="w-3.5 h-3.5 text-purple-600" />
+                        <span>2. Select Branch Center:</span>
+                      </label>
+                      <select
+                        value={selectedBranch?._id || selectedBranch?.branchName || ""}
+                        onChange={(e) => {
+                          setBulkDoctorBranchId(e.target.value);
+                          setBulkDoctorName("");
+                          setBulkCustomDoctorInput("");
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-500 shadow-xs"
+                      >
+                        {hosp.branches.map((b: any, bIdx: number) => (
+                          <option key={b._id || bIdx} value={b._id || b.branchName}>
+                            {b.branchName} {b.city ? `• ${b.city}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Doctors of that branch */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-purple-900 dark:text-purple-300 font-bold flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3 text-purple-600" />
+                      Doctors at {selectedBranch?.branchName || hosp?.name} ({branchDocs.length}):
+                    </span>
+                    {branchDocs.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {branchDocs.map((doc, idx) => {
+                          const isSelected = bulkDoctorName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase() === doc.trim().toLowerCase();
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setBulkDoctorName(`Dr. ${doc}`);
+                                setBulkCustomDoctorInput("");
+                              }}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isSelected
+                                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                  : "bg-white hover:bg-purple-100 text-purple-700 border-purple-200 dark:bg-slate-900 dark:text-purple-300 dark:border-purple-800"
+                              }`}
+                            >
+                              <Stethoscope className={`w-3 h-3 ${isSelected ? "text-white" : "text-purple-600"}`} />
+                              Dr. {doc}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 italic p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        No doctors listed specifically for this branch. Enter doctor name below.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Doctor Input */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span>Doctor Name to Assign:</span>
+                {bulkDoctorName && (
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                    Dr. {bulkDoctorName.replace(/^Dr\.?\s*/i, "")}
+                  </span>
+                )}
+              </label>
+              <input
+                type="text"
+                placeholder="Type doctor name (e.g., Dr. Sonia Malik)..."
+                value={bulkCustomDoctorInput || (bulkDoctorName ? `Dr. ${bulkDoctorName.replace(/^Dr\.?\s*/i, "")}` : "")}
+                onChange={(e) => {
+                  setBulkCustomDoctorInput(e.target.value);
+                  setBulkDoctorName(e.target.value);
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-xs"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsBulkAssignDoctorOpen(false)}
+                disabled={actionLoading}
+                className="rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleBulkAssignDoctor(bulkDoctorName)}
+                disabled={actionLoading || !bulkDoctorName.trim()}
+                className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1 font-bold cursor-pointer"
+              >
+                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Confirm Doctor Assignment ({selectedIds.length})
+              </Button>
             </div>
           </div>
         </DialogContent>

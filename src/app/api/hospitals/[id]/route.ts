@@ -32,11 +32,12 @@ export async function PUT(
     const {
       name,
       shortName,
-      code,
       registrationNumber,
-      licenseNumber,
       gstNumber,
-      panNumber,
+      doctorName,
+      pickupLocation,
+      wantInvoice,
+      tdsPercentage,
       contactPerson,
       email,
       mobileNumber,
@@ -50,38 +51,41 @@ export async function PUT(
       pincode,
       hospitalType,
       specializations,
-      organTypesSupported,
-      icuAvailability,
-      transplantLicenseNumber,
+      branches,
+      doctors,
+      eggDonorDealPrice,
+      eggProfileDonorDealPrice,
+      spermDonorDealPrice,
+      spermProfileDonorDealPrice,
       donorDealPrice,
+      profiledonorDealPrice,
       serviceCharge,
-      processingFee,
-      registrationFee,
-      commission,
-      additionalCharges,
       currency,
       status
     } = body;
 
     // Check if any pricing parameters changed
+    const effectiveEggNormal = eggDonorDealPrice !== undefined ? Number(eggDonorDealPrice) : donorDealPrice !== undefined ? Number(donorDealPrice) : undefined;
+    const effectiveEggProfile = eggProfileDonorDealPrice !== undefined ? Number(eggProfileDonorDealPrice) : profiledonorDealPrice !== undefined ? Number(profiledonorDealPrice) : undefined;
+
     const pricingChanged =
-      (donorDealPrice !== undefined && donorDealPrice !== hospital.donorDealPrice) ||
-      (serviceCharge !== undefined && serviceCharge !== hospital.serviceCharge) ||
-      (processingFee !== undefined && processingFee !== hospital.processingFee) ||
-      (registrationFee !== undefined && registrationFee !== hospital.registrationFee) ||
-      (commission !== undefined && commission !== hospital.commission) ||
-      (additionalCharges !== undefined && additionalCharges !== hospital.additionalCharges) ||
+      (effectiveEggNormal !== undefined && effectiveEggNormal !== hospital.eggDonorDealPrice) ||
+      (effectiveEggProfile !== undefined && effectiveEggProfile !== hospital.eggProfileDonorDealPrice) ||
+      (spermDonorDealPrice !== undefined && Number(spermDonorDealPrice) !== hospital.spermDonorDealPrice) ||
+      (spermProfileDonorDealPrice !== undefined && Number(spermProfileDonorDealPrice) !== hospital.spermProfileDonorDealPrice) ||
+      (serviceCharge !== undefined && Number(serviceCharge) !== hospital.serviceCharge) ||
       (currency !== undefined && currency !== hospital.currency);
 
     // If pricing changed, add a pricing history log snapshot
     if (pricingChanged) {
       const newPricingSnapshot = {
-        donorDealPrice: donorDealPrice !== undefined ? donorDealPrice : hospital.donorDealPrice,
-        serviceCharge: serviceCharge !== undefined ? serviceCharge : hospital.serviceCharge,
-        processingFee: processingFee !== undefined ? processingFee : hospital.processingFee,
-        registrationFee: registrationFee !== undefined ? registrationFee : hospital.registrationFee,
-        commission: commission !== undefined ? commission : hospital.commission,
-        additionalCharges: additionalCharges !== undefined ? additionalCharges : hospital.additionalCharges,
+        donorDealPrice: effectiveEggNormal !== undefined ? effectiveEggNormal : hospital.eggDonorDealPrice,
+        profiledonorDealPrice: effectiveEggProfile !== undefined ? effectiveEggProfile : hospital.eggProfileDonorDealPrice,
+        eggDonorDealPrice: effectiveEggNormal !== undefined ? effectiveEggNormal : hospital.eggDonorDealPrice,
+        eggProfileDonorDealPrice: effectiveEggProfile !== undefined ? effectiveEggProfile : hospital.eggProfileDonorDealPrice,
+        spermDonorDealPrice: spermDonorDealPrice !== undefined ? Number(spermDonorDealPrice) : hospital.spermDonorDealPrice,
+        spermProfileDonorDealPrice: spermProfileDonorDealPrice !== undefined ? Number(spermProfileDonorDealPrice) : hospital.spermProfileDonorDealPrice,
+        serviceCharge: serviceCharge !== undefined ? Number(serviceCharge) : hospital.serviceCharge,
         currency: currency !== undefined ? currency : hospital.currency,
         changedBy: session.user.name || session.user.email,
         changedAt: new Date()
@@ -92,11 +96,12 @@ export async function PUT(
     // Apply updates
     if (name !== undefined) hospital.name = name;
     if (shortName !== undefined) hospital.shortName = shortName;
-    if (code !== undefined) hospital.code = code;
     if (registrationNumber !== undefined) hospital.registrationNumber = registrationNumber;
-    if (licenseNumber !== undefined) hospital.licenseNumber = licenseNumber;
     if (gstNumber !== undefined) hospital.gstNumber = gstNumber;
-    if (panNumber !== undefined) hospital.panNumber = panNumber;
+    if (doctorName !== undefined) hospital.doctorName = doctorName;
+    if (pickupLocation !== undefined) hospital.pickupLocation = pickupLocation;
+    if (wantInvoice !== undefined) hospital.wantInvoice = Boolean(wantInvoice);
+    if (tdsPercentage !== undefined) hospital.tdsPercentage = Number(tdsPercentage);
     if (contactPerson !== undefined) hospital.contactPerson = contactPerson;
     if (email !== undefined) hospital.email = email;
     if (mobileNumber !== undefined) hospital.mobileNumber = mobileNumber;
@@ -110,16 +115,20 @@ export async function PUT(
     if (pincode !== undefined) hospital.pincode = pincode;
     if (hospitalType !== undefined) hospital.hospitalType = hospitalType;
     if (specializations !== undefined) hospital.specializations = specializations;
-    if (organTypesSupported !== undefined) hospital.organTypesSupported = organTypesSupported;
-    if (icuAvailability !== undefined) hospital.icuAvailability = icuAvailability;
-    if (transplantLicenseNumber !== undefined) hospital.transplantLicenseNumber = transplantLicenseNumber;
-    
-    if (donorDealPrice !== undefined) hospital.donorDealPrice = donorDealPrice;
-    if (serviceCharge !== undefined) hospital.serviceCharge = serviceCharge;
-    if (processingFee !== undefined) hospital.processingFee = processingFee;
-    if (registrationFee !== undefined) hospital.registrationFee = registrationFee;
-    if (commission !== undefined) hospital.commission = commission;
-    if (additionalCharges !== undefined) hospital.additionalCharges = additionalCharges;
+    if (branches !== undefined) hospital.branches = Array.isArray(branches) ? branches : [];
+    if (doctors !== undefined) hospital.doctors = Array.isArray(doctors) ? doctors : [];
+
+    if (effectiveEggNormal !== undefined) {
+      hospital.eggDonorDealPrice = effectiveEggNormal;
+      hospital.donorDealPrice = effectiveEggNormal;
+    }
+    if (effectiveEggProfile !== undefined) {
+      hospital.eggProfileDonorDealPrice = effectiveEggProfile;
+      hospital.profiledonorDealPrice = effectiveEggProfile;
+    }
+    if (spermDonorDealPrice !== undefined) hospital.spermDonorDealPrice = Number(spermDonorDealPrice);
+    if (spermProfileDonorDealPrice !== undefined) hospital.spermProfileDonorDealPrice = Number(spermProfileDonorDealPrice);
+    if (serviceCharge !== undefined) hospital.serviceCharge = Number(serviceCharge);
     if (currency !== undefined) hospital.currency = currency;
     
     if (status !== undefined) hospital.status = status;

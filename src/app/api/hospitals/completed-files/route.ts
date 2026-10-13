@@ -47,6 +47,8 @@ export async function GET(req: Request) {
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "10"));
     const skip = (page - 1) * limit;
 
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+
     // Status filter
     const query: any = {};
     if (statusParam === "all_completed") {
@@ -64,6 +66,12 @@ export async function GET(req: Request) {
       } else {
         query.assignedHospital = hospitalId;
       }
+    }
+
+    // Treating Doctor filter
+    const doctorParam = (searchParams.get("doctor") || "").trim();
+    if (doctorParam && doctorParam !== "ALL") {
+      query.assignedDoctor = { $regex: escapeRegex(doctorParam), $options: "i" };
     }
 
     // Donor payment filter
@@ -101,7 +109,6 @@ export async function GET(req: Request) {
     }
 
     // Search query
-    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
     if (search) {
       const searchRegex = { $regex: escapeRegex(search), $options: "i" };
       // Search matching hospital IDs first if search might be hospital name
@@ -156,10 +163,15 @@ export async function GET(req: Request) {
       const category = clinicDeal.donorCategory || r.donorDeal?.donorCategory || "normal";
 
       if (!clinicDeal.hospitalDealPrice && assignedHosp) {
-        const defaultHospPrice =
-          category === "profile"
-            ? assignedHosp.profiledonorDealPrice || assignedHosp.donorDealPrice || 85000
-            : assignedHosp.donorDealPrice || 65000;
+        const isSperm = donorType === "sperm" || r.donorType === "sperm";
+        const defaultHospPrice = isSperm
+          ? category === "profile"
+            ? assignedHosp.spermProfileDonorDealPrice || 25000
+            : assignedHosp.spermDonorDealPrice || 15000
+          : category === "profile"
+          ? assignedHosp.eggProfileDonorDealPrice || assignedHosp.profiledonorDealPrice || 85000
+          : assignedHosp.eggDonorDealPrice || assignedHosp.donorDealPrice || 65000;
+
         clinicDeal = {
           ...clinicDeal,
           donorCategory: category,
@@ -235,13 +247,20 @@ export async function GET(req: Request) {
 
     for (const rec of allCompletedRecords as any[]) {
       const hosp = rec.assignedHospital;
+      const isSperm = (donorType === "sperm") || rec.donorType === "sperm";
       const cat = rec.clinicDeal?.donorCategory || "normal";
       const hospPrice =
         rec.clinicDeal?.hospitalDealPrice ||
         (hosp
-          ? cat === "profile"
-            ? hosp.profiledonorDealPrice || hosp.donorDealPrice || 85000
-            : hosp.donorDealPrice || 65000
+          ? isSperm
+            ? cat === "profile"
+              ? hosp.spermProfileDonorDealPrice || 25000
+              : hosp.spermDonorDealPrice || 15000
+            : cat === "profile"
+            ? hosp.eggProfileDonorDealPrice || hosp.profiledonorDealPrice || 85000
+            : hosp.eggDonorDealPrice || hosp.donorDealPrice || 65000
+          : isSperm
+          ? 15000
           : 65000);
 
       const donorComp =
@@ -369,6 +388,12 @@ export async function PATCH(req: Request) {
       updatedAt: new Date(),
     };
 
+    // Invoice details & generation flags
+    if (updateFields.invoiceNumber !== undefined) updatePayload.invoiceNumber = updateFields.invoiceNumber;
+    if (updateFields.invoiceDate !== undefined) updatePayload.invoiceDate = updateFields.invoiceDate;
+    if (updateFields.isInvoiceGenerated !== undefined) updatePayload.isInvoiceGenerated = updateFields.isInvoiceGenerated;
+    if (updateFields.opuLocation !== undefined) updatePayload.opuLocation = updateFields.opuLocation;
+
     // Hospital Deal & Payment Received from Hospital
     if (updateFields.clinicDeal !== undefined) {
       const prevClinic = existing.clinicDeal || {};
@@ -383,9 +408,33 @@ export async function PATCH(req: Request) {
           ? updateFields.clinicDeal.hospitalDealPrice || prevClinic.hospitalDealPrice || 0
           : prevClinic.receivedAmount || 0;
 
+      const isInvGen =
+        updateFields.clinicDeal.isInvoiceGenerated !== undefined
+          ? updateFields.clinicDeal.isInvoiceGenerated
+          : updateFields.isInvoiceGenerated !== undefined
+          ? updateFields.isInvoiceGenerated
+          : prevClinic.isInvoiceGenerated || false;
+
+      const invNum =
+        updateFields.clinicDeal.invoiceNumber !== undefined
+          ? updateFields.clinicDeal.invoiceNumber
+          : updateFields.invoiceNumber !== undefined
+          ? updateFields.invoiceNumber
+          : prevClinic.invoiceNumber || "";
+
+      const invDate =
+        updateFields.clinicDeal.invoiceDate !== undefined
+          ? updateFields.clinicDeal.invoiceDate
+          : updateFields.invoiceDate !== undefined
+          ? updateFields.invoiceDate
+          : prevClinic.invoiceDate || null;
+
       updatePayload.clinicDeal = {
         ...prevClinic,
         ...updateFields.clinicDeal,
+        isInvoiceGenerated: isInvGen,
+        invoiceNumber: invNum,
+        invoiceDate: invDate,
         isPaymentReceived: isReceived,
         paymentStatus: isReceived ? "RECEIVED" : (updateFields.clinicDeal.paymentStatus || prevClinic.paymentStatus || "PENDING"),
         receivedAmount: receivedAmt,
@@ -393,10 +442,37 @@ export async function PATCH(req: Request) {
         agreedBy: prevClinic.agreedBy || userName,
         agreedAt: prevClinic.agreedAt || new Date(),
       };
+
+      if (updateFields.clinicDeal.tdsPercentage !== undefined) {
+        updatePayload.clinicDeal.tdsPercentage = Number(updateFields.clinicDeal.tdsPercentage);
+      }
+      if (updateFields.clinicDeal.tdsAmount !== undefined) {
+        updatePayload.clinicDeal.tdsAmount = Number(updateFields.clinicDeal.tdsAmount);
+      }
+      if (updateFields.clinicDeal.serviceCharge !== undefined) {
+        updatePayload.clinicDeal.serviceCharge = Number(updateFields.clinicDeal.serviceCharge);
+      }
+      if (updateFields.clinicDeal.donorReimbursement !== undefined) {
+        updatePayload.clinicDeal.donorReimbursement = Number(updateFields.clinicDeal.donorReimbursement);
+      }
+      if (updateFields.clinicDeal.totalAmount !== undefined) {
+        updatePayload.clinicDeal.totalAmount = Number(updateFields.clinicDeal.totalAmount);
+      }
+      if (updateFields.clinicDeal.gstAmount !== undefined) {
+        updatePayload.clinicDeal.gstAmount = Number(updateFields.clinicDeal.gstAmount);
+      }
+      if (updateFields.clinicDeal.netReceivableAmount !== undefined) {
+        updatePayload.clinicDeal.netReceivableAmount = Number(updateFields.clinicDeal.netReceivableAmount);
+      }
+
+      // Also ensure root level reflects invoice values
+      if (invNum) updatePayload.invoiceNumber = invNum;
+      if (invDate) updatePayload.invoiceDate = invDate;
+      if (isInvGen) updatePayload.isInvoiceGenerated = true;
     }
 
     // Donor Deal & Donor Payout Status
-    if (updateFields.donorDeal !== undefined || updateFields.isDonorPaid !== undefined) {
+    if (updateFields.donorDeal !== undefined || updateFields.isDonorPaid !== undefined || updateFields.clinicDeal?.donorReimbursement !== undefined) {
       const prevDonorDeal = existing.donorDeal || {};
       const isPaid =
         updateFields.isDonorPaid === true ||
@@ -405,7 +481,9 @@ export async function PATCH(req: Request) {
       const compensationAmount =
         updateFields.donorDeal?.compensationAmount !== undefined
           ? Number(updateFields.donorDeal.compensationAmount)
-          : prevDonorDeal.compensationAmount || 40000;
+          : updateFields.clinicDeal?.donorReimbursement !== undefined
+          ? Number(updateFields.clinicDeal.donorReimbursement)
+          : prevDonorDeal.compensationAmount || 55000;
 
       const advanceAmount =
         updateFields.donorDeal?.advanceAmount !== undefined
@@ -445,6 +523,12 @@ export async function PATCH(req: Request) {
         updatePayload.assignedHospital = updateFields.assignedHospital || null;
       }
     }
+
+    // Assigned Treating Doctor & Branch
+    if (updateFields.assignedDoctor !== undefined) updatePayload.assignedDoctor = updateFields.assignedDoctor;
+    if (updateFields.assignedDoctorId !== undefined) updatePayload.assignedDoctorId = updateFields.assignedDoctorId;
+    if (updateFields.assignedBranch !== undefined) updatePayload.assignedBranch = updateFields.assignedBranch;
+    if (updateFields.assignedBranchId !== undefined) updatePayload.assignedBranchId = updateFields.assignedBranchId;
 
     // Status (e.g. FILE_COMPLETED, COMPLETED)
     if (updateFields.status !== undefined) {

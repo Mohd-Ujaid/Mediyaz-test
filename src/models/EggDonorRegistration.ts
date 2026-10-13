@@ -150,6 +150,10 @@ export interface IEggDonorRegistration extends Document {
   };
 
   assignedHospital?: mongoose.Types.ObjectId;
+  assignedDoctor?: string;
+  assignedDoctorId?: string;
+  assignedBranch?: string;
+  assignedBranchId?: string;
   assignedBy?: string;
   assignedAt?: Date;
   affiliatedBy?: string;
@@ -164,6 +168,8 @@ export interface IEggDonorRegistration extends Document {
 
   adminNotes?: string;
   pickupDate?: string;
+  pickupLocation?: string;
+  opuLocation?: string;
   recruitmentDate?: string;
   supplyDate?: string;
   fileNumber?: string;
@@ -194,6 +200,12 @@ export interface IEggDonorRegistration extends Document {
     receivedAmount?: number;
     receivedAt?: Date | null;
     paymentReference?: string;
+    invoiceNumber?: string;
+    invoiceDate?: Date | string | null;
+    tdsPercentage?: number;
+    tdsAmount?: number;
+    serviceCharge?: number;
+    totalAmount?: number;
   };
 
   donorDeal?: {
@@ -236,6 +248,12 @@ export interface IClinicDeal {
   receivedAmount?: number;
   receivedAt?: Date | null;
   paymentReference?: string;
+  invoiceNumber?: string;
+  invoiceDate?: Date | string | null;
+  tdsPercentage?: number;
+  tdsAmount?: number;
+  serviceCharge?: number;
+  totalAmount?: number;
 }
 
 export interface IDonorDeal {
@@ -430,6 +448,10 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
     },
 
     assignedHospital: { type: Schema.Types.ObjectId, ref: "Hospital" },
+    assignedDoctor: { type: String, default: "" },
+    assignedDoctorId: { type: String, default: "" },
+    assignedBranch: { type: String, default: "" },
+    assignedBranchId: { type: String, default: "" },
     assignedBy: { type: String, default: null },
     assignedAt: { type: Date, default: null },
     affiliatedBy: { type: String, default: null },
@@ -446,6 +468,8 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
 
     adminNotes: { type: String, default: "" },
     pickupDate: { type: String, default: "" },
+    pickupLocation: { type: String, default: "" },
+    opuLocation: { type: String, default: "" },
     recruitmentDate: { type: String, default: "" },
     supplyDate: { type: String, default: "" },
     fileNumber: { type: String, default: "" },
@@ -488,6 +512,12 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
       receivedAmount: { type: Number, default: 0 },
       receivedAt: { type: Date, default: null },
       paymentReference: { type: String, default: "" },
+      invoiceNumber: { type: String, default: "" },
+      invoiceDate: { type: Date, default: null },
+      tdsPercentage: { type: Number, default: 10 },
+      tdsAmount: { type: Number, default: 0 },
+      serviceCharge: { type: Number, default: 0 },
+      totalAmount: { type: Number, default: 0 },
     },
 
     donorDeal: {

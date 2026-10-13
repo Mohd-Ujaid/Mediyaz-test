@@ -35,6 +35,8 @@ import {
   XCircle,
   FlaskConical,
   Award,
+  GitBranch,
+  Stethoscope,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -123,8 +125,10 @@ export default function ManageSpermRegistrationsPage() {
   // Search & Filters State
   const [search, setSearch] = useState("");
   const [hospitalFilter, setHospitalFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("APPROVED");
-  const [dateFilter, setDateFilter] = useState("");
+  const [fromDateFilter, setFromDateFilter] = useState("");
+  const [toDateFilter, setToDateFilter] = useState("");
 
   // Segmented Status Tabs State for Sperm Donor Management
   const [activeTab, setActiveTab] = useState<"all" | "APPROVED" | "WAITING_FORM13" | "FILE_COMPLETED" | "CANCELLED" | "other">("APPROVED");
@@ -174,11 +178,40 @@ export default function ManageSpermRegistrationsPage() {
   const [hospitalSearch, setHospitalSearch] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [tempSelectedHospitalId, setTempSelectedHospitalId] = useState<string | null>(null);
+  const [tempSelectedBranch, setTempSelectedBranch] = useState<{
+    branchId: string;
+    branchName: string;
+    doctorName?: string;
+  } | null>(null);
+
+  // Dedicated Doctor Assignment States
+  const [isAssignDoctorOpen, setIsAssignDoctorOpen] = useState(false);
+  const [doctorAssignReg, setDoctorAssignReg] = useState<any | null>(null);
+  const [selectedDoctorName, setSelectedDoctorName] = useState("");
+  const [customDoctorInput, setCustomDoctorInput] = useState("");
+  const [doctorModalBranchId, setDoctorModalBranchId] = useState("");
+
+  // Bulk Doctor Assignment States
+  const [isBulkAssignDoctorOpen, setIsBulkAssignDoctorOpen] = useState(false);
+  const [bulkDoctorName, setBulkDoctorName] = useState("");
+  const [bulkCustomDoctorInput, setBulkCustomDoctorInput] = useState("");
+  const [bulkDoctorHospitalId, setBulkDoctorHospitalId] = useState("");
+  const [bulkDoctorBranchId, setBulkDoctorBranchId] = useState("");
 
   const handleOpenAssignModal = (reg: any) => {
     setAssignReg(reg);
     setSelectedReg(reg);
-    setTempSelectedHospitalId(reg.assignedHospital?._id || reg.assignedHospital || null);
+    const currentHospId = reg.assignedHospital?._id || reg.assignedHospital || null;
+    setTempSelectedHospitalId(currentHospId);
+    if (reg.assignedBranch) {
+      setTempSelectedBranch({
+        branchName: reg.assignedBranch,
+        branchId: reg.assignedBranchId || "",
+        doctorName: reg.assignedDoctor || ""
+      });
+    } else {
+      setTempSelectedBranch(null);
+    }
     setHospitalSearch("");
     setIsAssignOpen(true);
   };
@@ -798,6 +831,12 @@ export default function ManageSpermRegistrationsPage() {
   // Bulk Operations Modals
   const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
   const [bulkHospitalSearch, setBulkHospitalSearch] = useState("");
+  const [bulkSelectedHospitalId, setBulkSelectedHospitalId] = useState<string | null>(null);
+  const [bulkSelectedBranch, setBulkSelectedBranch] = useState<{
+    branchId: string;
+    branchName: string;
+    doctorName?: string;
+  } | null>(null);
 
   // Fetch Approved Registrations (Sperm Donors Only)
   async function loadRegistrations() {
@@ -810,12 +849,27 @@ export default function ManageSpermRegistrationsPage() {
         donorType: "sperm",
         status: statusFilter || undefined,
         hospital: hospitalFilter || undefined,
+        branch: branchFilter || undefined,
+        startDate: fromDateFilter || undefined,
+        endDate: toDateFilter || undefined,
       })) as any;
       if (data.success && data.registrations) {
         // Strictly exclude egg donors and auto-sync status for sperm donors in management
         const spermOnly = (data.registrations || [])
           .filter(
-            (r: any) => r.donorType === "sperm" || r.registrationId?.startsWith("MED-SD") || r.registrationId?.startsWith("SPM")
+            (r: any) => {
+              if (r.donorType !== "sperm" && !r.registrationId?.startsWith("MED-SD") && !r.registrationId?.startsWith("SPM")) {
+                return false;
+              }
+              if (hospitalFilter) {
+                const hId = typeof r.assignedHospital === "object" ? r.assignedHospital?._id : r.assignedHospital;
+                if (hId && hId !== hospitalFilter) return false;
+              }
+              if (branchFilter && r.assignedBranch !== branchFilter) {
+                return false;
+              }
+              return true;
+            }
           )
           .map((r: any) => {
             const computed = computeSpermDonorManagementStatus(r).status;
@@ -874,7 +928,7 @@ export default function ManageSpermRegistrationsPage() {
 
   useEffect(() => {
     loadRegistrations();
-  }, [search, hospitalFilter, statusFilter, dateFilter, currentPage]);
+  }, [search, hospitalFilter, branchFilter, statusFilter, fromDateFilter, toDateFilter, currentPage]);
 
   useEffect(() => {
     loadHospitals();
@@ -897,7 +951,10 @@ export default function ManageSpermRegistrationsPage() {
   }, [registrationIdParam]);
 
   // Handle single hospital assign
-  const handleAssignHospital = async (hospitalId: string | null) => {
+  const handleAssignHospital = async (
+    hospitalId: string | null,
+    branchInfo?: { branchName: string; branchId: string; doctorName?: string } | null
+  ) => {
     const target = assignReg || selectedReg;
     if (!target) return;
     setActionLoading(true);
@@ -906,21 +963,40 @@ export default function ManageSpermRegistrationsPage() {
       const data = await updateAdminRegistrationStatusAction({
         registrationId: target.registrationId,
         assignedHospitalId: hospitalId || "",
+        assignedBranch: branchInfo?.branchName || "",
+        assignedBranchId: branchInfo?.branchId || "",
+        assignedDoctor: branchInfo?.doctorName || "",
         reason: "Assigned via Sperm Donor Management dashboard",
       });
       if (data.success) {
-        toast.success(hospitalId ? "Clinic assigned successfully!" : "Clinic unassigned.");
+        toast.success(
+          hospitalId
+            ? (branchInfo?.branchName ? `Mapped to ${branchInfo.branchName} successfully!` : "Clinic assigned successfully!")
+            : "Clinic unassigned."
+        );
         setIsAssignOpen(false);
         const updatedHosp = hospitals.find((h) => h._id === hospitalId) || null;
         setRegistrations((prev) =>
           prev.map((r) =>
             r.registrationId === target.registrationId || r._id === regId
-              ? { ...r, assignedHospital: updatedHosp }
+              ? {
+                  ...r,
+                  assignedHospital: updatedHosp,
+                  assignedBranch: branchInfo?.branchName || "",
+                  assignedBranchId: branchInfo?.branchId || "",
+                  assignedDoctor: branchInfo?.doctorName || "",
+                }
               : r
           )
         );
         if (selectedReg && (selectedReg.registrationId === target.registrationId || selectedReg._id === regId)) {
-          setSelectedReg((prev: any) => ({ ...prev, assignedHospital: updatedHosp }));
+          setSelectedReg((prev: any) => ({
+            ...prev,
+            assignedHospital: updatedHosp,
+            assignedBranch: branchInfo?.branchName || "",
+            assignedBranchId: branchInfo?.branchId || "",
+            assignedDoctor: branchInfo?.doctorName || "",
+          }));
         }
         setAssignReg(null);
         loadRegistrations();
@@ -976,7 +1052,10 @@ export default function ManageSpermRegistrationsPage() {
     }
   };
 
-  const handleBulkAssign = async (hospitalId: string) => {
+  const handleBulkAssign = async (
+    hospitalId: string,
+    branchInfo?: { branchName: string; branchId: string; doctorName?: string } | null
+  ) => {
     if (selectedIds.length === 0 || !hospitalId) return;
     setActionLoading(true);
     try {
@@ -985,6 +1064,9 @@ export default function ManageSpermRegistrationsPage() {
         const res = await updateAdminRegistrationStatusAction({
           registrationId: id,
           assignedHospitalId: hospitalId,
+          assignedBranch: branchInfo?.branchName || "",
+          assignedBranchId: branchInfo?.branchId || "",
+          assignedDoctor: branchInfo?.doctorName || "",
           reason: "Bulk assignment via Sperm Donor Management dashboard",
         });
         if (res.success) successCount++;
@@ -995,6 +1077,96 @@ export default function ManageSpermRegistrationsPage() {
       loadRegistrations();
     } catch {
       toast.error("Bulk clinic assignment encountered errors.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Dedicated Doctor Assignment Handlers
+  const openAssignDoctorModal = (reg: any) => {
+    setDoctorAssignReg(reg);
+    setSelectedDoctorName(reg.assignedDoctor ? `Dr. ${reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}` : "");
+    setCustomDoctorInput("");
+    setDoctorModalBranchId(reg.assignedBranchId || reg.assignedBranch || "");
+    setIsAssignDoctorOpen(true);
+  };
+
+  const handleAssignDoctor = async (docName: string, branchInfo?: { branchName: string; branchId: string }) => {
+    if (!doctorAssignReg) return;
+    const finalDoc = docName.trim();
+    setActionLoading(true);
+    try {
+      const payload: any = {
+        registrationId: doctorAssignReg.registrationId,
+        assignedDoctor: finalDoc,
+        reason: "Doctor assignment via Sperm Donor Management dashboard",
+      };
+      if (branchInfo?.branchName) {
+        payload.assignedBranch = branchInfo.branchName;
+        payload.assignedBranchId = branchInfo.branchId;
+      }
+      const data = await updateAdminRegistrationStatusAction(payload);
+      if (data.success) {
+        toast.success(finalDoc ? `Doctor updated to Dr. ${finalDoc.replace(/^Dr\.?\s*/i, "")}` : "Doctor unassigned.");
+        setIsAssignDoctorOpen(false);
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.registrationId === doctorAssignReg.registrationId
+              ? {
+                  ...r,
+                  assignedDoctor: finalDoc,
+                  ...(branchInfo?.branchName ? { assignedBranch: branchInfo.branchName, assignedBranchId: branchInfo.branchId } : {}),
+                }
+              : r
+          )
+        );
+        if (selectedReg && selectedReg.registrationId === doctorAssignReg.registrationId) {
+          setSelectedReg((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  assignedDoctor: finalDoc,
+                  ...(branchInfo?.branchName ? { assignedBranch: branchInfo.branchName, assignedBranchId: branchInfo.branchId } : {}),
+                }
+              : null
+          );
+        }
+        setDoctorAssignReg(null);
+        await loadRegistrations();
+      } else {
+        toast.error(data.error || "Failed to update doctor assignment.");
+      }
+    } catch {
+      toast.error("Network error during doctor update.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBulkAssignDoctor = async (docName: string) => {
+    const finalDoc = docName.trim();
+    if (selectedIds.length === 0 || !finalDoc) return;
+    setActionLoading(true);
+    let successCount = 0;
+    try {
+      for (const regId of selectedIds) {
+        const data = await updateAdminRegistrationStatusAction({
+          registrationId: regId,
+          assignedDoctor: finalDoc,
+          reason: "Bulk doctor assignment via Sperm Donor Management dashboard",
+        });
+        if (data.success) {
+          successCount++;
+        }
+      }
+      toast.success(`Assigned Dr. ${finalDoc.replace(/^Dr\.?\s*/i, "")} to ${successCount} registrations.`);
+      setIsBulkAssignDoctorOpen(false);
+      setSelectedIds([]);
+      setBulkDoctorName("");
+      setBulkCustomDoctorInput("");
+      await loadRegistrations();
+    } catch {
+      toast.error("Network error during bulk doctor assignment.");
     } finally {
       setActionLoading(false);
     }
@@ -1139,7 +1311,13 @@ export default function ManageSpermRegistrationsPage() {
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds([]);
-  }, [search, hospitalFilter, dateFilter, statusFilter]);
+  }, [search, hospitalFilter, branchFilter, fromDateFilter, toDateFilter, statusFilter]);
+
+  // Selected hospital and available branches for filtering
+  const selectedHospitalObj = hospitals.find((h) => h._id === hospitalFilter);
+  const availableBranches = selectedHospitalObj
+    ? (selectedHospitalObj.branches || [])
+    : hospitals.flatMap((h) => (h.branches || []).map((b: any) => ({ ...b, hospitalName: h.name })));
 
   // Filtered hospitals lists
   const filteredHospitals = hospitals.filter(
@@ -1284,13 +1462,32 @@ export default function ManageSpermRegistrationsPage() {
           <div>
             <select
               value={hospitalFilter}
-              onChange={(e) => setHospitalFilter(e.target.value)}
-              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
+              onChange={(e) => {
+                setHospitalFilter(e.target.value);
+                setBranchFilter("");
+              }}
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500 font-medium"
             >
-              <option value="">All Affiliated Hospitals</option>
+              <option value="">All Hospitals</option>
               {hospitals.map((h) => (
                 <option key={h._id} value={h._id}>
                   {h.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Branch Filter */}
+          <div>
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500 font-medium"
+            >
+              <option value="">All Branches</option>
+              {availableBranches.map((b: any, bIdx: number) => (
+                <option key={b._id || `${b.branchName}-${bIdx}`} value={b.branchName}>
+                  {b.branchName} {b.city ? `(${b.city})` : ""} {!selectedHospitalObj && b.hospitalName ? `• ${b.hospitalName}` : ""}
                 </option>
               ))}
             </select>
@@ -1337,23 +1534,62 @@ export default function ManageSpermRegistrationsPage() {
               )}
             </select>
           </div>
+        </div>
 
-          {/* Clear Filters Button */}
-          <div>
+        {/* Date Range & Reset Options */}
+        <div className="flex flex-wrap items-center justify-between gap-4 text-xs pt-3 border-t border-slate-100 dark:border-slate-900">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-slate-500">Date Range:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">From:</span>
+              <input
+                type="date"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">To:</span>
+              <input
+                type="date"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            {(fromDateFilter || toDateFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFromDateFilter("");
+                  setToDateFilter("");
+                }}
+                className="text-[11px] text-rose-500 hover:text-rose-600 underline font-medium"
+              >
+                Clear Dates
+              </button>
+            )}
+          </div>
+
+          {(search || hospitalFilter || branchFilter || statusFilter !== "APPROVED" || fromDateFilter || toDateFilter || activeTab !== "APPROVED") && (
             <Button
               variant="outline"
+              size="sm"
               onClick={() => {
                 setSearch("");
                 setHospitalFilter("");
+                setBranchFilter("");
                 setStatusFilter("APPROVED");
                 setActiveTab("APPROVED");
-                setDateFilter("");
+                setFromDateFilter("");
+                setToDateFilter("");
               }}
-              className="w-full h-9 rounded-xl text-xs text-slate-600 hover:text-slate-900 border-slate-200 dark:border-slate-800"
+              className="h-8 text-xs text-slate-600 hover:text-slate-900 border-slate-200 dark:border-slate-800 rounded-xl"
             >
-              Reset Filters
+              Reset All Filters
             </Button>
-          </div>
+          )}
         </div>
       </Card>
 
@@ -1370,12 +1606,45 @@ export default function ManageSpermRegistrationsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
-              onClick={() => setIsBulkAssignOpen(true)}
+              onClick={() => {
+                setBulkSelectedHospitalId(null);
+                setBulkSelectedBranch(null);
+                setIsBulkAssignOpen(true);
+              }}
               disabled={actionLoading}
-              className="border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-300 hover:bg-teal-100/50 rounded-xl text-xs gap-1 py-1 px-3 h-8"
+              className="border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-300 hover:bg-teal-100/50 rounded-xl text-xs gap-1 py-1 px-3 h-8 cursor-pointer"
               title="Assign selected sperm donors to an affiliate clinic"
             >
               <Building2 className="w-3.5 h-3.5 text-teal-600" /> Assign Clinic
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkDoctorName("");
+                setBulkCustomDoctorInput("");
+                const selectedRegs = registrations.filter(r => selectedIds.includes(r.registrationId));
+                const firstHospId = selectedRegs[0]?.assignedHospital?._id || selectedRegs[0]?.assignedHospitalId;
+                const allSameHosp = selectedRegs.length > 0 && selectedRegs.every(r => (r.assignedHospital?._id || r.assignedHospitalId) === firstHospId);
+                if (allSameHosp && firstHospId) {
+                  setBulkDoctorHospitalId(firstHospId);
+                  const firstBranchId = selectedRegs[0]?.assignedBranchId || selectedRegs[0]?.assignedBranch;
+                  const allSameBranch = selectedRegs.every(r => (r.assignedBranchId || r.assignedBranch) === firstBranchId);
+                  if (allSameBranch && firstBranchId) {
+                    setBulkDoctorBranchId(firstBranchId);
+                  } else {
+                    setBulkDoctorBranchId("");
+                  }
+                } else {
+                  setBulkDoctorHospitalId("");
+                  setBulkDoctorBranchId("");
+                }
+                setIsBulkAssignDoctorOpen(true);
+              }}
+              disabled={actionLoading}
+              className="border-purple-300 dark:border-purple-700 text-purple-800 dark:text-purple-300 hover:bg-purple-100/50 rounded-xl text-xs gap-1 py-1 px-3 h-8 cursor-pointer shadow-xs"
+              title="Assign selected sperm donors to a treating doctor"
+            >
+              <Stethoscope className="w-3.5 h-3.5 text-purple-600" /> Assign Doctor
             </Button>
             <Button
               variant="outline"
@@ -1449,6 +1718,7 @@ export default function ManageSpermRegistrationsPage() {
                   <th className="p-3.5 whitespace-nowrap">Donor ID</th>
                   <th className="p-3.5 whitespace-nowrap">Donor Name</th>
                   <th className="p-3.5 whitespace-nowrap">Assigned Hospital</th>
+                  <th className="p-3.5 whitespace-nowrap">Treating Doctor</th>
                   <th className="p-3.5 whitespace-nowrap">Approved By</th>
                   <th className="p-3.5 whitespace-nowrap">Donor Deal</th>
                   <th className="p-3.5 whitespace-nowrap">Payout Status</th>
@@ -1509,15 +1779,21 @@ export default function ManageSpermRegistrationsPage() {
                                 {reg.assignedHospital.name}
                               </span>
                             </div>
+                            {reg.assignedBranch && (
+                              <div className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold flex items-center gap-1 pl-1">
+                                <GitBranch className="w-3 h-3 text-teal-600 shrink-0" />
+                                <span>{reg.assignedBranch}</span>
+                              </div>
+                            )}
                             {Boolean(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice) && (
-                              <div className="text-[10px] font-bold text-blue-600 font-mono">
+                              <div className="text-[10px] font-bold text-blue-600 font-mono pl-1">
                                 Hospital Deal: ₹{Number(reg.clinicDeal?.hospitalDealPrice || (dealInfo.category === "profile" ? (reg.assignedHospital?.profiledonorDealPrice || reg.assignedHospital?.donorDealPrice) : reg.assignedHospital?.donorDealPrice)).toLocaleString()}
                               </div>
                             )}
                             <button
                               type="button"
                               onClick={() => handleOpenAssignModal(reg)}
-                              className="text-[9px] text-teal-600 hover:text-teal-800 hover:underline block text-left font-semibold cursor-pointer"
+                              className="text-[10px] text-teal-600 hover:text-teal-800 hover:underline block text-left font-semibold cursor-pointer pl-1"
                             >
                               Change Clinic
                             </button>
@@ -1530,6 +1806,30 @@ export default function ManageSpermRegistrationsPage() {
                             className="h-6 text-[10px] text-teal-600 border-teal-200 hover:bg-teal-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
                           >
                             + Assign Hospital
+                          </Button>
+                        )}
+                      </td>
+                      <td className="p-3.5 whitespace-nowrap">
+                        {reg.assignedDoctor ? (
+                          <button
+                            type="button"
+                            onClick={() => openAssignDoctorModal(reg)}
+                            className="font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-950/60 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-purple-200 dark:border-purple-800 whitespace-nowrap cursor-pointer transition-colors"
+                            title="Click to change treating doctor"
+                          >
+                            <Stethoscope className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span className="truncate max-w-[150px]" title={reg.assignedDoctor}>
+                              Dr. {reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}
+                            </span>
+                          </button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openAssignDoctorModal(reg)}
+                            className="h-6 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
+                          >
+                            + Assign Doctor
                           </Button>
                         )}
                       </td>
@@ -1845,96 +2145,358 @@ export default function ManageSpermRegistrationsPage() {
 
       {/* DIALOG 1: MAP HOSPITAL */}
       <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-xl rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-              <Building2 className="w-5 h-5 text-teal-600" /> Map Partner Clinic
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Building2 className="w-5 h-5 text-teal-600" /> Map Partner Hospital &amp; Branch
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Assign sperm donor: <span className="font-mono font-bold">{selectedReg?.registrationId}</span> to an active partner hospital.
+              Assign sperm donor: <span className="font-mono font-bold">{selectedReg?.registrationId}</span> to a partner hospital and choose the specific branch center and treating doctor.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Show Current Hospital */}
+          <div className="space-y-4 py-2 text-xs">
+            {/* Show Current Hospital & Branch Assignment */}
             {selectedReg?.assignedHospital && (
-              <div className="p-3.5 bg-teal-50/50 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900 rounded-xl space-y-1">
-                <div className="text-[10px] text-teal-700 font-bold uppercase">Currently Assigned to:</div>
-                <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedReg.assignedHospital.name}</div>
-                <div className="text-xs text-slate-500">{selectedReg.assignedHospital.address}</div>
-                <Button
-                  onClick={() => handleAssignHospital(null)}
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-7 bg-white text-red-600 hover:text-red-700 text-[10px] rounded-lg border-slate-200 hover:bg-red-50"
-                  disabled={actionLoading}
-                >
-                  Unassign Hospital mapping
-                </Button>
+              <div className="p-3.5 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-teal-700 dark:text-teal-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Currently Assigned
+                  </span>
+                  <Button
+                    onClick={() => handleAssignHospital(null, null)}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-[10px] rounded-lg p-1 px-2 cursor-pointer"
+                    disabled={actionLoading}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" /> Unassign Clinic
+                  </Button>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="font-bold text-sm text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-teal-600 shrink-0" />
+                    <span>{selectedReg.assignedHospital.name}</span>
+                  </div>
+                  
+                  {selectedReg.assignedBranch ? (
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 pl-6">
+                      <GitBranch className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                      <span>Branch: {selectedReg.assignedBranch}</span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 pl-6">
+                      Branch: Main / Single Center
+                    </div>
+                  )}
+
+                  {selectedReg.assignedDoctor && (
+                    <div className="text-[11px] text-purple-700 dark:text-purple-300 font-medium pl-6 flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3 text-purple-600 shrink-0" />
+                      <span>Treating Doctor: Dr. {selectedReg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}</span>
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-slate-500 pl-6">
+                    {selectedReg.assignedHospital.address}
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Search Clinics */}
-            <div className="space-y-2">
-              <label className="font-bold text-slate-700">Select Partner Hospital:</label>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Filter active clinics by name or city..."
-                  value={hospitalSearch}
-                  onChange={(e) => setHospitalSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                />
+            {/* Professional Step-by-Step Dropdown Mapping */}
+            <div className="space-y-4 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300 pb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Choose Partner Clinic &amp; Designated Branch</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  {hospitals.length} partner clinics available
+                </span>
               </div>
 
-              {/* Clinic list */}
-              <div className="max-h-40 overflow-y-auto border border-slate-100 dark:border-slate-900 rounded-xl divide-y divide-slate-50 dark:divide-slate-900">
-                {hospitalsLoading ? (
-                  <div className="p-8 text-center text-xs text-slate-400">Loading clinics...</div>
-                ) : filteredHospitals.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400">No active clinics available.</div>
-                ) : (
-                  filteredHospitals.map((h) => (
-                    <button
-                      key={h._id}
-                      type="button"
-                      onClick={() => setTempSelectedHospitalId(h._id)}
-                      className={`w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-900 flex justify-between items-center group text-xs ${tempSelectedHospitalId === h._id ? "bg-teal-50/50 dark:bg-teal-950/20" : ""}`}
-                      disabled={actionLoading}
-                    >
-                      <div className="space-y-0.5">
-                        <div className={`font-semibold text-slate-800 dark:text-slate-200 group-hover:text-teal-600 ${tempSelectedHospitalId === h._id ? "text-teal-600 font-bold" : ""}`}>{h.name}</div>
-                        <div className="text-[10px] text-slate-500">{h.city}, {h.state}</div>
-                      </div>
-                      {tempSelectedHospitalId === h._id && (
-                        <Check className="w-4 h-4 text-teal-600 shrink-0 font-bold" />
-                      )}
-                    </button>
-                  ))
-                )}
+              {/* 1. Hospital Dropdown */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>1. Select Hospital / Clinic: <span className="text-red-500">*</span></span>
+                  {tempSelectedHospitalId && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Selected
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={tempSelectedHospitalId || ""}
+                  onChange={(e) => {
+                    const hospId = e.target.value;
+                    setTempSelectedHospitalId(hospId || null);
+                    if (!hospId) {
+                      setTempSelectedBranch(null);
+                      return;
+                    }
+                    const hosp = hospitals.find(h => h._id === hospId);
+                    if (hosp?.branches && hosp.branches.length > 0) {
+                      const firstB = hosp.branches[0];
+                      const firstDoc = firstB.doctors && firstB.doctors.length > 0
+                        ? (typeof firstB.doctors[0] === "string" ? firstB.doctors[0] : firstB.doctors[0].name)
+                        : (firstB.doctorName || "");
+                      setTempSelectedBranch({
+                        branchId: firstB._id || "branch_0",
+                        branchName: firstB.branchName,
+                        doctorName: firstDoc
+                      });
+                    } else {
+                      setTempSelectedBranch({
+                        branchId: "main",
+                        branchName: "Main Center",
+                        doctorName: hosp?.doctorName || ""
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                >
+                  <option value="">-- Choose Partner Hospital / ART Clinic --</option>
+                  {hospitals.map(h => (
+                    <option key={h._id} value={h._id}>
+                      {h.name} {h.shortName ? `(${h.shortName})` : ""} {h.city ? `• ${h.city}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {/* Step 2 & 3: Branch and Treatment Doctor (enabled once hospital is picked) */}
+              {tempSelectedHospitalId && (() => {
+                const hosp = hospitals.find(h => h._id === tempSelectedHospitalId);
+                const hasBranches = Array.isArray(hosp?.branches) && hosp.branches.length > 0;
+                const branches = hosp?.branches || [];
+                const currentBranchObj = branches.find((b: any) => 
+                  b._id === tempSelectedBranch?.branchId || b.branchName === tempSelectedBranch?.branchName
+                ) || (branches.length > 0 ? branches[0] : null);
+
+                return (
+                  <div className="space-y-3.5 p-3.5 rounded-2xl bg-teal-50/40 dark:bg-slate-900/60 border border-teal-200/60 dark:border-slate-800">
+                    {/* Branch Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <GitBranch className="w-3.5 h-3.5 text-teal-600" />
+                          <span>2. Select Branch Center: <span className="text-red-500">*</span></span>
+                        </span>
+                        {hasBranches && (
+                          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">
+                            {branches.length} {branches.length === 1 ? "branch available" : "branches available"}
+                          </span>
+                        )}
+                      </label>
+
+                      {hasBranches ? (
+                        <select
+                          value={tempSelectedBranch?.branchId || currentBranchObj?._id || ""}
+                          onChange={(e) => {
+                            const bId = e.target.value;
+                            const b = branches.find((item: any, idx: number) => (item._id || `branch_${idx}`) === bId || item._id === bId);
+                            if (b) {
+                              const doc = b.doctors && b.doctors.length > 0
+                                ? (typeof b.doctors[0] === "string" ? b.doctors[0] : b.doctors[0].name)
+                                : (b.doctorName || "");
+                              setTempSelectedBranch({
+                                branchId: b._id || bId,
+                                branchName: b.branchName,
+                                doctorName: doc
+                              });
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                        >
+                          {branches.map((b: any, bIdx: number) => {
+                            const idVal = b._id || `branch_${bIdx}`;
+                            const locStr = [b.city, b.state].filter(Boolean).join(", ");
+                            return (
+                              <option key={idVal} value={idVal}>
+                                {b.branchName} {b.branchCode ? `(${b.branchCode})` : ""} {locStr ? `• ${locStr}` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <div className="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span>Single / Main Center (All operations based at main facility)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Branch Info Card (Reg No, GST, Address) */}
+                    {currentBranchObj && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5 shadow-xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {currentBranchObj.registrationNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 text-[10px] font-semibold">
+                              Reg No: {currentBranchObj.registrationNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.gstNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 text-[10px] font-semibold">
+                              GSTIN: {currentBranchObj.gstNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.pickupLocation && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-medium">
+                              Location: {currentBranchObj.pickupLocation}
+                            </span>
+                          )}
+                        </div>
+
+                        {(currentBranchObj.addressLine1 || currentBranchObj.city || currentBranchObj.state) && (
+                          <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 text-[11px] pt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>
+                              {[currentBranchObj.addressLine1, currentBranchObj.city, currentBranchObj.state, currentBranchObj.pincode].filter(Boolean).join(", ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Step 3: Treatment Doctor Dropdown */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                          <span>3. Treatment Doctor:</span>
+                        </span>
+                        {tempSelectedBranch?.doctorName && (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                            Dr. {tempSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}
+                          </span>
+                        )}
+                      </label>
+
+                      {currentBranchObj?.doctors && currentBranchObj.doctors.length > 0 ? (
+                        <div className="space-y-2">
+                          <select
+                            value={
+                              currentBranchObj.doctors.some((d: any) => {
+                                const dName = typeof d === "string" ? d : d.name;
+                                return (tempSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                              })
+                                ? (tempSelectedBranch?.doctorName || "")
+                                : "__custom__"
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                setTempSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: ""
+                                }));
+                              } else {
+                                setTempSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }
+                            }}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                          >
+                            {currentBranchObj.doctors.map((d: any, dIdx: number) => {
+                              const dName = typeof d === "string" ? d : d.name;
+                              return (
+                                <option key={dIdx} value={dName}>
+                                  Dr. {dName.replace(/^Dr\.?\s*/i, "")}
+                                </option>
+                              );
+                            })}
+                            <option value="__custom__">+ Enter Custom Doctor Name...</option>
+                          </select>
+
+                          {/* Custom doctor name text input if custom selected or none match */}
+                          {(!currentBranchObj.doctors.some((d: any) => {
+                            const dName = typeof d === "string" ? d : d.name;
+                            return (tempSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                          })) && (
+                            <input
+                              type="text"
+                              placeholder="Type Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                              value={tempSelectedBranch?.doctorName || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setTempSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Enter Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                          value={tempSelectedBranch?.doctorName || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTempSelectedBranch(prev => ({
+                              branchId: prev?.branchId || currentBranchObj?._id || "branch_0",
+                              branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                              doctorName: val
+                            }));
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Action buttons */}
-            <div className="flex gap-3 justify-end pt-3 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsAssignOpen(false)}
-                className="rounded-xl text-xs"
-                disabled={actionLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => handleAssignHospital(tempSelectedHospitalId)}
-                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1"
-                disabled={actionLoading}
-              >
-                Confirm Mapping
-              </Button>
+            <div className="flex items-center justify-between gap-3 pt-3 border-t">
+              <div className="text-[11px] text-slate-500 truncate">
+                {tempSelectedHospitalId ? (
+                  <span>
+                    Selected: <strong className="text-teal-700 dark:text-teal-300">
+                      {hospitals.find(h => h._id === tempSelectedHospitalId)?.name}
+                    </strong>
+                    {tempSelectedBranch?.branchName && (
+                      <> → <span className="font-semibold">{tempSelectedBranch.branchName}</span></>
+                    )}
+                    {tempSelectedBranch?.doctorName && (
+                      <> • <span className="text-purple-600 dark:text-purple-400 font-semibold">Dr. {tempSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}</span></>
+                    )}
+                  </span>
+                ) : (
+                  <span>No hospital selected</span>
+                )}
+              </div>
+
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAssignOpen(false)}
+                  className="rounded-xl text-xs cursor-pointer"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleAssignHospital(tempSelectedHospitalId, tempSelectedBranch)}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer font-bold"
+                  disabled={!tempSelectedHospitalId || actionLoading}
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Confirm Mapping
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -2806,6 +3368,18 @@ export default function ManageSpermRegistrationsPage() {
                             <div className="font-bold text-foreground text-sm">
                               {selectedReg.assignedHospital.name}
                             </div>
+                            {selectedReg.assignedBranch && (
+                              <div className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 flex items-center gap-1">
+                                <GitBranch className="w-3 h-3 text-teal-600" />
+                                <span>{selectedReg.assignedBranch}</span>
+                              </div>
+                            )}
+                            {selectedReg.assignedDoctor && (
+                              <div className="text-[11px] font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                                <Stethoscope className="w-3 h-3 text-purple-600" />
+                                <span>Dr. {selectedReg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}</span>
+                              </div>
+                            )}
                             <div className="text-[10px] text-muted-foreground">
                               {selectedReg.assignedHospital.city}, {selectedReg.assignedHospital.state}
                             </div>
@@ -3228,52 +3802,764 @@ export default function ManageSpermRegistrationsPage() {
         }}
       />
 
-      {/* DIALOG 4: BULK ASSIGN HOSPITAL */}
+      {/* DIALOG 4: BULK ASSIGN HOSPITAL & BRANCH */}
       <Dialog open={isBulkAssignOpen} onOpenChange={setIsBulkAssignOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-xl rounded-2xl p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-              <Building2 className="w-5 h-5 text-teal-600" /> Bulk Clinic Mapping
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Building2 className="w-5 h-5 text-teal-600" /> Bulk Clinic &amp; Branch Mapping
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Assign <span className="font-bold">{selectedIds.length}</span> selected applications to a single clinic.
+              Assign <strong className="text-teal-700 dark:text-teal-300 font-bold">{selectedIds.length}</strong> selected applications to a single clinic and designated branch.
             </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <label className="font-bold text-slate-700">Select Affiliate Clinic:</label>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search clinics..."
-                  value={bulkHospitalSearch}
-                  onChange={(e) => setBulkHospitalSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                />
+            {/* Step-by-Step Dropdown Mapping for Bulk Assignment */}
+            <div className="space-y-4 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300 pb-1 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Choose Destination Clinic &amp; Branch</span>
+                </span>
+                <span className="text-[10px] text-teal-700 dark:text-teal-300 font-bold">
+                  Targeting {selectedIds.length} donors
+                </span>
               </div>
 
-              <div className="max-h-40 overflow-y-auto border border-slate-100 dark:border-slate-900 rounded-xl divide-y divide-slate-50 dark:divide-slate-900">
-                {hospitalsLoading ? (
-                  <div className="p-8 text-center text-xs text-slate-400">Loading clinics...</div>
-                ) : bulkFilteredHospitals.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400">No active clinics match search.</div>
-                ) : (
-                  bulkFilteredHospitals.map((h) => (
-                    <button
-                      key={h._id}
-                      onClick={() => handleBulkAssign(h._id)}
-                      className="w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-900 flex justify-between items-center group text-xs"
-                      disabled={actionLoading}
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-teal-600">{h.name}</div>
-                        <div className="text-[10px] text-slate-500">{h.city}, {h.state}</div>
+              {/* 1. Hospital Dropdown */}
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>1. Select Hospital / Clinic: <span className="text-red-500">*</span></span>
+                  {bulkSelectedHospitalId && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Selected
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={bulkSelectedHospitalId || ""}
+                  onChange={(e) => {
+                    const hospId = e.target.value;
+                    setBulkSelectedHospitalId(hospId || null);
+                    if (!hospId) {
+                      setBulkSelectedBranch(null);
+                      return;
+                    }
+                    const hosp = hospitals.find(h => h._id === hospId);
+                    if (hosp?.branches && hosp.branches.length > 0) {
+                      const firstB = hosp.branches[0];
+                      const firstDoc = firstB.doctors && firstB.doctors.length > 0
+                        ? (typeof firstB.doctors[0] === "string" ? firstB.doctors[0] : firstB.doctors[0].name)
+                        : (firstB.doctorName || "");
+                      setBulkSelectedBranch({
+                        branchId: firstB._id || "branch_0",
+                        branchName: firstB.branchName,
+                        doctorName: firstDoc
+                      });
+                    } else {
+                      setBulkSelectedBranch({
+                        branchId: "main",
+                        branchName: "Main Center",
+                        doctorName: hosp?.doctorName || ""
+                      });
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                >
+                  <option value="">-- Choose Partner Hospital / ART Clinic --</option>
+                  {hospitals.map(h => (
+                    <option key={h._id} value={h._id}>
+                      {h.name} {h.shortName ? `(${h.shortName})` : ""} {h.city ? `• ${h.city}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2 & 3: Branch and Treatment Doctor for Bulk */}
+              {bulkSelectedHospitalId && (() => {
+                const hosp = hospitals.find(h => h._id === bulkSelectedHospitalId);
+                const hasBranches = Array.isArray(hosp?.branches) && hosp.branches.length > 0;
+                const branches = hosp?.branches || [];
+                const currentBranchObj = branches.find((b: any) => 
+                  b._id === bulkSelectedBranch?.branchId || b.branchName === bulkSelectedBranch?.branchName
+                ) || (branches.length > 0 ? branches[0] : null);
+
+                return (
+                  <div className="space-y-3.5 p-3.5 rounded-2xl bg-teal-50/40 dark:bg-slate-900/60 border border-teal-200/60 dark:border-slate-800">
+                    {/* Branch Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <GitBranch className="w-3.5 h-3.5 text-teal-600" />
+                          <span>2. Select Branch Center: <span className="text-red-500">*</span></span>
+                        </span>
+                        {hasBranches && (
+                          <span className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold">
+                            {branches.length} {branches.length === 1 ? "branch available" : "branches available"}
+                          </span>
+                        )}
+                      </label>
+
+                      {hasBranches ? (
+                        <select
+                          value={bulkSelectedBranch?.branchId || currentBranchObj?._id || ""}
+                          onChange={(e) => {
+                            const bId = e.target.value;
+                            const b = branches.find((item: any, idx: number) => (item._id || `branch_${idx}`) === bId || item._id === bId);
+                            if (b) {
+                              const doc = b.doctors && b.doctors.length > 0
+                                ? (typeof b.doctors[0] === "string" ? b.doctors[0] : b.doctors[0].name)
+                                : (b.doctorName || "");
+                              setBulkSelectedBranch({
+                                branchId: b._id || bId,
+                                branchName: b.branchName,
+                                doctorName: doc
+                              });
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                        >
+                          {branches.map((b: any, bIdx: number) => {
+                            const idVal = b._id || `branch_${bIdx}`;
+                            const locStr = [b.city, b.state].filter(Boolean).join(", ");
+                            return (
+                              <option key={idVal} value={idVal}>
+                                {b.branchName} {b.branchCode ? `(${b.branchCode})` : ""} {locStr ? `• ${locStr}` : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <div className="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                          <span>Single / Main Center (All operations based at main facility)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Branch Info Card (Reg No, GST, Address) */}
+                    {currentBranchObj && (
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5 shadow-xs">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {currentBranchObj.registrationNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 text-[10px] font-semibold">
+                              Reg No: {currentBranchObj.registrationNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.gstNumber && (
+                            <span className="font-mono px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/60 text-[10px] font-semibold">
+                              GSTIN: {currentBranchObj.gstNumber}
+                            </span>
+                          )}
+                          {currentBranchObj.pickupLocation && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-medium">
+                              Location: {currentBranchObj.pickupLocation}
+                            </span>
+                          )}
+                        </div>
+
+                        {(currentBranchObj.addressLine1 || currentBranchObj.city || currentBranchObj.state) && (
+                          <div className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5 text-[11px] pt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>
+                              {[currentBranchObj.addressLine1, currentBranchObj.city, currentBranchObj.state, currentBranchObj.pincode].filter(Boolean).join(", ")}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    </button>
-                  ))
+                    )}
+
+                    {/* Step 3: Treatment Doctor Dropdown for Bulk */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                          <span>3. Treatment Doctor for Selected Applications:</span>
+                        </span>
+                        {bulkSelectedBranch?.doctorName && (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                            Dr. {bulkSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}
+                          </span>
+                        )}
+                      </label>
+
+                      {currentBranchObj?.doctors && currentBranchObj.doctors.length > 0 ? (
+                        <div className="space-y-2">
+                          <select
+                            value={
+                              currentBranchObj.doctors.some((d: any) => {
+                                const dName = typeof d === "string" ? d : d.name;
+                                return (bulkSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                              })
+                                ? (bulkSelectedBranch?.doctorName || "")
+                                : "__custom__"
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                setBulkSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: ""
+                                }));
+                              } else {
+                                setBulkSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }
+                            }}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                          >
+                            {currentBranchObj.doctors.map((d: any, dIdx: number) => {
+                              const dName = typeof d === "string" ? d : d.name;
+                              return (
+                                <option key={dIdx} value={dName}>
+                                  Dr. {dName.replace(/^Dr\.?\s*/i, "")}
+                                </option>
+                              );
+                            })}
+                            <option value="__custom__">+ Enter Custom Doctor Name...</option>
+                          </select>
+
+                          {/* Custom doctor name text input if custom selected or none match */}
+                          {(!currentBranchObj.doctors.some((d: any) => {
+                            const dName = typeof d === "string" ? d : d.name;
+                            return (bulkSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
+                          })) && (
+                            <input
+                              type="text"
+                              placeholder="Type Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                              value={bulkSelectedBranch?.doctorName || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBulkSelectedBranch(prev => ({
+                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
+                                  branchName: prev?.branchName || currentBranchObj.branchName,
+                                  doctorName: val
+                                }));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Enter Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                          value={bulkSelectedBranch?.doctorName || ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setBulkSelectedBranch(prev => ({
+                              branchId: prev?.branchId || currentBranchObj?._id || "branch_0",
+                              branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                              doctorName: val
+                            }));
+                          }}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex items-center justify-between gap-3 pt-3 border-t">
+              <div className="text-[11px] text-slate-500 truncate">
+                {bulkSelectedHospitalId ? (
+                  <span>
+                    Selected: <strong className="text-teal-700 dark:text-teal-300">
+                      {hospitals.find(h => h._id === bulkSelectedHospitalId)?.name}
+                    </strong>
+                    {bulkSelectedBranch?.branchName && (
+                      <> → <span className="font-semibold">{bulkSelectedBranch.branchName}</span></>
+                    )}
+                    {bulkSelectedBranch?.doctorName && (
+                      <> • <span className="text-purple-600 dark:text-purple-400 font-semibold">Dr. {bulkSelectedBranch.doctorName.replace(/^Dr\.?\s*/i, "")}</span></>
+                    )}
+                  </span>
+                ) : (
+                  <span>No hospital selected</span>
                 )}
               </div>
+
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsBulkAssignOpen(false)}
+                  className="rounded-xl text-xs cursor-pointer"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (bulkSelectedHospitalId) {
+                      handleBulkAssign(bulkSelectedHospitalId, bulkSelectedBranch);
+                    }
+                  }}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer font-bold"
+                  disabled={!bulkSelectedHospitalId || actionLoading}
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Confirm Bulk Assignment ({selectedIds.length})
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: ASSIGN TREATING DOCTOR (STRICTLY ISOLATED TO ASSIGNED HOSPITAL & BRANCH) */}
+      <Dialog open={isAssignDoctorOpen} onOpenChange={setIsAssignDoctorOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Stethoscope className="w-5 h-5 text-purple-600" /> Assign Treating Doctor
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Assign treating doctor for donor{" "}
+              <strong className="text-purple-700 dark:text-purple-300 font-bold">
+                {doctorAssignReg?.personalInfo?.fullName || doctorAssignReg?.donorId || doctorAssignReg?.registrationId}
+              </strong>
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Hospital & Branch Context - Isolated to assigned hospital & branch */}
+            {(() => {
+              const hospId = doctorAssignReg?.assignedHospital?._id 
+                || doctorAssignReg?.assignedHospitalId 
+                || (typeof doctorAssignReg?.assignedHospital === "string" && doctorAssignReg?.assignedHospital.length === 24 ? doctorAssignReg?.assignedHospital : null);
+              const hospName = doctorAssignReg?.assignedHospital?.name 
+                || (typeof doctorAssignReg?.assignedHospital === "string" ? doctorAssignReg?.assignedHospital : "");
+
+              const matchedHosp = hospitals.find(h => 
+                (hospId && (h._id === hospId || String(h._id) === String(hospId))) ||
+                (hospName && h.name?.toLowerCase().trim() === hospName.toLowerCase().trim())
+              );
+
+              const hasBranches = Array.isArray(matchedHosp?.branches) && matchedHosp.branches.length > 0;
+              const currentBranch = hasBranches 
+                ? (matchedHosp.branches.find((b: any) => 
+                    b._id === doctorModalBranchId ||
+                    b.branchName === doctorModalBranchId ||
+                    b.branchName === doctorAssignReg?.assignedBranch ||
+                    b._id === doctorAssignReg?.assignedBranchId
+                  ) || matchedHosp.branches[0])
+                : null;
+
+              // Extract doctors strictly from this single branch / hospital (NO MERGING with other branches or hospitals!)
+              const branchDocs: string[] = [];
+              const addDocName = (raw: string) => {
+                if (!raw) return;
+                raw.split(/[,;\/]+|\band\b/i).forEach(p => {
+                  const clean = p.replace(/^Dr\.?\s*/i, "").trim();
+                  if (clean && !branchDocs.some(d => d.toLowerCase() === clean.toLowerCase())) {
+                    branchDocs.push(clean);
+                  }
+                });
+              };
+
+              if (currentBranch) {
+                if (Array.isArray(currentBranch.doctors)) {
+                  currentBranch.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (currentBranch.doctorName) {
+                  addDocName(currentBranch.doctorName);
+                }
+              } else if (matchedHosp && (!matchedHosp.branches || matchedHosp.branches.length === 0)) {
+                if (Array.isArray(matchedHosp.doctors)) {
+                  matchedHosp.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (matchedHosp.doctorName) {
+                  addDocName(matchedHosp.doctorName);
+                }
+              }
+
+              return (
+                <div className="space-y-3">
+                  {matchedHosp ? (
+                    <div className="p-3 bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-900/60 rounded-xl space-y-2">
+                      <div className="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300">
+                        <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <span>{matchedHosp.name}</span>
+                      </div>
+
+                      {hasBranches ? (
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-teal-700 dark:text-teal-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <GitBranch className="w-3 h-3 text-teal-600" />
+                            <span>Branch:</span>
+                          </label>
+                          <select
+                            value={currentBranch?._id || currentBranch?.branchName || ""}
+                            onChange={(e) => {
+                              const bId = e.target.value;
+                              setDoctorModalBranchId(bId);
+                              const newB = matchedHosp.branches.find((b: any) => b._id === bId || b.branchName === bId);
+                              if (newB) {
+                                const newDocs: string[] = [];
+                                const addN = (raw: string) => {
+                                  if (!raw) return;
+                                  raw.split(/[,;\/]+|\band\b/i).forEach(p => {
+                                    const c = p.replace(/^Dr\.?\s*/i, "").trim();
+                                    if (c && !newDocs.some(d => d.toLowerCase() === c.toLowerCase())) newDocs.push(c);
+                                  });
+                                };
+                                if (Array.isArray(newB.doctors)) newB.doctors.forEach((d: any) => addN(typeof d === "string" ? d : d?.name));
+                                if (newB.doctorName) addN(newB.doctorName);
+                                if (newDocs.length > 0) {
+                                  setSelectedDoctorName(`Dr. ${newDocs[0]}`);
+                                  setCustomDoctorInput("");
+                                }
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-teal-500"
+                          >
+                            {matchedHosp.branches.map((b: any, bIdx: number) => (
+                              <option key={b._id || bIdx} value={b._id || b.branchName}>
+                                {b.branchName} {b.city ? `• ${b.city}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-[11px] text-teal-700 dark:text-teal-400 pl-5">
+                          <span>Main Center Facility</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl space-y-1 text-amber-800 dark:text-amber-300">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>No Hospital Assigned</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                        Please assign a hospital &amp; branch to this donor first to view affiliated doctors, or enter doctor name manually below.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Available Doctors (STRICTLY for this branch) */}
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                      <span>Treating Doctor:</span>
+                      {selectedDoctorName && (
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                          Dr. {selectedDoctorName.replace(/^Dr\.?\s*/i, "")}
+                        </span>
+                      )}
+                    </label>
+
+                    {branchDocs.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                          <Stethoscope className="w-3 h-3 text-purple-600" />
+                          <span>Doctors available at {currentBranch?.branchName || matchedHosp?.name} ({branchDocs.length}):</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {branchDocs.map((doc, idx) => {
+                            const isSelected = selectedDoctorName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase() === doc.trim().toLowerCase();
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDoctorName(`Dr. ${doc}`);
+                                  setCustomDoctorInput("");
+                                }}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isSelected
+                                    ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                    : "bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+                                }`}
+                              >
+                                <Stethoscope className={`w-3 h-3 ${isSelected ? "text-white" : "text-purple-600"}`} />
+                                Dr. {doc}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : matchedHosp ? (
+                      <div className="text-[11px] text-slate-500 italic p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                        No doctors currently registered specifically for {currentBranch?.branchName ? `"${currentBranch.branchName}"` : matchedHosp.name}. Type doctor name below.
+                      </div>
+                    ) : null}
+
+                    {/* Manual doctor name input */}
+                    <div className="pt-1">
+                      <input
+                        type="text"
+                        placeholder="Type doctor name (e.g. Dr. Sonia Malik)..."
+                        value={customDoctorInput || (selectedDoctorName ? `Dr. ${selectedDoctorName.replace(/^Dr\.?\s*/i, "")}` : "")}
+                        onChange={(e) => {
+                          setCustomDoctorInput(e.target.value);
+                          setSelectedDoctorName(e.target.value);
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Actions */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t">
+              <div>
+                {doctorAssignReg?.assignedDoctor && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleAssignDoctor("")}
+                    disabled={actionLoading}
+                    className="h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs rounded-xl cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Unassign Doctor
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAssignDoctorOpen(false)}
+                  disabled={actionLoading}
+                  className="rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const hospId = doctorAssignReg?.assignedHospital?._id || doctorAssignReg?.assignedHospitalId || (typeof doctorAssignReg?.assignedHospital === "string" && doctorAssignReg?.assignedHospital.length === 24 ? doctorAssignReg?.assignedHospital : null);
+                    const hospName = doctorAssignReg?.assignedHospital?.name || (typeof doctorAssignReg?.assignedHospital === "string" ? doctorAssignReg?.assignedHospital : "");
+                    const matchedHosp = hospitals.find(h => (hospId && (h._id === hospId || String(h._id) === String(hospId))) || (hospName && h.name?.toLowerCase().trim() === hospName.toLowerCase().trim()));
+                    const bObj = matchedHosp?.branches?.find((b: any) => b._id === doctorModalBranchId || b.branchName === doctorModalBranchId);
+                    handleAssignDoctor(selectedDoctorName, bObj ? { branchName: bObj.branchName, branchId: bObj._id } : undefined);
+                  }}
+                  disabled={actionLoading || !selectedDoctorName.trim()}
+                  className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1 font-bold cursor-pointer"
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Save Doctor
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG: BULK ASSIGN TREATING DOCTOR (STRICTLY ISOLATED BY HOSPITAL & BRANCH) */}
+      <Dialog open={isBulkAssignDoctorOpen} onOpenChange={setIsBulkAssignDoctorOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base font-bold">
+              <Stethoscope className="w-5 h-5 text-purple-600" /> Bulk Assign Treating Doctor
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Assign a treating doctor to <strong className="text-purple-700 dark:text-purple-300 font-bold">{selectedIds.length}</strong> selected registrations.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Step 1: Select Hospital */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span>1. Select Hospital / Clinic:</span>
+              </label>
+              <select
+                value={bulkDoctorHospitalId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBulkDoctorHospitalId(val);
+                  const h = hospitals.find(item => item._id === val);
+                  if (h?.branches && h.branches.length > 0) {
+                    setBulkDoctorBranchId(h.branches[0]._id || h.branches[0].branchName);
+                  } else {
+                    setBulkDoctorBranchId("");
+                  }
+                  setBulkDoctorName("");
+                  setBulkCustomDoctorInput("");
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-500 shadow-xs"
+              >
+                <option value="">-- Choose Hospital to view branch doctors --</option>
+                {hospitals.map(h => (
+                  <option key={h._id} value={h._id}>
+                    {h.name} {h.shortName ? `(${h.shortName})` : ""} {h.city ? `• ${h.city}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Step 2: Select Branch & Doctors for that branch */}
+            {bulkDoctorHospitalId && (() => {
+              const hosp = hospitals.find(h => h._id === bulkDoctorHospitalId);
+              const hasBranches = Array.isArray(hosp?.branches) && hosp.branches.length > 0;
+              const selectedBranch = hasBranches
+                ? (hosp.branches.find((b: any) => b._id === bulkDoctorBranchId || b.branchName === bulkDoctorBranchId) || hosp.branches[0])
+                : null;
+
+              // Extract doctors strictly from this single branch (or standalone hospital)
+              const branchDocs: string[] = [];
+              const addDocName = (raw: string) => {
+                if (!raw) return;
+                raw.split(/[,;\/]+|\band\b/i).forEach(p => {
+                  const clean = p.replace(/^Dr\.?\s*/i, "").trim();
+                  if (clean && !branchDocs.some(d => d.toLowerCase() === clean.toLowerCase())) {
+                    branchDocs.push(clean);
+                  }
+                });
+              };
+
+              if (selectedBranch) {
+                if (Array.isArray(selectedBranch.doctors)) {
+                  selectedBranch.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (selectedBranch.doctorName) {
+                  addDocName(selectedBranch.doctorName);
+                }
+              } else if (hosp && (!hosp.branches || hosp.branches.length === 0)) {
+                if (Array.isArray(hosp.doctors)) {
+                  hosp.doctors.forEach((d: any) => {
+                    const name = typeof d === "string" ? d : d?.name;
+                    if (name) addDocName(name);
+                  });
+                }
+                if (hosp.doctorName) {
+                  addDocName(hosp.doctorName);
+                }
+              }
+
+              return (
+                <div className="space-y-3.5 p-3 rounded-xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/60">
+                  {hasBranches && (
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <GitBranch className="w-3.5 h-3.5 text-purple-600" />
+                        <span>2. Select Branch Center:</span>
+                      </label>
+                      <select
+                        value={selectedBranch?._id || selectedBranch?.branchName || ""}
+                        onChange={(e) => {
+                          setBulkDoctorBranchId(e.target.value);
+                          setBulkDoctorName("");
+                          setBulkCustomDoctorInput("");
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-purple-500 shadow-xs"
+                      >
+                        {hosp.branches.map((b: any, bIdx: number) => (
+                          <option key={b._id || bIdx} value={b._id || b.branchName}>
+                            {b.branchName} {b.city ? `• ${b.city}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Doctors of that branch */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-purple-900 dark:text-purple-300 font-bold flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3 text-purple-600" />
+                      Doctors at {selectedBranch?.branchName || hosp?.name} ({branchDocs.length}):
+                    </span>
+                    {branchDocs.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {branchDocs.map((doc, idx) => {
+                          const isSelected = bulkDoctorName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase() === doc.trim().toLowerCase();
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setBulkDoctorName(`Dr. ${doc}`);
+                                setBulkCustomDoctorInput("");
+                              }}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isSelected
+                                  ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                                  : "bg-white hover:bg-purple-100 text-purple-700 border-purple-200 dark:bg-slate-900 dark:text-purple-300 dark:border-purple-800"
+                              }`}
+                            >
+                              <Stethoscope className={`w-3 h-3 ${isSelected ? "text-white" : "text-purple-600"}`} />
+                              Dr. {doc}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 italic p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                        No doctors listed specifically for this branch. Enter doctor name below.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Doctor Input */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span>Doctor Name to Assign:</span>
+                {bulkDoctorName && (
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                    Dr. {bulkDoctorName.replace(/^Dr\.?\s*/i, "")}
+                  </span>
+                )}
+              </label>
+              <input
+                type="text"
+                placeholder="Type doctor name (e.g., Dr. Sonia Malik)..."
+                value={bulkCustomDoctorInput || (bulkDoctorName ? `Dr. ${bulkDoctorName.replace(/^Dr\.?\s*/i, "")}` : "")}
+                onChange={(e) => {
+                  setBulkCustomDoctorInput(e.target.value);
+                  setBulkDoctorName(e.target.value);
+                }}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 shadow-xs"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsBulkAssignDoctorOpen(false)}
+                disabled={actionLoading}
+                className="rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleBulkAssignDoctor(bulkDoctorName)}
+                disabled={actionLoading || !bulkDoctorName.trim()}
+                className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1 font-bold cursor-pointer"
+              >
+                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Confirm Doctor Assignment ({selectedIds.length})
+              </Button>
             </div>
           </div>
         </DialogContent>

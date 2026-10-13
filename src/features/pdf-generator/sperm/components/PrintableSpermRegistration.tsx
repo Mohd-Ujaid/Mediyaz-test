@@ -388,6 +388,7 @@ const PrintableDonorRegistration = ({
     eggDonorInfo = {},
     investigations = {},
     physicalExamination = {},
+    assignedHospital,
     recruitmentDate,
     fileNumber,
   } = mergedRegistration || {};
@@ -443,6 +444,68 @@ const PrintableDonorRegistration = ({
     overrides?.donorId ||
     registrationId ||
     "MAB/SD/___";
+
+  // ART Clinic and Doctor from assignedHospital in manage-sperm-registrations / manage-registrations
+  const hospitalObj =
+    assignedHospital && typeof assignedHospital === "object"
+      ? assignedHospital
+      : mergedRegistration.assignedHospitalDetails || null;
+
+  const baseClinic = (
+    overrides?.clinicName ||
+    hospitalObj?.name ||
+    mergedRegistration.clinicName ||
+    ""
+  ).trim();
+
+  const branchName = (
+    overrides?.assignedBranch ||
+    mergedRegistration.assignedBranch ||
+    ""
+  ).trim();
+
+  const clinicName =
+    branchName && !baseClinic.toLowerCase().includes(branchName.toLowerCase())
+      ? `${baseClinic} (${branchName})`
+      : baseClinic;
+
+  // Check if assigned branch in hospitalObj has a doctor
+  let branchDoctor = "";
+  if (hospitalObj?.branches && Array.isArray(hospitalObj.branches)) {
+    const matchedBranch = hospitalObj.branches.find(
+      (b: any) =>
+        (mergedRegistration.assignedBranchId && b._id?.toString() === mergedRegistration.assignedBranchId?.toString()) ||
+        (mergedRegistration.assignedBranch && b.branchName?.toLowerCase() === mergedRegistration.assignedBranch?.toLowerCase())
+    );
+    if (matchedBranch) {
+      if (matchedBranch.doctorName) {
+        branchDoctor = matchedBranch.doctorName;
+      } else if (matchedBranch.doctors && matchedBranch.doctors.length > 0) {
+        const d = matchedBranch.doctors[0];
+        branchDoctor = typeof d === "string" ? d : d.name;
+      }
+    }
+  }
+
+  const rawDoctorName = (
+    overrides?.assignedDoctor ||
+    overrides?.doctorName ||
+    mergedRegistration.assignedDoctor ||
+    branchDoctor ||
+    mergedRegistration.doctorName ||
+    hospitalObj?.doctorName ||
+    hospitalObj?.contactPerson ||
+    ""
+  ).trim();
+
+  let formattedDoctor = rawDoctorName;
+  if (formattedDoctor) {
+    if (!/^Dr\.?\s*/i.test(formattedDoctor)) {
+      formattedDoctor = `Dr. ${formattedDoctor}`;
+    } else {
+      formattedDoctor = formattedDoctor.replace(/^Dr\.?\s*/i, "Dr. ");
+    }
+  }
 
   // Date Formatting
   const dateObj = rawRegistrationDate
@@ -688,7 +751,7 @@ const PrintableDonorRegistration = ({
           <Text style={styles.title}>REGISTRATION FORM For SPERM DONOR</Text>
 
           <View style={styles.table}>
-            <View style={styles.tableRow}>
+            <View style={[styles.tableRow, (clinicName || formattedDoctor) ? { borderBottomWidth: 1, borderColor: "#000" } : {}]}>
               <View style={styles.tableCell}>
                 <Text style={styles.label}>Registration Date</Text>
                 <Text>{displayRegistrationDate}</Text>
@@ -699,11 +762,26 @@ const PrintableDonorRegistration = ({
                 <Text>{displayFileNumber}</Text>
               </View>
 
-              <View style={styles.tableCell}>
+              <View style={[styles.tableCell, { borderRightWidth: 0 }]}>
                 <Text style={styles.label}>Donor ID</Text>
                 <Text>{displayDonorId}</Text>
               </View>
             </View>
+
+            {(clinicName || formattedDoctor) ? (
+              <View style={styles.tableRow}>
+                <View style={[styles.tableCell, { flex: formattedDoctor ? 3 : 5, borderRightWidth: formattedDoctor ? 1 : 0 }]}>
+                  <Text style={styles.label}>ART Clinic</Text>
+                  <Text>{clinicName || "—"}</Text>
+                </View>
+                {formattedDoctor ? (
+                  <View style={[styles.tableCell, { flex: 2, borderRightWidth: 0 }]}>
+                    <Text style={styles.label}>Doctor</Text>
+                    <Text>{formattedDoctor}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           <Text style={styles.text}>
@@ -1051,7 +1129,7 @@ const PrintableDonorRegistration = ({
 
           {/* Paragraph 2 */}
           <Text style={styles.text}>
-            I have had a full discussion with Dr. Sanaul haq Hashmi (name and
+            I have had a full discussion with {formattedDoctor || "Dr. Sanaul haq Hashmi"} (name and
             address of the clinician) Mediyaz Art Bank - 336/4 Govindpuri Kalka
             Ji South Delhi 110019 on{" "}
             <Text style={styles.bold}>{consent.signatureDate}</Text>
@@ -1059,7 +1137,7 @@ const PrintableDonorRegistration = ({
 
           {/* Paragraph 3 */}
           <Text style={styles.text}>
-            I have been counselled by Dr. Sanaul haq Hashmi (name and address of
+            I have been counselled by {formattedDoctor || "Dr. Sanaul haq Hashmi"} (name and address of
             independent counsellor) Mediyaz Art Bank - 336/4 Govindpuri Kalka Ji
             South Delhi 110019 on{" "}
             <Text style={styles.bold}>{consent.signatureDate}</Text>
@@ -1119,7 +1197,7 @@ const PrintableDonorRegistration = ({
             </View>
 
             <View style={{ width: "55%" }}>
-              <Text>Dr. Sanaul haq Hashmi</Text>
+              <Text>{formattedDoctor || "Dr. Sanaul haq Hashmi"}</Text>
             </View>
           </View>
 

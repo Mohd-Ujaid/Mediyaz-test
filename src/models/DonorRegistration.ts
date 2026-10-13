@@ -230,6 +230,10 @@ export interface IDonorRegistration extends Document {
   paidBy?: string | null;
 
   assignedHospital?: mongoose.Types.ObjectId;
+  assignedBranch?: string;
+  assignedBranchId?: string;
+  assignedDoctor?: string;
+  assignedDoctorId?: string;
   assignedBy?: string;
   assignedAt?: Date;
   affiliatedBy?: string;
@@ -244,6 +248,8 @@ export interface IDonorRegistration extends Document {
 
   adminNotes?: string;
   pickupDate?: string;
+  pickupLocation?: string;
+  opuLocation?: string;
   recruitmentDate?: string;
   supplyDate?: string;
   fileNumber?: string;
@@ -468,6 +474,10 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
     },
 
     assignedHospital: { type: Schema.Types.ObjectId, ref: "Hospital", default: null },
+    assignedBranch: { type: String, default: "" },
+    assignedBranchId: { type: String, default: "" },
+    assignedDoctor: { type: String, default: "" },
+    assignedDoctorId: { type: String, default: "" },
     assignedBy: { type: String, default: null },
     assignedAt: { type: Date, default: null },
     affiliatedBy: { type: String, default: null },
@@ -484,6 +494,8 @@ const DonorRegistrationSchema = new Schema<IDonorRegistration>(
 
     adminNotes: { type: String, default: "" },
     pickupDate: { type: String, default: "" },
+    pickupLocation: { type: String, default: "" },
+    opuLocation: { type: String, default: "" },
     recruitmentDate: { type: String, default: "" },
     supplyDate: { type: String, default: "" },
     fileNumber: { type: String, default: "" },

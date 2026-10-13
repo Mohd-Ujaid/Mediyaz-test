@@ -580,14 +580,55 @@ const PrintableEggRegistration = ({
     "MAB/OD/___";
 
   // 4. ART Clinic and Doctor from assignedHospital in manage-registrations
-  const clinicName =
-    assignedHospital?.name ||
+  const hospitalObj =
+    assignedHospital && typeof assignedHospital === "object"
+      ? assignedHospital
+      : mergedRegistration.assignedHospitalDetails || null;
+
+  const baseClinic = (
+    overrides?.clinicName ||
+    hospitalObj?.name ||
     mergedRegistration.clinicName ||
-    "";
+    ""
+  ).trim();
+
+  const branchName = (
+    overrides?.assignedBranch ||
+    mergedRegistration.assignedBranch ||
+    ""
+  ).trim();
+
+  const clinicName =
+    branchName && !baseClinic.toLowerCase().includes(branchName.toLowerCase())
+      ? `${baseClinic} (${branchName})`
+      : baseClinic;
+
+  // Check if assigned branch in hospitalObj has a doctor
+  let branchDoctor = "";
+  if (hospitalObj?.branches && Array.isArray(hospitalObj.branches)) {
+    const matchedBranch = hospitalObj.branches.find(
+      (b: any) =>
+        (mergedRegistration.assignedBranchId && b._id?.toString() === mergedRegistration.assignedBranchId?.toString()) ||
+        (mergedRegistration.assignedBranch && b.branchName?.toLowerCase() === mergedRegistration.assignedBranch?.toLowerCase())
+    );
+    if (matchedBranch) {
+      if (matchedBranch.doctorName) {
+        branchDoctor = matchedBranch.doctorName;
+      } else if (matchedBranch.doctors && matchedBranch.doctors.length > 0) {
+        const d = matchedBranch.doctors[0];
+        branchDoctor = typeof d === "string" ? d : d.name;
+      }
+    }
+  }
 
   const rawDoctorName = (
-    assignedHospital?.contactPerson ||
+    overrides?.assignedDoctor ||
+    overrides?.doctorName ||
+    mergedRegistration.assignedDoctor ||
+    branchDoctor ||
     mergedRegistration.doctorName ||
+    hospitalObj?.doctorName ||
+    hospitalObj?.contactPerson ||
     ""
   ).trim();
 

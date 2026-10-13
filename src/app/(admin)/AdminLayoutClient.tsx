@@ -27,7 +27,9 @@ import {
   Search,
   CheckCircle2,
   Calendar,
-  Receipt
+  Receipt,
+  Database,
+  BookOpen
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 
@@ -84,10 +86,21 @@ const sidebarNavigation: SidebarGroupSection[] = [
     title: "Clinical Operations",
     items: [
       { href: "/dashboard", label: "Executive Dashboard", icon: LayoutDashboard, requiredPermission: "VIEW_DASHBOARD" },
-      { href: "/donor-registrations/egg", label: "Egg Registrations", icon: Heart, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/donor-registrations/sperm", label: "Sperm Registrations", icon: Dna, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/manage-registrations", label: "Egg Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
-      { href: "/manage-sperm-registrations", label: "Sperm Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
+      
+    ]
+  },
+  {
+    title: "ART Clinic Network",
+    items: [
+      { href: "/hospitals", label: "Registered ART Clinics", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
+      { href: "/hospitals/leaderboard", label: "Clinic Performance", icon: Award, requiredPermission: "VIEW_HOSPITALS" },
+      
+    ]
+  },
+  {
+    title: "Affiliates & Partners",
+    items: [
+      { href: "/agents", label: "Referral Partners (Agents)", icon: Users, requiredPermission: "VIEW_REFERRALS" },
     ]
   },
   {
@@ -97,6 +110,29 @@ const sidebarNavigation: SidebarGroupSection[] = [
       { href: "/completed-files/sperm", label: "Sperm Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS" },
     ]
   },
+  {
+    title: "Billing & Accounts",
+    items: [
+      { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS" },
+      { href: "/ledger", label: "Accounts Ledger (Laser)", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
+    ]
+  },
+  {
+    title: "Registration",
+    items: [
+      { href: "/manage-registrations", label: "Egg Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
+      { href: "/manage-sperm-registrations", label: "Sperm Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
+      { href: "/donor-registrations/egg", label: "Egg Registrations", icon: Heart, requiredPermission: "VIEW_REGISTRATIONS" },
+      { href: "/donor-registrations/sperm", label: "Sperm Registrations", icon: Dna, requiredPermission: "VIEW_REGISTRATIONS" },
+    ]
+  },
+  {
+    title: "Previous Records",
+    items: [
+      { href: "/previous-data", label: "Previous Donor Data", icon: Database, requiredPermission: "VIEW_REGISTRATIONS" },
+    ]
+  },
+  
   // {
   //   title: "Donor Directory",
   //   items: [
@@ -112,19 +148,16 @@ const sidebarNavigation: SidebarGroupSection[] = [
   //     { href: "/contact-messages", label: "Inquiries & Consultations", icon: MessageSquare, requiredPermission: "VIEW_INQUIRIES" },
   //   ]
   // },
-  {
-    title: "ART Clinic Network",
-    items: [
-      { href: "/hospitals", label: "Registered ART Clinics", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
-      { href: "/hospitals/leaderboard", label: "Clinic Performance", icon: Award, requiredPermission: "VIEW_HOSPITALS" },
-    ]
-  },
-  {
-    title: "Affiliates & Partners",
-    items: [
-      { href: "/agents", label: "Referral Partners (Agents)", icon: Users, requiredPermission: "VIEW_REFERRALS" },
-    ]
-  },
+
+  // {
+  //   title: "ART Clinic Network",
+  //   items: [
+  //     { href: "/hospitals", label: "Registered ART Clinics", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
+  //     { href: "/hospitals/leaderboard", label: "Clinic Performance", icon: Award, requiredPermission: "VIEW_HOSPITALS" },
+  //   ]
+  // },
+
+  
   // {
   //   title: "Administration & System",
   //   items: [

@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { EggDonorRegistration } from "@/models/EggDonorRegistration";
 import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
+import { PreviousDonor } from "@/models/PreviousDonor";
 import { Notification } from "@/models/Notification";
 import { Hospital } from "@/models/Hospital";
 import { Agent } from "@/models/Agent";
@@ -212,10 +213,27 @@ export async function createAdminRegistration(body: {
 
   const Model = donorType === "egg" ? EggDonorRegistration : SpermDonorRegistration;
 
+  // Check for duplicate by Aadhaar or mobile in historical/previous data
+  const cleanAadhaar = aadhaarNumber.replace(/\D/g, "");
+  const prevDonor = await PreviousDonor.findOne({
+    $or: [
+      { "personalInfo.aadhaarNumber": cleanAadhaar },
+      { "contactInfo.mobileNumber": mobileNumber },
+    ],
+  });
+  if (prevDonor) {
+    const isAadhaarMatch = prevDonor.personalInfo?.aadhaarNumber === cleanAadhaar;
+    const matchLabel = isAadhaarMatch ? `Aadhaar (${cleanAadhaar})` : `Mobile (${mobileNumber})`;
+    const recCode = prevDonor.recordCode || prevDonor.legacyId || "Archived Record";
+    throw new Error(
+      `This ${matchLabel} already exists in Previous Donor Database (${prevDonor.donorType === "sperm" ? "Sperm" : "Egg"} Donor, ID: ${recCode}). Duplicate registrations are not permitted under ART Act.`
+    );
+  }
+
   // Check for duplicate by Aadhaar or mobile in the specific collection
   const existing = await Model.findOne({
     $or: [
-      { "personalInfo.aadhaarNumber": aadhaarNumber.replace(/\D/g, "") },
+      { "personalInfo.aadhaarNumber": cleanAadhaar },
       { "contactInfo.mobileNumber": mobileNumber }
     ]
   });
@@ -535,6 +553,9 @@ export async function getAdminRegistrations(filters: {
   status?: string;
   bloodGroup?: string;
   hospital?: string;
+  branch?: string;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   limit?: number;
 }, session: any) {
@@ -555,7 +576,7 @@ export async function getAdminRegistrations(filters: {
   const isSperm = filters.donorType === "sperm";
   const Model = isSperm ? SpermDonorRegistration : EggDonorRegistration;
 
-  const { search = "", status = "", bloodGroup = "", hospital = "", page = 1, limit = 10 } = filters;
+  const { search = "", status = "", bloodGroup = "", hospital = "", branch = "", startDate = "", endDate = "", page = 1, limit = 10 } = filters;
   const skip = (page - 1) * limit;
 
   const query: any = {};
@@ -570,7 +591,34 @@ export async function getAdminRegistrations(filters: {
     query.status = { $in: ["APPROVED", "WAITING_FORM13", "FILE_COMPLETED", "COMPLETED", "UNDER_REVIEW", "SUSPENDED", "REJECTED", "CANCELLED"] };
   }
   if (bloodGroup) query["personalInfo.bloodGroup"] = bloodGroup;
-  if (hospital) query.assignedHospital = hospital;
+  if (hospital) {
+    if (hospital.startsWith("branch:")) {
+      const parts = hospital.split(":");
+      query.assignedHospital = parts[1];
+      if (parts.slice(2).join(":")) {
+        query.assignedBranch = parts.slice(2).join(":");
+      }
+    } else {
+      query.assignedHospital = hospital;
+    }
+  }
+  if (branch) {
+    query.assignedBranch = branch;
+  }
+
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      query.createdAt.$gte = s;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      query.createdAt.$lte = e;
+    }
+  }
 
   if (search) {
     const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
@@ -596,7 +644,33 @@ export async function getAdminRegistrations(filters: {
   // Status counts for Management tabs directly from this donor type's collection
   const baseStatusQuery: any = {};
   if (bloodGroup) baseStatusQuery["personalInfo.bloodGroup"] = bloodGroup;
-  if (hospital) baseStatusQuery.assignedHospital = hospital;
+  if (hospital) {
+    if (hospital.startsWith("branch:")) {
+      const parts = hospital.split(":");
+      baseStatusQuery.assignedHospital = parts[1];
+      if (parts.slice(2).join(":")) {
+        baseStatusQuery.assignedBranch = parts.slice(2).join(":");
+      }
+    } else {
+      baseStatusQuery.assignedHospital = hospital;
+    }
+  }
+  if (branch) {
+    baseStatusQuery.assignedBranch = branch;
+  }
+  if (startDate || endDate) {
+    baseStatusQuery.createdAt = {};
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      baseStatusQuery.createdAt.$gte = s;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      baseStatusQuery.createdAt.$lte = e;
+    }
+  }
 
   const [
     allCount,
@@ -670,6 +744,8 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
     adminNotes,
     assignedHospitalId,
     pickupDate,
+    pickupLocation,
+    opuLocation,
     recruitmentDate,
     supplyDate,
     paymentStatus,
@@ -698,6 +774,8 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
   if (!effectiveStatus) {
     const simulated = mergeWithDotNotation(registration.toObject(), {
       pickupDate: pickupDate !== undefined ? pickupDate : registration.pickupDate,
+      pickupLocation: pickupLocation !== undefined ? pickupLocation : (registration.pickupLocation || registration.opuLocation),
+      opuLocation: opuLocation !== undefined ? opuLocation : (registration.opuLocation || registration.pickupLocation),
       recruitmentDate: recruitmentDate !== undefined ? recruitmentDate : registration.recruitmentDate,
       supplyDate: supplyDate !== undefined ? supplyDate : registration.supplyDate,
       isDonorPaid: paymentStatus !== undefined ? paymentStatus === "PAID" : registration.isDonorPaid,
@@ -718,6 +796,8 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
   const statusChanged = effectiveStatus && effectiveStatus !== oldValues.status;
   if (adminNotes !== undefined) registration.adminNotes = adminNotes;
   if (pickupDate !== undefined) registration.pickupDate = pickupDate;
+  if (pickupLocation !== undefined) registration.pickupLocation = pickupLocation;
+  if (opuLocation !== undefined) registration.opuLocation = opuLocation;
   if (recruitmentDate !== undefined) registration.recruitmentDate = recruitmentDate;
   if (supplyDate !== undefined) registration.supplyDate = supplyDate;
   if (donorId !== undefined) registration.donorId = donorId;
@@ -761,6 +841,43 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
       registration.assignedHospital = newHospitalId;
       registration.assignedBy = newHospitalId ? (session.user.name || session.user.email) : null;
       registration.assignedAt = newHospitalId ? new Date() : null;
+    }
+
+    if (bodyData.assignedBranch !== undefined) {
+      registration.assignedBranch = bodyData.assignedBranch || "";
+    } else if (!newHospitalId) {
+      registration.assignedBranch = "";
+    }
+    if (bodyData.assignedBranchId !== undefined) {
+      registration.assignedBranchId = bodyData.assignedBranchId || "";
+    } else if (!newHospitalId) {
+      registration.assignedBranchId = "";
+    }
+    if (bodyData.assignedDoctor !== undefined) {
+      registration.assignedDoctor = bodyData.assignedDoctor || "";
+    } else if (!newHospitalId) {
+      registration.assignedDoctor = "";
+    }
+    if (bodyData.assignedDoctorId !== undefined) {
+      registration.assignedDoctorId = bodyData.assignedDoctorId || "";
+    } else if (!newHospitalId) {
+      registration.assignedDoctorId = "";
+    }
+  }
+
+  // Handle independent doctor and branch assignment updates without reassigning hospital
+  if (assignedHospitalId === undefined) {
+    if (bodyData.assignedDoctor !== undefined) {
+      registration.assignedDoctor = bodyData.assignedDoctor || "";
+    }
+    if (bodyData.assignedDoctorId !== undefined) {
+      registration.assignedDoctorId = bodyData.assignedDoctorId || "";
+    }
+    if (bodyData.assignedBranch !== undefined) {
+      registration.assignedBranch = bodyData.assignedBranch || "";
+    }
+    if (bodyData.assignedBranchId !== undefined) {
+      registration.assignedBranchId = bodyData.assignedBranchId || "";
     }
   }
 
@@ -981,6 +1098,8 @@ export async function patchAdminRegistrationFields(id: string, updateObj: Record
     "form13",
     "affidavit",
     "pickupDate",
+    "pickupLocation",
+    "opuLocation",
     "recruitmentDate",
     "supplyDate",
     "status",

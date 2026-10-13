@@ -28,6 +28,8 @@ interface ReactPdfViewerProps {
   fileName?: string;
   onBack?: () => void;
   embedded?: boolean;
+  onLoadSuccess?: () => void;
+  onLoadError?: (error: Error) => void;
 }
 
 export default function ReactPdfViewer({
@@ -37,6 +39,8 @@ export default function ReactPdfViewer({
   fileName = "document.pdf",
   onBack,
   embedded = false,
+  onLoadSuccess,
+  onLoadError,
 }: ReactPdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState<boolean>(false);
@@ -78,11 +82,13 @@ export default function ReactPdfViewer({
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
     setErrorMsg(null);
+    onLoadSuccess?.();
   };
 
   const onDocumentLoadError = (err: Error) => {
     console.error("react-pdf Document load error:", err);
     setErrorMsg(err.message || "Failed to load PDF document");
+    onLoadError?.(err);
   };
 
   const handleDownload = useCallback(() => {

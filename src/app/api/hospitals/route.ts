@@ -35,7 +35,8 @@ export async function GET(req: Request) {
     const state = searchParams.get("state") || "";
     const status = searchParams.get("status") || "";
     const hospitalType = searchParams.get("type") || "";
-    // const organ = searchParams.get("organ") || "";
+    const startDate = searchParams.get("startDate") || "";
+    const endDate = searchParams.get("endDate") || "";
     
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "100");
@@ -54,6 +55,20 @@ export async function GET(req: Request) {
     if (state) query.state = { $regex: escapeRegex(state), $options: "i" };
     if (hospitalType) query.hospitalType = hospitalType;
     // if (organ) query.organTypesSupported = organ;
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        s.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = s;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        e.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = e;
+      }
+    }
 
     if (search) {
       const safeSearch = escapeRegex(search);
@@ -77,14 +92,13 @@ export async function GET(req: Request) {
       if (!canSeeDealPrices) {
         delete obj.donorDealPrice;
         delete obj.profiledonorDealPrice;
+        delete obj.eggDonorDealPrice;
+        delete obj.eggProfileDonorDealPrice;
+        delete obj.spermDonorDealPrice;
+        delete obj.spermProfileDonorDealPrice;
         delete obj.currency;
       }
       if (!isFullAdmin) {
-        delete obj.serviceCharge;
-        delete obj.processingFee;
-        delete obj.registrationFee;
-        delete obj.commission;
-        delete obj.additionalCharges;
         delete obj.pricingHistory;
       }
       return obj;
@@ -137,11 +151,12 @@ export async function POST(req: Request) {
     const {
       name,
       shortName,
-      // code,
       registrationNumber,
-      // licenseNumber,
       gstNumber,
-      // panNumber,
+      doctorName = "",
+      pickupLocation = "",
+      wantInvoice = true,
+      tdsPercentage = 2,
       contactPerson,
       email,
       mobileNumber,
@@ -155,35 +170,65 @@ export async function POST(req: Request) {
       pincode,
       hospitalType,
       specializations,
-      // organTypesSupported,
-      // icuAvailability,
-      // transplantLicenseNumber,
-      donorDealPrice = 0,
-      profiledonorDealPrice = 0,
-      // serviceCharge = 0,
-      // processingFee = 0,
-      // registrationFee = 0,
-      // commission = 0,
-      // additionalCharges = 0,
+      branches = [],
+      doctors = [],
+      eggDonorDealPrice = 65000,
+      eggProfileDonorDealPrice = 85000,
+      spermDonorDealPrice = 15000,
+      spermProfileDonorDealPrice = 25000,
+      serviceCharge = 5000,
+      donorDealPrice,
+      profiledonorDealPrice,
       currency = "INR",
       status = "ACTIVE"
     } = body;
 
-    // Validate inputs
-    if (!name || !shortName|| !registrationNumber || !contactPerson || !email || !mobileNumber || !addressLine1 || !city || !state || !pincode || !hospitalType) {
+    // Validate inputs - Clinic Entity
+    if (!name || !shortName || !hospitalType) {
       return NextResponse.json(
-        { success: false, error: "All required basic, contact, address, medical, and status configuration fields must be provided." },
+        { success: false, error: "Hospital Name, Short Name, and Hospital Type are required." },
         { status: 400 }
       );
     }
 
-    const address = `${addressLine1 || ""}, ${addressLine2 || ""}, ${city || ""}, ${state || ""} - ${pincode || ""}, ${country || "India"}`.replace(/^[,\s]+|[,\s]+$/g, "").replace(/\s*,\s*,/g, ",");
-    const contactInfo = `${contactPerson || ""} (${email || ""}, Mob: ${mobileNumber || ""})`;
+    const primaryBranch = Array.isArray(branches) && branches.length > 0
+      ? (branches.find((b: any) => b.isMainBranch) || branches[0])
+      : null;
+
+    const finalRegNo = registrationNumber || primaryBranch?.registrationNumber || "";
+    const finalGst = gstNumber || primaryBranch?.gstNumber || "";
+    const finalDoctor = doctorName || primaryBranch?.doctorName || "";
+    const finalPickup = pickupLocation || primaryBranch?.pickupLocation || "";
+    const finalContactPerson = contactPerson || primaryBranch?.contactPerson || "";
+    const finalEmail = email || primaryBranch?.email || "";
+    const finalMobile = mobileNumber || primaryBranch?.mobileNumber || "";
+    const finalTelephone = telephone || primaryBranch?.telephone || "";
+    const finalAddress1 = addressLine1 || primaryBranch?.addressLine1 || "";
+    const finalAddress2 = addressLine2 || primaryBranch?.addressLine2 || "";
+    const finalCity = city || primaryBranch?.city || "";
+    const finalState = state || primaryBranch?.state || "";
+    const finalCountry = country || primaryBranch?.country || "India";
+    const finalPincode = pincode || primaryBranch?.pincode || "";
+
+    const finalEggNormal = Number(eggDonorDealPrice ?? (donorDealPrice ?? 65000));
+    const finalEggProfile = Number(eggProfileDonorDealPrice ?? (profiledonorDealPrice ?? 85000));
+    const finalSpermNormal = Number(spermDonorDealPrice ?? 15000);
+    const finalSpermProfile = Number(spermProfileDonorDealPrice ?? 25000);
+    const finalServiceCharge = Number(serviceCharge ?? 5000);
+    const finalTdsPct = Number(tdsPercentage ?? 2);
+
+    const address = [finalAddress1, finalAddress2, finalCity, finalState, finalPincode, finalCountry].filter(Boolean).join(", ");
+    const contactInfo = finalContactPerson ? `${finalContactPerson} (${finalEmail || ""}, Mob: ${finalMobile || ""})` : (finalEmail || finalMobile || "");
 
     // Set pricing history log initial snapshot
     const initialPricingLog = {
-      donorDealPrice,
-      profiledonorDealPrice,
+      donorDealPrice: finalEggNormal,
+      profiledonorDealPrice: finalEggProfile,
+      eggDonorDealPrice: finalEggNormal,
+      eggProfileDonorDealPrice: finalEggProfile,
+      spermDonorDealPrice: finalSpermNormal,
+      spermProfileDonorDealPrice: finalSpermProfile,
+      serviceCharge: finalServiceCharge,
       currency,
       changedBy: session.user.name || session.user.email,
       changedAt: new Date()
@@ -194,23 +239,34 @@ export async function POST(req: Request) {
       address,
       contactInfo,
       shortName,
-      registrationNumber,
-      gstNumber,
-      contactPerson,
-      email,
-      mobileNumber,
-      telephone,
+      registrationNumber: finalRegNo,
+      gstNumber: finalGst,
+      doctorName: finalDoctor,
+      pickupLocation: finalPickup,
+      wantInvoice: wantInvoice !== false,
+      tdsPercentage: finalTdsPct,
+      contactPerson: finalContactPerson,
+      email: finalEmail,
+      mobileNumber: finalMobile,
+      telephone: finalTelephone,
       emergencyNumber,
-      addressLine1,
-      addressLine2,
-      city,
-      state,
-      country: country || "India",
-      pincode,
+      addressLine1: finalAddress1,
+      addressLine2: finalAddress2,
+      city: finalCity,
+      state: finalState,
+      country: finalCountry,
+      pincode: finalPincode,
       hospitalType,
       specializations: specializations || [],
-      donorDealPrice,
-      profiledonorDealPrice,
+      branches: Array.isArray(branches) ? branches : [],
+      doctors: Array.isArray(doctors) ? doctors : [],
+      eggDonorDealPrice: finalEggNormal,
+      eggProfileDonorDealPrice: finalEggProfile,
+      spermDonorDealPrice: finalSpermNormal,
+      spermProfileDonorDealPrice: finalSpermProfile,
+      serviceCharge: finalServiceCharge,
+      donorDealPrice: finalEggNormal,
+      profiledonorDealPrice: finalEggProfile,
       currency,
       status,
       pricingHistory: [initialPricingLog]

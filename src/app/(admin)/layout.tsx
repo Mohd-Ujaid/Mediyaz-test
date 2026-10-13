@@ -16,7 +16,7 @@ export default async function AdminLayout({
   const sidebarCookie = cookieStore.get("sidebar_state")?.value;
   const defaultOpen = sidebarCookie === "false" ? false : true;
 
-  if (/^\/(admin\/)?manage-registrations\/[^/]+\/print\/?$/.test(pathname)) {
+  if (/^\/(admin\/)?(manage-registrations\/[^/]+|ledger|laser)\/print\/?$/.test(pathname)) {
     return <>{children}</>;
   }
 

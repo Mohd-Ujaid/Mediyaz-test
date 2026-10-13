@@ -38,6 +38,7 @@ interface CompletedFileInvoiceModalProps {
   onClose: () => void;
   registration: any;
   donorType?: "egg" | "sperm";
+  onInvoiceSaved?: () => void;
 }
 
 export function CompletedFileInvoiceModal({
@@ -45,6 +46,7 @@ export function CompletedFileInvoiceModal({
   onClose,
   registration,
   donorType = "egg",
+  onInvoiceSaved,
 }: CompletedFileInvoiceModalProps) {
   const isEgg = donorType === "egg";
   const hosp =
@@ -52,10 +54,26 @@ export function CompletedFileInvoiceModal({
       ? registration.assignedHospital
       : null;
 
-  // Build default initial form data
+  const isSperm = donorType === "sperm" || registration?.donorType === "sperm";
+  const cat = registration?.clinicDeal?.donorCategory || registration?.donorDeal?.donorCategory || "normal";
+
+  // Build default initial form data (e.g. 60,000 for normal egg donor)
   const defaultDealPrice =
-    registration?.clinicDeal?.hospitalDealPrice || 100000;
-  const defaultServiceCharge = 5000;
+    registration?.clinicDeal?.totalAmount ||
+    registration?.clinicDeal?.hospitalDealPrice ||
+    (hosp
+      ? isSperm
+        ? cat === "profile"
+          ? hosp.spermProfileDonorDealPrice || 25000
+          : hosp.spermDonorDealPrice || 15000
+        : cat === "profile"
+        ? hosp.eggProfileDonorDealPrice || hosp.profiledonorDealPrice || 85000
+        : hosp.eggDonorDealPrice || hosp.donorDealPrice || 60000
+      : isSperm
+      ? 15000
+      : 60000);
+
+  const defaultServiceCharge = hosp?.serviceCharge || 5000;
   const defaultReimbursement = Math.max(
     0,
     defaultDealPrice - defaultServiceCharge
@@ -81,7 +99,9 @@ export function CompletedFileInvoiceModal({
     : initialInvoiceDate;
 
   // State
-  const [invoiceNumber, setInvoiceNumber] = useState("54");
+  const [invoiceNumber, setInvoiceNumber] = useState(
+    registration?.clinicDeal?.invoiceNumber || registration?.invoiceNumber || "54"
+  );
   const [invoiceDate, setInvoiceDate] = useState(initialInvoiceDate);
   const [pickupDate, setPickupDate] = useState(initialPickupDate);
   const [hospitalName, setHospitalName] = useState(
@@ -92,7 +112,7 @@ export function CompletedFileInvoiceModal({
   );
   const [hospitalAddress, setHospitalAddress] = useState(initialHospAddress);
   const [pickupLocation, setPickupLocation] = useState(
-    hosp?.shortName || hosp?.name || "Mediworld Fertility Centre"
+    hosp?.pickupLocation || hosp?.shortName || hosp?.name || "Mediworld Fertility Centre"
   );
   const [saleType, setSaleType] = useState<"STATE" | "INTER-STATE">(
     hosp?.state && !hosp.state.toLowerCase().includes("delhi")
@@ -100,12 +120,14 @@ export function CompletedFileInvoiceModal({
       : "STATE"
   );
 
+  const [totalDealPrice, setTotalDealPrice] = useState(defaultDealPrice);
   const [serviceCharge, setServiceCharge] = useState(defaultServiceCharge);
   const [donorReimbursement, setDonorReimbursement] =
     useState(defaultReimbursement);
 
   const [activeTab, setActiveTab] = useState<"settings" | "preview">("preview");
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // PDF Blob states for instant download and printing
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
@@ -123,17 +145,27 @@ export function CompletedFileInvoiceModal({
         ? formatDotDate(registration.pickupDate)
         : formatDotDate(new Date());
 
-      setInvoiceDate(pDate);
+      setInvoiceDate(registration.clinicDeal?.invoiceDate ? formatDotDate(registration.clinicDeal.invoiceDate) : pDate);
       setPickupDate(pDate);
 
-      // Invoice number default heuristic
-      const numOnly = registration.registrationId?.replace(/\D/g, "");
-      setInvoiceNumber(numOnly ? numOnly.slice(-3) || "54" : "54");
+      // Invoice number: prioritize existing saved invoice number
+      const existingInvNum = (registration.clinicDeal?.invoiceNumber || registration.invoiceNumber || "").trim();
+      if (existingInvNum) {
+        setInvoiceNumber(existingInvNum);
+      } else {
+        const numOnly = registration.registrationId?.replace(/\D/g, "");
+        setInvoiceNumber(numOnly ? numOnly.slice(-3) || "54" : "54");
+      }
 
       setHospitalName(h?.name || "Mediworld Fertility Private Limited");
       setHospitalGstin(h?.gstNumber || "07AANCM1124F1ZQ");
       setPickupLocation(
-        h?.shortName || h?.name || "Mediworld Fertility Centre"
+        registration.opuLocation ||
+          registration.pickupLocation ||
+          h?.pickupLocation ||
+          h?.shortName ||
+          h?.name ||
+          "Mediworld Fertility Centre"
       );
 
       const addr = h
@@ -154,11 +186,40 @@ export function CompletedFileInvoiceModal({
           : "STATE"
       );
 
-      const dPrice = registration.clinicDeal?.hospitalDealPrice || 100000;
-      setServiceCharge(5000);
-      setDonorReimbursement(Math.max(0, dPrice - 5000));
+      const isSpermReg = donorType === "sperm" || registration.donorType === "sperm";
+      const catReg = registration.clinicDeal?.donorCategory || registration.donorDeal?.donorCategory || "normal";
+      const resolvedDealPrice =
+        registration.clinicDeal?.totalAmount ||
+        registration.clinicDeal?.hospitalDealPrice ||
+        (h
+          ? isSpermReg
+            ? catReg === "profile"
+              ? h.spermProfileDonorDealPrice || 25000
+              : h.spermDonorDealPrice || 15000
+            : catReg === "profile"
+            ? h.eggProfileDonorDealPrice || h.profiledonorDealPrice || 85000
+            : h.eggDonorDealPrice || h.donorDealPrice || 60000
+          : isSpermReg
+          ? 15000
+          : 60000);
+
+      const sc =
+        registration.clinicDeal?.serviceCharge !== undefined && registration.clinicDeal?.serviceCharge !== null
+          ? Number(registration.clinicDeal.serviceCharge)
+          : h?.serviceCharge !== undefined && h?.serviceCharge !== null
+          ? Number(h.serviceCharge)
+          : 5000;
+
+      const reimb =
+        registration.clinicDeal?.donorReimbursement !== undefined && registration.clinicDeal?.donorReimbursement !== null
+          ? Number(registration.clinicDeal.donorReimbursement)
+          : Math.max(0, resolvedDealPrice - sc);
+
+      setTotalDealPrice(resolvedDealPrice);
+      setServiceCharge(sc);
+      setDonorReimbursement(reimb);
     }
-  }, [registration]);
+  }, [registration, donorType]);
 
   if (!registration) return null;
 
@@ -186,6 +247,80 @@ export function CompletedFileInvoiceModal({
     ? "Rembursment Of Oocyte Donor Exp"
     : "Rembursment Of Sperm Donor Exp";
   const pickupLabel = isEgg ? "Date of Oocyte Pickup" : "Date of Sperm Pickup";
+
+  // Synchronization helpers
+  const handleTotalDealChange = (val: number) => {
+    setTotalDealPrice(val);
+    setDonorReimbursement(Math.max(0, val - serviceCharge));
+  };
+
+  const handleServiceChargeChange = (val: number) => {
+    setServiceCharge(val);
+    setDonorReimbursement(Math.max(0, totalDealPrice - val));
+  };
+
+  const handleReimbursementChange = (val: number) => {
+    setDonorReimbursement(val);
+    setTotalDealPrice(val + serviceCharge);
+  };
+
+  // Save invoice details to database and activate donor in ledger
+  const saveInvoiceToDb = async (silent = false): Promise<boolean> => {
+    setIsSaving(true);
+    try {
+      const gstVal = isInterState ? igstAmount : cgstAmount + sgstAmount;
+      const tdsAmt = Math.round(totalBeforeTax * 0.02);
+      const netVal = Math.max(0, totalBeforeTax - tdsAmt + gstVal);
+
+      const res = await fetch("/api/hospitals/completed-files", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registrationId: registration.registrationId,
+          donorType: isEgg ? "egg" : "sperm",
+          invoiceNumber,
+          invoiceDate,
+          pickupDate,
+          opuLocation: pickupLocation,
+          isInvoiceGenerated: true,
+          clinicDeal: {
+            isInvoiceGenerated: true,
+            invoiceNumber,
+            invoiceDate,
+            hospitalDealPrice: totalBeforeTax,
+            totalAmount: totalBeforeTax,
+            serviceCharge,
+            donorReimbursement,
+            gstAmount: gstVal,
+            tdsPercentage: 2,
+            tdsAmount: tdsAmt,
+            netReceivableAmount: netVal,
+          },
+          donorDeal: {
+            compensationAmount: donorReimbursement,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        if (!silent) {
+          toast.success(`Invoice #${invoiceNumber} saved! Donor is now listed in the Clinic Ledger.`);
+        }
+        onInvoiceSaved?.();
+        return true;
+      } else {
+        if (!silent) toast.error(data.error || "Failed to save invoice to ledger");
+        return false;
+      }
+    } catch (err: any) {
+      console.error("Save invoice error:", err);
+      if (!silent) toast.error("Error saving invoice to database");
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Pre-generate PDF Blob in background for instant download and printing
   useEffect(() => {
@@ -293,6 +428,7 @@ export function CompletedFileInvoiceModal({
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
     try {
+      await saveInvoiceToDb(true);
       if (pdfBlob && pdfBlobUrl) {
         const link = document.createElement("a");
         link.href = pdfBlobUrl;
@@ -300,7 +436,7 @@ export function CompletedFileInvoiceModal({
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success(`Invoice #${invoiceNumber} downloaded successfully!`);
+        toast.success(`Invoice #${invoiceNumber} downloaded and recorded in ledger!`);
         return;
       }
 
@@ -319,7 +455,7 @@ export function CompletedFileInvoiceModal({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
-      toast.success(`Invoice #${invoiceNumber} downloaded successfully!`);
+      toast.success(`Invoice #${invoiceNumber} downloaded and recorded in ledger!`);
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to download invoice PDF");
@@ -329,7 +465,8 @@ export function CompletedFileInvoiceModal({
   };
 
   // 2. Print PDF Action
-  const handlePrintPdf = () => {
+  const handlePrintPdf = async () => {
+    await saveInvoiceToDb(true);
     if (pdfBlobUrl) {
       const printWin = window.open(pdfBlobUrl, "_blank");
       if (printWin) {
@@ -978,47 +1115,75 @@ export function CompletedFileInvoiceModal({
 
               {/* Price Breakdown Details */}
               <div className="p-3.5 rounded-xl border bg-card space-y-3">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                  <Receipt className="w-3.5 h-3.5 text-blue-600" /> Service Charge
-                  & Donor Reimbursement Breakdown
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <Receipt className="w-3.5 h-3.5 text-blue-600" /> Deal & Price Breakdown
+                  </h4>
+                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Formula: Reimbursement = Deal Price - Service Charge
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* 1. Total Hospital Deal Price */}
                   <div className="p-3 rounded-lg bg-teal-500/5 border border-teal-500/20">
                     <label className="font-bold text-teal-800 dark:text-teal-300 block mb-1">
-                      1. Service Charge (Taxable at 18% GST)
+                      1. Total Deal Price (Gross)
+                    </label>
+                    <Input
+                      type="number"
+                      value={totalDealPrice}
+                      onChange={(e) => handleTotalDealChange(parseFloat(e.target.value) || 0)}
+                      className="h-9 text-xs font-bold text-teal-700"
+                      placeholder="e.g. 60000"
+                    />
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      Hospital Consideration: <strong>₹{totalDealPrice.toLocaleString("en-IN")}</strong>
+                    </div>
+                  </div>
+
+                  {/* 2. Service Charge */}
+                  <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                    <label className="font-bold text-blue-800 dark:text-blue-300 block mb-1">
+                      2. Service Charge (18% GST)
                     </label>
                     <Input
                       type="number"
                       value={serviceCharge}
-                      onChange={(e) =>
-                        setServiceCharge(parseFloat(e.target.value) || 0)
-                      }
-                      className="h-9 text-xs font-bold text-teal-700"
+                      onChange={(e) => handleServiceChargeChange(parseFloat(e.target.value) || 0)}
+                      className="h-9 text-xs font-bold text-blue-700"
+                      placeholder="e.g. 5000"
                     />
-                    <div className="text-[11px] text-muted-foreground mt-1.5">
-                      GST: {isInterState ? `IGST (18%) = ₹${igstAmount}` : `CGST (9%) = ₹${cgstAmount} + SGST (9%) = ₹${sgstAmount}`}
-                      {" • "}
-                      <strong className="text-foreground">
-                        Subtotal: ₹{serviceChargeTotal.toLocaleString("en-IN")}
-                      </strong>
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      GST (18%): <strong>₹{(isInterState ? igstAmount : cgstAmount + sgstAmount).toFixed(0)}</strong> • Total: <strong>₹{serviceChargeTotal.toLocaleString("en-IN")}</strong>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                    <label className="font-bold text-blue-800 dark:text-blue-300 block mb-1">
-                      2. {reimbursementDesc} (GST Exempt)
+                  {/* 3. Donor Reimbursement */}
+                  <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                    <label className="font-bold text-amber-800 dark:text-amber-300 block mb-1">
+                      3. {reimbursementDesc} (Exempt)
                     </label>
                     <Input
                       type="number"
                       value={donorReimbursement}
-                      onChange={(e) =>
-                        setDonorReimbursement(parseFloat(e.target.value) || 0)
-                      }
-                      className="h-9 text-xs font-bold text-blue-700"
+                      onChange={(e) => handleReimbursementChange(parseFloat(e.target.value) || 0)}
+                      className="h-9 text-xs font-bold text-amber-700"
+                      placeholder="e.g. 55000"
                     />
-                    <div className="text-[11px] text-muted-foreground mt-1.5">
-                      SAC Code: 999317 (Pure reimbursement of donor expenses)
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      SAC 999317 (Pure reimbursement of expenses)
                     </div>
+                  </div>
+                </div>
+
+                {/* Calculation Info Banner */}
+                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border text-[11px] text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    Deal: <strong className="text-foreground">₹{totalDealPrice.toLocaleString("en-IN")}</strong> = Service Charge <strong className="text-foreground">₹{serviceCharge.toLocaleString("en-IN")}</strong> + Donor Reimbursement <strong className="text-foreground">₹{donorReimbursement.toLocaleString("en-IN")}</strong>
+                  </div>
+                  <div className="text-teal-600 font-semibold">
+                    18% GST applies strictly to Service Charge
                   </div>
                 </div>
 
@@ -1026,7 +1191,7 @@ export function CompletedFileInvoiceModal({
                 <div className="p-3 rounded-xl bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/40 border flex items-center justify-between">
                   <div>
                     <div className="text-[11px] text-muted-foreground font-semibold uppercase">
-                      Total Amount After Tax:
+                      Total Invoice Value (With Tax):
                     </div>
                     <div className="text-xl font-black text-teal-700 dark:text-teal-300">
                       ₹{totalAmountAfterTax.toLocaleString("en-IN")}
@@ -1045,6 +1210,20 @@ export function CompletedFileInvoiceModal({
         {/* Fixed Footer Toolbar */}
         <div className="shrink-0 px-6 py-3 border-t bg-card/95 backdrop-blur flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => saveInvoiceToDb(false)}
+              disabled={isSaving}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs h-9 px-4 gap-1.5 shadow-sm font-bold cursor-pointer"
+            >
+              {isSaving ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Receipt className="w-3.5 h-3.5" />
+              )}
+              Save & Record to Ledger
+            </Button>
+
             <Button
               type="button"
               onClick={handleDownloadPdf}

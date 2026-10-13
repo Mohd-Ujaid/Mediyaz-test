@@ -197,6 +197,7 @@ export default function AdminSpermDonorRegistrationsPage() {
     recruitmentDate: string;
     supplyDate: string;
     targetStatus: "APPROVED" | null;
+    assignedDoctor: string;
   }>({
     assignedHospitalId: "",
     donorCategory: "normal",
@@ -213,6 +214,7 @@ export default function AdminSpermDonorRegistrationsPage() {
     recruitmentDate: "",
     supplyDate: "",
     targetStatus: null,
+    assignedDoctor: "",
   });
 
   // Step 2 Lab reports state
@@ -503,6 +505,7 @@ export default function AdminSpermDonorRegistrationsPage() {
       recruitmentDate: formatDateForInput(reg.recruitmentDate),
       supplyDate: formatDateForInput(reg.supplyDate || reg.pickupDate),
       targetStatus,
+      assignedDoctor: reg.assignedDoctor || (reg.assignedHospital?.doctorName || ""),
     });
     setIsDealModalOpen(true);
   };
@@ -517,10 +520,13 @@ export default function AdminSpermDonorRegistrationsPage() {
         : matchedHosp.donorDealPrice || 15000
       : 15000;
 
+    const defaultDoc = matchedHosp?.doctors?.find((d: any) => d.isPrimary)?.name || matchedHosp?.doctors?.[0]?.name || matchedHosp?.doctorName || "";
+
     setDealForm((prev) => ({
       ...prev,
       assignedHospitalId: hospitalId,
       hospitalDealPrice: newPrice,
+      assignedDoctor: prev.assignedDoctor || defaultDoc,
     }));
   };
 
@@ -567,6 +573,7 @@ export default function AdminSpermDonorRegistrationsPage() {
 
       const payload: any = {
         assignedHospital: dealForm.assignedHospitalId,
+        assignedDoctor: dealForm.assignedDoctor || "",
         hospitalDealType: dealForm.donorCategory,
         recruitmentDate: dealForm.recruitmentDate || "",
         supplyDate: dealForm.supplyDate || "",
@@ -2991,6 +2998,43 @@ export default function AdminSpermDonorRegistrationsPage() {
                   </option>
                 ))}
               </select>
+
+              {dealForm.assignedHospitalId && (() => {
+                const selHosp = hospitals.find((h) => h._id === dealForm.assignedHospitalId);
+                const docs = selHosp?.doctors || [];
+                const legacyDoc = selHosp?.doctorName;
+
+                return (
+                  <div className="pt-2">
+                    <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5 mb-1">
+                      <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                      Assigned Treating Doctor
+                    </label>
+                    {docs.length > 0 ? (
+                      <select
+                        value={dealForm.assignedDoctor || ""}
+                        onChange={(e) => setDealForm({ ...dealForm, assignedDoctor: e.target.value })}
+                        className="w-full p-2 text-xs bg-background border rounded-xl font-medium focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="">— Select Treating Doctor from Clinic —</option>
+                        {docs.map((d: any) => (
+                          <option key={d._id || d.name} value={d.name}>
+                            {d.name.startsWith("Dr.") ? d.name : `Dr. ${d.name}`} {d.specialization ? `(${d.specialization})` : ""} {d.isPrimary ? "★ Primary" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={dealForm.assignedDoctor}
+                        onChange={(e) => setDealForm({ ...dealForm, assignedDoctor: e.target.value })}
+                        placeholder={legacyDoc ? `e.g. Dr. ${legacyDoc}` : "e.g. Dr. Sunita Rao"}
+                        className="w-full p-2 text-xs bg-background border rounded-xl font-medium focus:ring-2 focus:ring-purple-500"
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* SECTION 2: DONOR CATEGORY (REGISTRY VS NORMAL VS PROFILE) */}

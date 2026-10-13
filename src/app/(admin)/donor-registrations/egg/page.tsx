@@ -195,6 +195,7 @@ export default function AdminEggDonorRegistrationsPage() {
     recruitmentDate: string;
     supplyDate: string;
     targetStatus: "APPROVED" | null;
+    assignedDoctor: string;
   }>({
     assignedHospitalId: "",
     donorCategory: "normal",
@@ -212,6 +213,7 @@ export default function AdminEggDonorRegistrationsPage() {
     recruitmentDate: "",
     supplyDate: "",
     targetStatus: null,
+    assignedDoctor: "",
   });
 
   const fetchHospitals = useCallback(async () => {
@@ -431,6 +433,7 @@ export default function AdminEggDonorRegistrationsPage() {
       recruitmentDate: formatDateForInput(reg.recruitmentDate || reg.donorInfo?.recruitmentDate),
       supplyDate: formatDateForInput(reg.supplyDate || reg.donorInfo?.supplyDate),
       targetStatus,
+      assignedDoctor: reg.assignedDoctor || (reg.assignedHospital?.doctorName || ""),
     });
     setIsDealModalOpen(true);
   };
@@ -443,10 +446,13 @@ export default function AdminEggDonorRegistrationsPage() {
         : matchedHosp.donorDealPrice || 65000
       : 65000;
 
+    const defaultDoc = matchedHosp?.doctors?.find((d: any) => d.isPrimary)?.name || matchedHosp?.doctors?.[0]?.name || matchedHosp?.doctorName || "";
+
     setDealForm((prev) => ({
       ...prev,
       assignedHospitalId: hospitalId,
       hospitalDealPrice: newPrice,
+      assignedDoctor: prev.assignedDoctor || defaultDoc,
     }));
   };
 
@@ -484,6 +490,7 @@ export default function AdminEggDonorRegistrationsPage() {
     try {
       const payload: any = {
         assignedHospital: dealForm.assignedHospitalId,
+        assignedDoctor: dealForm.assignedDoctor || "",
         clinicDeal: {
           donorCategory: dealForm.donorCategory,
           hospitalDealPrice:
@@ -1521,6 +1528,12 @@ export default function AdminEggDonorRegistrationsPage() {
                             Deal: ₹{Number(reg.clinicDeal?.hospitalDealPrice || reg.assignedHospital?.donorDealPrice).toLocaleString()}
                           </div>
                         )}
+                        {reg.assignedDoctor && (
+                          <div className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold flex items-center gap-1">
+                            <Stethoscope className="w-2.5 h-2.5" />
+                            <span>{reg.assignedDoctor.startsWith("Dr.") ? reg.assignedDoctor : `Dr. ${reg.assignedDoctor}`}</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -2418,7 +2431,7 @@ export default function AdminEggDonorRegistrationsPage() {
                         </div>
 
                         {/* Hospital Deal / Clinic Price */}
-                        <div className="p-3 bg-background rounded-xl border text-xs space-y-1">
+                        {/* <div className="p-3 bg-background rounded-xl border text-xs space-y-1">
                           <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1">
                             <Building2 className="w-3 h-3 text-blue-600" /> Hospital Deal
                           </span>
@@ -2440,7 +2453,7 @@ export default function AdminEggDonorRegistrationsPage() {
                               ? `${selectedReg.clinicDeal.donorCategory.toUpperCase()} Rate`
                               : "Hospital Billing"}
                           </div>
-                        </div>
+                        </div> */}
 
                         {/* Donor Deal Status */}
                         <div className="p-3 bg-background rounded-xl border text-xs space-y-1">
@@ -2606,6 +2619,43 @@ export default function AdminEggDonorRegistrationsPage() {
                   </option>
                 ))}
               </select>
+
+              {dealForm.assignedHospitalId && (() => {
+                const selHosp = hospitals.find((h) => h._id === dealForm.assignedHospitalId);
+                const docs = selHosp?.doctors || [];
+                const legacyDoc = selHosp?.doctorName;
+
+                return (
+                  <div className="pt-2">
+                    <label className="text-[11px] font-bold text-foreground flex items-center gap-1.5 mb-1">
+                      <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                      Assigned Treating Doctor
+                    </label>
+                    {docs.length > 0 ? (
+                      <select
+                        value={dealForm.assignedDoctor || ""}
+                        onChange={(e) => setDealForm({ ...dealForm, assignedDoctor: e.target.value })}
+                        className="w-full p-2 text-xs bg-background border rounded-xl font-medium focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="">— Select Treating Doctor from Clinic —</option>
+                        {docs.map((d: any) => (
+                          <option key={d._id || d.name} value={d.name}>
+                            {d.name.startsWith("Dr.") ? d.name : `Dr. ${d.name}`} {d.specialization ? `(${d.specialization})` : ""} {d.isPrimary ? "★ Primary" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={dealForm.assignedDoctor}
+                        onChange={(e) => setDealForm({ ...dealForm, assignedDoctor: e.target.value })}
+                        placeholder={legacyDoc ? `e.g. Dr. ${legacyDoc}` : "e.g. Dr. Sunita Rao"}
+                        className="w-full p-2 text-xs bg-background border rounded-xl font-medium focus:ring-2 focus:ring-purple-500"
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* SECTION 2: DONOR CATEGORY (REGISTRY VS NORMAL VS PROFILE) */}
@@ -2670,7 +2720,7 @@ export default function AdminEggDonorRegistrationsPage() {
             </div>
 
             {/* SECTION 3: HOSPITAL DEAL (CLINIC PRICE) */}
-            <div className="space-y-3 border-b pb-4">
+            {/* <div className="space-y-3 border-b pb-4">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Building2 className="w-4 h-4 text-blue-600" />
@@ -2706,7 +2756,7 @@ export default function AdminEggDonorRegistrationsPage() {
                   );
                 })()}
               </div>
-            </div>
+            </div> */}
 
             {/* SECTION 4: DEAL WITH DONOR (Hidden for Registry) */}
             {dealForm.donorCategory !== "registry" ? (

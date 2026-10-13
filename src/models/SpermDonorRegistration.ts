@@ -206,6 +206,10 @@ export interface ISpermDonorRegistration extends Document {
   };
 
   assignedHospital?: mongoose.Types.ObjectId;
+  assignedDoctor?: string;
+  assignedDoctorId?: string;
+  assignedBranch?: string;
+  assignedBranchId?: string;
   assignedBy?: string;
   assignedAt?: Date;
   affiliatedBy?: string;
@@ -220,6 +224,8 @@ export interface ISpermDonorRegistration extends Document {
 
   adminNotes?: string;
   pickupDate?: string;
+  pickupLocation?: string;
+  opuLocation?: string;
   recruitmentDate?: string;
   supplyDate?: string;
   reviewedBy?: string;
@@ -247,6 +253,12 @@ export interface ISpermDonorRegistration extends Document {
     receivedAmount?: number;
     receivedAt?: Date | null;
     paymentReference?: string;
+    invoiceNumber?: string;
+    invoiceDate?: Date | string | null;
+    tdsPercentage?: number;
+    tdsAmount?: number;
+    serviceCharge?: number;
+    totalAmount?: number;
   };
 
   donorDeal?: {
@@ -502,6 +514,10 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
     },
 
     assignedHospital: { type: Schema.Types.ObjectId, ref: "Hospital" },
+    assignedDoctor: { type: String, default: "" },
+    assignedDoctorId: { type: String, default: "" },
+    assignedBranch: { type: String, default: "" },
+    assignedBranchId: { type: String, default: "" },
     assignedBy: { type: String, default: null },
     assignedAt: { type: Date, default: null },
     affiliatedBy: { type: String, default: null },
@@ -518,6 +534,8 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
 
     adminNotes: { type: String, default: "" },
     pickupDate: { type: String, default: "" },
+    pickupLocation: { type: String, default: "" },
+    opuLocation: { type: String, default: "" },
     recruitmentDate: { type: String, default: "" },
     supplyDate: { type: String, default: "" },
     reviewedBy: { type: String, default: null },
@@ -553,6 +571,12 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
       receivedAmount: { type: Number, default: 0 },
       receivedAt: { type: Date, default: null },
       paymentReference: { type: String, default: "" },
+      invoiceNumber: { type: String, default: "" },
+      invoiceDate: { type: Date, default: null },
+      tdsPercentage: { type: Number, default: 10 },
+      tdsAmount: { type: Number, default: 0 },
+      serviceCharge: { type: Number, default: 0 },
+      totalAmount: { type: Number, default: 0 },
     },
 
     donorDeal: {

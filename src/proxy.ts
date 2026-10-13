@@ -8,7 +8,7 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-pathname", path);
 
   // Print pages should bypass auth/layout processing for embedded iframe printing
-  const isPrintPage = /^\/(admin\/)?manage-registrations\/[^/]+\/print\/?$/.test(
+  const isPrintPage = /^\/(admin\/)?(manage-registrations\/[^/]+|ledger|laser)\/print\/?$/.test(
     path,
   );
 

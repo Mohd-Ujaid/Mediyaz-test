@@ -33,6 +33,17 @@ import {
   Loader2,
   MoreHorizontal,
   Receipt,
+  GitBranch,
+  Check,
+  Star,
+  AlertCircle,
+  Stethoscope,
+  FileText,
+  Globe,
+  Building,
+  Users,
+  UserPlus,
+  UserCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -101,6 +112,8 @@ export default function HospitalManagementPage() {
   const [stateFilter, setStateFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [fromDateFilter, setFromDateFilter] = useState("");
+  const [toDateFilter, setToDateFilter] = useState("");
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -120,19 +133,64 @@ export default function HospitalManagementPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedHospital, setSelectedHospital] = useState<any | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [formTab, setFormTab] = useState<"basic" | "contact" | "medical" | "financial">("basic");
-  const [detailTab, setDetailTab] = useState<"info" | "financial" | "history">("info");
+  const [formTab, setFormTab] = useState<"basic" | "branches" | "financial">("basic");
+  const [detailTab, setDetailTab] = useState<"info" | "branches" | "financial" | "history">("info");
+  
+  // Temporary input states for adding multiple doctors
+  const [newHospitalDoctor, setNewHospitalDoctor] = useState("");
+  const [newBranchDoctor, setNewBranchDoctor] = useState("");
+  const [newModalBranchDoctor, setNewModalBranchDoctor] = useState("");
+
+  // Initial Branch template
+  const initialBranchForm = {
+    _id: "",
+    branchName: "",
+    branchCode: "",
+    registrationNumber: "",
+    gstNumber: "",
+    contactPerson: "",
+    email: "",
+    mobileNumber: "",
+    telephone: "",
+    doctorName: "",
+    doctors: [] as string[],
+    pickupLocation: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    country: "India",
+    pincode: "",
+    isMainBranch: false,
+    status: "ACTIVE"
+  };
+
+  // Branch Editor State inside Wizard
+  const [branchForm, setBranchForm] = useState<any>(initialBranchForm);
+  const [isAddingBranch, setIsAddingBranch] = useState(false);
+  const [editingBranchIndex, setEditingBranchIndex] = useState<number | null>(null);
+
+  // Dedicated Quick Branch Manager Modal state
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+  const [branchModalHospital, setBranchModalHospital] = useState<any | null>(null);
+  const [isModalAddingBranch, setIsModalAddingBranch] = useState(false);
+  const [modalBranchForm, setModalBranchForm] = useState<any>(initialBranchForm);
+  const [editingModalBranchId, setEditingModalBranchId] = useState<string | null>(null);
+  const [isBranchActionLoading, setIsBranchActionLoading] = useState(false);
 
   // Form Fields
   const [formFields, setFormFields] = useState<any>({
     name: "",
     shortName: "",
-    // code: "",
     registrationNumber: "",
-    // licenseNumber: "",
     gstNumber: "",
-    // panNumber: "",
+    doctorName: "",
+    doctors: [] as string[],
+    pickupLocation: "",
+    wantInvoice: true,
+    tdsPercentage: 2,
     
     contactPerson: "",
     email: "",
@@ -147,19 +205,17 @@ export default function HospitalManagementPage() {
     country: "India",
     pincode: "",
     
-    hospitalType: "",
+    hospitalType: "Proprietor",
     specializations: [],
-    // organTypesSupported: [],
-    // icuAvailability: false,
-    // transplantLicenseNumber: "",
+    branches: [],
     
-    donorDealPrice: 0,
-    profiledonorDealPrice: 0,
-    // serviceCharge: 0,
-    // processingFee: 0,
-    // registrationFee: 0,
-    // commission: 0,
-    // additionalCharges: 0,
+    eggDonorDealPrice: 65000,
+    eggProfileDonorDealPrice: 85000,
+    spermDonorDealPrice: 15000,
+    spermProfileDonorDealPrice: 25000,
+    serviceCharge: 5000,
+    donorDealPrice: 65000,
+    profiledonorDealPrice: 85000,
     currency: "INR",
     status: "ACTIVE"
   });
@@ -171,11 +227,13 @@ export default function HospitalManagementPage() {
     setFormFields({
       name: "",
       shortName: "",
-      // code: "",
       registrationNumber: "",
-      // licenseNumber: "",
       gstNumber: "",
-      // panNumber: "",
+      doctorName: "",
+      doctors: [],
+      pickupLocation: "",
+      wantInvoice: true,
+      tdsPercentage: 2,
       contactPerson: "",
       email: "",
       mobileNumber: "",
@@ -187,22 +245,310 @@ export default function HospitalManagementPage() {
       state: "",
       country: "India",
       pincode: "",
-      hospitalType: "",
+      hospitalType: "Proprietor",
       specializations: [],
-      // organTypesSupported: [],
-      // icuAvailability: false,
-      // transplantLicenseNumber: "",
-      donorDealPrice: 0,
-      profiledonorDealPrice: 0,
-      // serviceCharge: 0,
-      // processingFee: 0,
-      // registrationFee: 0,
-      // commission: 0,
-      // additionalCharges: 0,
+      branches: [],
+      eggDonorDealPrice: 65000,
+      eggProfileDonorDealPrice: 85000,
+      spermDonorDealPrice: 15000,
+      spermProfileDonorDealPrice: 25000,
+      serviceCharge: 5000,
+      donorDealPrice: 65000,
+      profiledonorDealPrice: 85000,
       currency: "INR",
       status: "ACTIVE"
     });
+    setNewHospitalDoctor("");
+    setNewBranchDoctor("");
     setFormTab("basic");
+    setIsAddingBranch(false);
+    setEditingBranchIndex(null);
+    setBranchForm(initialBranchForm);
+  };
+
+  // Branch handlers for the Wizard Form
+  const handleSaveBranch = () => {
+    if (!branchForm.branchName?.trim()) {
+      toast.error("Branch name is required.");
+      return;
+    }
+    if (!branchForm.registrationNumber?.trim()) {
+      toast.error("Branch registration number is required.");
+      return;
+    }
+    if (!branchForm.contactPerson?.trim()) {
+      toast.error("Branch contact person is required.");
+      return;
+    }
+    if (!branchForm.mobileNumber?.trim()) {
+      toast.error("Branch contact phone is required.");
+      return;
+    }
+    if (!branchForm.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branchForm.email?.trim())) {
+      toast.error("Valid branch email address is required.");
+      return;
+    }
+    if (!branchForm.addressLine1?.trim() || !branchForm.state?.trim() || !branchForm.city?.trim() || !branchForm.pincode?.trim()) {
+      toast.error("Complete branch address (Address Line 1, State, City, Pincode) is required.");
+      return;
+    }
+
+    const currentBranches = [...(formFields.branches || [])];
+    const isFirstBranch = currentBranches.length === 0;
+    const branchDoctors = Array.isArray(branchForm.doctors) ? branchForm.doctors : [];
+    const effectiveDoctorName = branchDoctors.join(", ") || branchForm.doctorName?.trim() || "";
+
+    const newBranch = {
+      ...branchForm,
+      branchName: branchForm.branchName.trim(),
+      branchCode: branchForm.branchCode?.trim() || "",
+      registrationNumber: branchForm.registrationNumber.trim(),
+      gstNumber: branchForm.gstNumber?.trim() || "",
+      doctorName: effectiveDoctorName,
+      doctors: branchDoctors,
+      contactPerson: branchForm.contactPerson.trim(),
+      email: branchForm.email.trim(),
+      mobileNumber: branchForm.mobileNumber.trim(),
+      telephone: branchForm.telephone?.trim() || "",
+      pickupLocation: branchForm.pickupLocation?.trim() || "",
+      addressLine1: branchForm.addressLine1.trim(),
+      addressLine2: branchForm.addressLine2?.trim() || "",
+      city: branchForm.city.trim(),
+      state: branchForm.state.trim(),
+      country: branchForm.country?.trim() || "India",
+      pincode: branchForm.pincode.trim(),
+      isMainBranch: isFirstBranch ? true : Boolean(branchForm.isMainBranch),
+      status: branchForm.status || "ACTIVE",
+      _id: branchForm._id || `temp_${Date.now()}`
+    };
+
+    if (newBranch.isMainBranch) {
+      currentBranches.forEach((b: any) => { b.isMainBranch = false; });
+    }
+
+    if (editingBranchIndex !== null && editingBranchIndex >= 0) {
+      currentBranches[editingBranchIndex] = newBranch;
+      toast.success("Branch details updated.");
+    } else {
+      currentBranches.push(newBranch);
+      toast.success("Branch added to clinic.");
+    }
+
+    // Ensure at least one branch is designated as main
+    if (!currentBranches.some((b: any) => b.isMainBranch) && currentBranches.length > 0) {
+      currentBranches[0].isMainBranch = true;
+    }
+
+    setFormFields({ ...formFields, branches: currentBranches });
+    setBranchForm(initialBranchForm);
+    setNewBranchDoctor("");
+    setIsAddingBranch(false);
+    setEditingBranchIndex(null);
+  };
+
+  const handleEditBranch = (index: number) => {
+    const b = formFields.branches[index];
+    if (!b) return;
+    const bDoctors = Array.isArray(b.doctors) && b.doctors.length > 0
+      ? b.doctors.map((d: any) => typeof d === "string" ? d : d.name).filter(Boolean)
+      : (b.doctorName ? b.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
+    setBranchForm({ ...b, doctors: bDoctors });
+    setNewBranchDoctor("");
+    setEditingBranchIndex(index);
+    setIsAddingBranch(true);
+  };
+
+  const handleDeleteBranch = (index: number) => {
+    const currentBranches = formFields.branches.filter((_: any, i: number) => i !== index);
+    if (currentBranches.length > 0 && !currentBranches.some((b: any) => b.isMainBranch)) {
+      currentBranches[0].isMainBranch = true;
+    }
+    setFormFields({ ...formFields, branches: currentBranches });
+    toast.success("Branch removed.");
+  };
+
+  const handleSetMainBranch = (index: number) => {
+    const currentBranches = formFields.branches.map((b: any, i: number) => ({
+      ...b,
+      isMainBranch: i === index
+    }));
+    setFormFields({ ...formFields, branches: currentBranches });
+    toast.success("Main branch designated.");
+  };
+
+  const openBranchManager = (hosp: any) => {
+    setBranchModalHospital(hosp);
+    setIsModalAddingBranch(false);
+    setEditingModalBranchId(null);
+    setModalBranchForm(initialBranchForm);
+    setNewModalBranchDoctor("");
+    setIsBranchModalOpen(true);
+  };
+
+  const handleModalSaveBranch = async () => {
+    if (!modalBranchForm.branchName?.trim()) {
+      toast.error("Branch name is required.");
+      return;
+    }
+    if (!modalBranchForm.registrationNumber?.trim()) {
+      toast.error("Branch registration number is required.");
+      return;
+    }
+    if (!modalBranchForm.contactPerson?.trim()) {
+      toast.error("Branch contact person is required.");
+      return;
+    }
+    if (!modalBranchForm.mobileNumber?.trim()) {
+      toast.error("Branch contact phone is required.");
+      return;
+    }
+    if (!modalBranchForm.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(modalBranchForm.email?.trim())) {
+      toast.error("Valid branch email address is required.");
+      return;
+    }
+    if (!modalBranchForm.addressLine1?.trim() || !modalBranchForm.state?.trim() || !modalBranchForm.city?.trim() || !modalBranchForm.pincode?.trim()) {
+      toast.error("Complete branch address (Address Line 1, State, City, Pincode) is required.");
+      return;
+    }
+    if (!branchModalHospital) return;
+
+    setIsBranchActionLoading(true);
+    try {
+      const isEdit = Boolean(editingModalBranchId);
+      const method = isEdit ? "PUT" : "POST";
+      const modalDoctors = Array.isArray(modalBranchForm.doctors) ? modalBranchForm.doctors : [];
+      const effectiveDoctorName = modalDoctors.join(", ") || modalBranchForm.doctorName?.trim() || "";
+      const payloadData = {
+        ...modalBranchForm,
+        doctorName: effectiveDoctorName,
+        doctors: modalDoctors
+      };
+      const body = isEdit
+        ? { ...payloadData, branchId: editingModalBranchId }
+        : payloadData;
+
+      const res = await fetch(`/api/hospitals/${branchModalHospital._id}/branches`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || (isEdit ? "Branch updated successfully." : "Branch added successfully."));
+        const updatedBranches = data.branches;
+        setBranchModalHospital({
+          ...branchModalHospital,
+          branches: updatedBranches
+        });
+        setHospitals(prev => prev.map(h => h._id === branchModalHospital._id ? { ...h, branches: updatedBranches } : h));
+        if (selectedHospital && selectedHospital._id === branchModalHospital._id) {
+          setSelectedHospital({ ...selectedHospital, branches: updatedBranches });
+        }
+        setIsModalAddingBranch(false);
+        setEditingModalBranchId(null);
+        setModalBranchForm(initialBranchForm);
+        setNewModalBranchDoctor("");
+      } else {
+        toast.error(data.error || "Failed to save branch.");
+      }
+    } catch (error) {
+      toast.error("Network error saving branch.");
+    } finally {
+      setIsBranchActionLoading(false);
+    }
+  };
+
+  const handleModalDeleteBranch = async (branchId: string) => {
+    if (!confirm("Are you sure you want to delete this branch?")) return;
+    if (!branchModalHospital) return;
+
+    setIsBranchActionLoading(true);
+    try {
+      const res = await fetch(`/api/hospitals/${branchModalHospital._id}/branches?branchId=${branchId}`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Branch removed successfully.");
+        const updatedBranches = data.branches;
+        setBranchModalHospital({
+          ...branchModalHospital,
+          branches: updatedBranches
+        });
+        setHospitals(prev => prev.map(h => h._id === branchModalHospital._id ? { ...h, branches: updatedBranches } : h));
+        if (selectedHospital && selectedHospital._id === branchModalHospital._id) {
+          setSelectedHospital({ ...selectedHospital, branches: updatedBranches });
+        }
+      } else {
+        toast.error(data.error || "Failed to delete branch.");
+      }
+    } catch (error) {
+      toast.error("Network error deleting branch.");
+    } finally {
+      setIsBranchActionLoading(false);
+    }
+  };
+
+  const handleModalSetMainBranch = async (branch: any) => {
+    if (!branchModalHospital) return;
+    setIsBranchActionLoading(true);
+    try {
+      const res = await fetch(`/api/hospitals/${branchModalHospital._id}/branches`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: branch._id, isMainBranch: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Designated as main branch.");
+        const updatedBranches = data.branches;
+        setBranchModalHospital({
+          ...branchModalHospital,
+          branches: updatedBranches
+        });
+        setHospitals(prev => prev.map(h => h._id === branchModalHospital._id ? { ...h, branches: updatedBranches } : h));
+        if (selectedHospital && selectedHospital._id === branchModalHospital._id) {
+          setSelectedHospital({ ...selectedHospital, branches: updatedBranches });
+        }
+      } else {
+        toast.error(data.error || "Failed to designate main branch.");
+      }
+    } catch (error) {
+      toast.error("Network error designating main branch.");
+    } finally {
+      setIsBranchActionLoading(false);
+    }
+  };
+
+  // Step Validation Logic
+  const isStep1Valid = Boolean(
+    formFields.name?.trim() &&
+    formFields.shortName?.trim() &&
+    formFields.hospitalType?.trim()
+  );
+
+  const isStep2Valid = true;
+  const isStep3Valid = true;
+
+  const formSteps = [
+    { id: "basic", label: "Hospital / ART Clinic", icon: Building2, desc: "Clinic identity & entity", isValid: isStep1Valid },
+    ...(isAdmin ? [{ id: "financial", label: "Default Deals", icon: DollarSign, desc: "Default deal pricing", isValid: isStep3Valid }] : [])
+  ];
+
+  const currentStepIndex = formSteps.findIndex(s => s.id === formTab);
+  const currentStep = formSteps[currentStepIndex] || formSteps[0];
+  const isCurrentStepValid = currentStep?.isValid ?? false;
+  const canSubmit = isStep1Valid;
+
+  const getMissingFieldsNote = () => {
+    if (formTab === "basic") {
+      const missing = [];
+      if (!formFields.name?.trim()) missing.push("Clinic Name");
+      if (!formFields.shortName?.trim()) missing.push("Short Name");
+      if (!formFields.hospitalType?.trim()) missing.push("Hospital Type");
+      return missing.length ? `Required: ${missing.join(", ")}` : "";
+    }
+    return "";
   };
 
   async function loadHospitals() {
@@ -214,6 +560,8 @@ export default function HospitalManagementPage() {
       if (stateFilter) query += `&state=${encodeURIComponent(stateFilter)}`;
       if (typeFilter) query += `&type=${typeFilter}`;
       if (statusFilter) query += `&status=${statusFilter}`;
+      if (fromDateFilter) query += `&startDate=${encodeURIComponent(fromDateFilter)}`;
+      if (toDateFilter) query += `&endDate=${encodeURIComponent(toDateFilter)}`;
       // if (organFilter) query += `&organ=${organFilter}`;
 
       const res = await fetch(query);
@@ -257,65 +605,114 @@ data.hospitals?.forEach((h: any, index: number) => {
 
   useEffect(() => {
     loadHospitals();
-  }, [currentPage, search, cityFilter, stateFilter, typeFilter, statusFilter]);
+  }, [currentPage, search, cityFilter, stateFilter, typeFilter, statusFilter, fromDateFilter, toDateFilter]);
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate required fields
-    if (!formFields.name || !formFields.shortName ||  !formFields.registrationNumber || !formFields.contactPerson || !formFields.email || !formFields.mobileNumber || !formFields.addressLine1 || !formFields.city || !formFields.state || !formFields.pincode) {
-      toast.error("Please fill in all required fields across all tabs.");
+    // Validate required fields for the hospital / clinic
+    if (!formFields.name?.trim() || !formFields.shortName?.trim() || !formFields.hospitalType?.trim()) {
+      toast.error("Please enter Hospital / Clinic Name, Short Name, and Hospital Type.");
+      setFormTab("basic");
       return;
     }
 
+    setIsSubmitting(true);
     try {
+      const hospitalDoctorList = Array.isArray(formFields.doctors)
+        ? formFields.doctors.map((d: any) => typeof d === "string" ? { name: d.trim() } : d).filter((d: any) => d.name)
+        : [];
+      const hospitalDoctorString = hospitalDoctorList.map((d: any) => d.name).join(", ");
+
+      const normalizedBranches = (formFields.branches || []).map((b: any) => {
+        const bDocs = Array.isArray(b.doctors)
+          ? b.doctors.map((d: any) => typeof d === "string" ? { name: d.trim() } : d).filter((d: any) => d.name)
+          : [];
+        return {
+          ...b,
+          doctors: bDocs,
+          doctorName: bDocs.map((d: any) => d.name).join(", ") || b.doctorName || ""
+        };
+      });
+
+      const payload = {
+        ...formFields,
+        branches: normalizedBranches,
+        doctors: hospitalDoctorList,
+        doctorName: hospitalDoctorString || formFields.doctorName || "",
+        registrationNumber: formFields.registrationNumber?.trim() || "",
+        gstNumber: formFields.gstNumber?.trim() || "",
+        pickupLocation: formFields.pickupLocation?.trim() || "",
+        contactPerson: formFields.contactPerson?.trim() || "",
+        email: formFields.email?.trim() || "",
+        mobileNumber: formFields.mobileNumber?.trim() || "",
+        telephone: formFields.telephone?.trim() || "",
+        emergencyNumber: formFields.emergencyNumber?.trim() || "",
+        addressLine1: formFields.addressLine1?.trim() || "",
+        addressLine2: formFields.addressLine2?.trim() || "",
+        city: formFields.city?.trim() || "",
+        state: formFields.state?.trim() || "",
+        pincode: formFields.pincode?.trim() || "",
+        country: formFields.country?.trim() || "India"
+      };
+
       const url = selectedHospital ? `/api/hospitals/${selectedHospital._id}` : "/api/hospitals";
       const method = selectedHospital ? "PUT" : "POST";
       
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formFields)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
-      // gtemp
-      console.log("HOSPITAL API RESPONSE:", data);
-console.log("HOSPITALS:", data.hospitals);
-
-data.hospitals?.forEach((h: any, index: number) => {
-  console.log(`Hospital ${index}:`, h);
-
-  console.log("hospitalType:", h.hospitalType, typeof h.hospitalType);
-  console.log("contactPerson:", h.contactPerson, typeof h.contactPerson);
-  console.log("email:", h.email, typeof h.email);
-  console.log("address:", h.address, typeof h.address);
-});
-      // gtemp
       
       if (data.success) {
-        toast.success(selectedHospital ? "Hospital details updated successfully." : "Hospital registered successfully.");
+        const createdHosp = data.hospital;
+        toast.success(selectedHospital ? "Hospital details updated successfully." : "Hospital created successfully! Now add branches for this hospital.");
         setIsFormOpen(false);
         resetForm();
         setSelectedHospital(null);
-        loadHospitals();
+        await loadHospitals();
+        if (!selectedHospital && createdHosp) {
+          openBranchManager(createdHosp);
+          setIsModalAddingBranch(true);
+        }
       } else {
         toast.error(data.error || "Operation failed.");
       }
     } catch (error) {
       toast.error("Network error during operation.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleOpenEdit = (hosp: any) => {
     setSelectedHospital(hosp);
+    // Parse doctors for the hospital
+    const loadedHospitalDoctors = Array.isArray(hosp.doctors) && hosp.doctors.length > 0
+      ? hosp.doctors.map((d: any) => typeof d === "string" ? d : d.name).filter(Boolean)
+      : (hosp.doctorName ? hosp.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
+
+    let initialBranches = Array.isArray(hosp.branches) && hosp.branches.length > 0
+      ? hosp.branches.map((b: any) => ({
+          ...b,
+          doctors: Array.isArray(b.doctors) && b.doctors.length > 0
+            ? b.doctors.map((d: any) => typeof d === "string" ? d : d.name).filter(Boolean)
+            : (b.doctorName ? b.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean) : [])
+        }))
+      : [];
+
     setFormFields({
       name: hosp.name || "",
       shortName: hosp.shortName || "",
-      // code: hosp.code || "",
       registrationNumber: hosp.registrationNumber || "",
-      // licenseNumber: hosp.licenseNumber || "",
-      // gstNumber: hosp.gstNumber || "",
-      // panNumber: hosp.panNumber || "",
+      gstNumber: hosp.gstNumber || "",
+      doctorName: hosp.doctorName || "",
+      doctors: loadedHospitalDoctors,
+      pickupLocation: hosp.pickupLocation || "",
+      wantInvoice: hosp.wantInvoice !== undefined ? hosp.wantInvoice : true,
+      tdsPercentage: hosp.tdsPercentage !== undefined ? hosp.tdsPercentage : 2,
       contactPerson: hosp.contactPerson || "",
       email: hosp.email || "",
       mobileNumber: hosp.mobileNumber || "",
@@ -327,22 +724,25 @@ data.hospitals?.forEach((h: any, index: number) => {
       state: hosp.state || "",
       country: hosp.country || "India",
       pincode: hosp.pincode || "",
-      hospitalType: hosp.hospitalType || "",
+      hospitalType: hosp.hospitalType || "Proprietor",
       specializations: hosp.specializations || [],
-      // organTypesSupported: hosp.organTypesSupported || [],
-      // icuAvailability: hosp.icuAvailability || false,
-      // transplantLicenseNumber: hosp.transplantLicenseNumber || "",
-      donorDealPrice: hosp.donorDealPrice || 0,
-      profiledonorDealPrice: hosp.profiledonorDealPrice || 0,
-      // serviceCharge: hosp.serviceCharge || 0,
-      // processingFee: hosp.processingFee || 0,
-      // registrationFee: hosp.registrationFee || 0,
-      // commission: hosp.commission || 0,
-      // additionalCharges: hosp.additionalCharges || 0,
+      branches: initialBranches,
+      eggDonorDealPrice: hosp.eggDonorDealPrice || hosp.donorDealPrice || 65000,
+      eggProfileDonorDealPrice: hosp.eggProfileDonorDealPrice || hosp.profiledonorDealPrice || 85000,
+      spermDonorDealPrice: hosp.spermDonorDealPrice || 15000,
+      spermProfileDonorDealPrice: hosp.spermProfileDonorDealPrice || 25000,
+      serviceCharge: hosp.serviceCharge || 5000,
+      donorDealPrice: hosp.eggDonorDealPrice || hosp.donorDealPrice || 65000,
+      profiledonorDealPrice: hosp.eggProfileDonorDealPrice || hosp.profiledonorDealPrice || 85000,
       currency: hosp.currency || "INR",
       status: hosp.status || "ACTIVE"
     });
+    setNewHospitalDoctor("");
+    setNewBranchDoctor("");
     setFormTab("basic");
+    setIsAddingBranch(false);
+    setEditingBranchIndex(null);
+    setBranchForm(initialBranchForm);
     setIsFormOpen(true);
   };
 
@@ -381,6 +781,63 @@ data.hospitals?.forEach((h: any, index: number) => {
     } catch (error) {
       toast.error("Failed to communicate status update.");
     }
+  };
+
+  const handleToggleHospitalStatus = (h: any) => {
+    const nextStatus = h.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    handleUpdateStatus(h._id, nextStatus);
+  };
+
+  const openClinicDashboard = (h: any, tab: "info" | "branches" | "financial" | "history" = "info") => {
+    setSelectedHospital(h);
+    setDetailTab(tab);
+    setIsDetailOpen(true);
+  };
+
+  // Multiple Doctor helpers for Hospital and Branches
+  const addHospitalDoctor = () => {
+    const trimmed = newHospitalDoctor.trim();
+    if (!trimmed) return;
+    const current = formFields.doctors || [];
+    if (!current.includes(trimmed)) {
+      setFormFields({ ...formFields, doctors: [...current, trimmed] });
+    }
+    setNewHospitalDoctor("");
+  };
+
+  const removeHospitalDoctor = (idx: number) => {
+    const current = (formFields.doctors || []).filter((_: any, i: number) => i !== idx);
+    setFormFields({ ...formFields, doctors: current });
+  };
+
+  const addBranchDoctor = () => {
+    const trimmed = newBranchDoctor.trim();
+    if (!trimmed) return;
+    const current = branchForm.doctors || [];
+    if (!current.includes(trimmed)) {
+      setBranchForm({ ...branchForm, doctors: [...current, trimmed] });
+    }
+    setNewBranchDoctor("");
+  };
+
+  const removeBranchDoctor = (idx: number) => {
+    const current = (branchForm.doctors || []).filter((_: any, i: number) => i !== idx);
+    setBranchForm({ ...branchForm, doctors: current });
+  };
+
+  const addModalBranchDoctor = () => {
+    const trimmed = newModalBranchDoctor.trim();
+    if (!trimmed) return;
+    const current = modalBranchForm.doctors || [];
+    if (!current.includes(trimmed)) {
+      setModalBranchForm({ ...modalBranchForm, doctors: [...current, trimmed] });
+    }
+    setNewModalBranchDoctor("");
+  };
+
+  const removeModalBranchDoctor = (idx: number) => {
+    const current = (modalBranchForm.doctors || []).filter((_: any, i: number) => i !== idx);
+    setModalBranchForm({ ...modalBranchForm, doctors: current });
   };
 
   const addSpec = () => {
@@ -553,13 +1010,13 @@ data.hospitals?.forEach((h: any, index: number) => {
 
       {/* Advanced Filters Panel */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search bar */}
           <div className="relative lg:col-span-2">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by name, contact..."
+              placeholder="Search by clinic name, code, contact..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
@@ -573,10 +1030,9 @@ data.hospitals?.forEach((h: any, index: number) => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
             >
-              {/* <option value="">Status (Active/Suspended)</option> */}
+              <option value="">All Statuses</option>
               <option value="ACTIVE">Active Partner</option>
               <option value="INACTIVE">Inactive</option>
-              {/* <option value="SUSPENDED">Suspended</option>   */}
               <option value="ARCHIVED">Archived (Soft deleted)</option>
             </select>
           </div>
@@ -585,7 +1041,10 @@ data.hospitals?.forEach((h: any, index: number) => {
           <div>
             <select
               value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
+              onChange={(e) => {
+                setStateFilter(e.target.value);
+                setCityFilter("");
+              }}
               className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
             >
               <option value="">Select State (All)</option>
@@ -596,7 +1055,6 @@ data.hospitals?.forEach((h: any, index: number) => {
             </select>
           </div>
 
-          
           {/* City Filter */}
           <div>
             <select
@@ -611,17 +1069,64 @@ data.hospitals?.forEach((h: any, index: number) => {
               {(STATE_CITIES[stateFilter] || []).includes("Other") && <option value="Other">Other</option>}
             </select>
           </div>
+        </div>
 
-          {/* Organ Filter */}
-          {/* <div>
-            <input
-              type="text"
-              placeholder="Organ specialty (e.g. Kidney, Egg)"
-              value={organFilter}
-              onChange={(e) => setOrganFilter(e.target.value)}
-              className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500"
-            />
-          </div> */}
+        {/* Date Range Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-900 text-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+              Registration Date Range:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">From:</span>
+              <input
+                type="date"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400 font-medium">To:</span>
+              <input
+                type="date"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+                className="h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            {(fromDateFilter || toDateFilter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFromDateFilter("");
+                  setToDateFilter("");
+                }}
+                className="text-[11px] text-rose-500 hover:text-rose-600 underline font-medium"
+              >
+                Clear Dates
+              </button>
+            )}
+          </div>
+
+          {(search || statusFilter || stateFilter || cityFilter || fromDateFilter || toDateFilter) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("");
+                setStateFilter("");
+                setCityFilter("");
+                setFromDateFilter("");
+                setToDateFilter("");
+                setCurrentPage(1);
+              }}
+              className="h-8 text-xs text-slate-600 hover:text-slate-900 border-slate-200 dark:border-slate-800 rounded-xl"
+            >
+              Reset All Filters
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -652,10 +1157,59 @@ data.hospitals?.forEach((h: any, index: number) => {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-900">
                 {hospitals.map((h) => (
                   <tr key={h._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                    <td className="p-3.5 font-bold font-mono text-slate-900 dark:text-white">{h.name}</td>
-                    {/* <td className="p-3.5 font-semibold text-slate-800 dark:text-slate-200">
-                      {h.name} <span className="text-[10px] text-slate-400">({h.shortName})</span>
-                    </td> */}
+                    <td className="p-3.5">
+                      <div className="space-y-1">
+                        <div className="font-bold font-mono text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <span>{h.name}</span>
+                          {h.shortName && <span className="text-[10px] text-slate-400 font-sans">({h.shortName})</span>}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {h.branches && h.branches.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => openBranchManager(h)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200/60 hover:bg-teal-100 transition-colors cursor-pointer"
+                              title="Click to view and manage branches"
+                            >
+                              <GitBranch className="w-3 h-3 text-teal-600" />
+                              <span>{h.branches.length} {h.branches.length === 1 ? "Branch" : "Branches"}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openBranchManager(h)}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-teal-600 hover:bg-teal-50/50 dark:hover:bg-slate-900 transition-colors"
+                              title="Click to add branches"
+                            >
+                              <GitBranch className="w-2.5 h-2.5 text-slate-400" />
+                              <span>Single Center</span>
+                            </button>
+                          )}
+
+                          {h.doctors && h.doctors.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => openClinicDashboard(h, "info")}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60 hover:bg-purple-100 transition-colors cursor-pointer"
+                              title="Click to view clinic details"
+                            >
+                              <Stethoscope className="w-3 h-3 text-purple-600" />
+                              <span>{h.doctors.length} {h.doctors.length === 1 ? "Doctor" : "Doctors"}</span>
+                            </button>
+                          ) : h.doctorName ? (
+                            <button
+                              type="button"
+                              onClick={() => openClinicDashboard(h, "info")}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                              title="Click to view clinic details"
+                            >
+                              <Stethoscope className="w-2.5 h-2.5 text-purple-500" />
+                              <span>Dr. {h.doctorName.replace(/^Dr\.?\s*/i, "")}</span>
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </td>
                     <td className="p-3.5 text-slate-600">{h.registrationNumber}</td>
                     <td className="p-3.5 text-slate-600">{h.hospitalType}</td>
                     <td className="p-3.5 text-slate-600">
@@ -667,38 +1221,37 @@ data.hospitals?.forEach((h: any, index: number) => {
                         <div className="text-[10px] text-slate-400">{h.mobileNumber}</div>
                       </div>
                     </td>
-                    {/* <td className="p-3.5">
-                      <div className="flex flex-wrap gap-1">
-                        {h.organTypesSupported?.slice(0, 2).map((org: string) => (
-                          <span key={org} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-semibold dark:bg-slate-900 dark:text-slate-400">
-                            {org}
-                          </span>
-                        ))}
-                        {h.organTypesSupported?.length > 2 && (
-                          <span className="text-[9px] text-slate-400">+{h.organTypesSupported.length - 2} more</span>
-                        )}
-                      </div>
-                    </td> */}
                     <td className="p-3.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        h.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" :
-                        // h.status === "SUSPENDED" ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" :
-                        h.status === "INACTIVE" ? "bg-red-500 text-white dark:bg-red-800 dark:text-white" :
-                        "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                      }`}>
-                        {h.status}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHospitalStatus(h)}
+                        disabled={!isAdmin}
+                        title={isAdmin ? `Click to toggle status (Currently ${h.status || "ACTIVE"})` : `Status: ${h.status || "ACTIVE"}`}
+                        className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+                          h.status === "ACTIVE"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/60 hover:bg-emerald-100"
+                            : h.status === "INACTIVE"
+                            ? "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200/60 hover:bg-rose-100"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200/60 hover:bg-amber-100"
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${h.status === "ACTIVE" ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                        <span>{h.status || "ACTIVE"}</span>
+                        {isAdmin && <span className="opacity-0 group-hover:opacity-100 text-[9px] text-slate-400 ml-0.5">⇄</span>}
+                      </button>
                     </td>
                     <td className="p-3.5 font-mono">
-                      <div className="space-y-0.5 text-xs">
-                        <div className="font-semibold text-teal-600 dark:text-teal-400">
-                          Normal: ₹{(h.donorDealPrice || 0).toLocaleString()}
+                      <div className="space-y-1 text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] uppercase font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-1 py-0.5 rounded border border-teal-200/50">Egg</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">₹{(h.eggDonorDealPrice || h.donorDealPrice || 65000).toLocaleString()}</span>
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400">/ ₹{(h.eggProfileDonorDealPrice || h.profiledonorDealPrice || 85000).toLocaleString()}</span>
                         </div>
-                        {h.profiledonorDealPrice > 0 && (
-                          <div className="text-[10px] text-purple-600 dark:text-purple-400">
-                            Profile: ₹{h.profiledonorDealPrice.toLocaleString()}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] uppercase font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1 py-0.5 rounded border border-blue-200/50">Sperm</span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">₹{(h.spermDonorDealPrice || 15000).toLocaleString()}</span>
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400">/ ₹{(h.spermProfileDonorDealPrice || 25000).toLocaleString()}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="p-3.5 text-right">
@@ -718,13 +1271,26 @@ data.hospitals?.forEach((h: any, index: number) => {
                           />
                           <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border">
                             <DropdownMenuItem
-                              onClick={() => { setSelectedHospital(h); setDetailTab("info"); setIsDetailOpen(true); }}
+                              onClick={() => openClinicDashboard(h, "info")}
                               className="text-xs font-medium cursor-pointer flex items-center gap-2 py-2"
                             >
                               <Eye className="w-4 h-4 text-blue-600" /> View Clinic Dashboard
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openBranchManager(h)}
+                              className="text-xs font-medium cursor-pointer flex items-center gap-2 py-2 text-teal-700 dark:text-teal-400"
+                            >
+                              <GitBranch className="w-4 h-4 text-teal-600" /> Manage Branches ({h.branches?.length || 0})
+                            </DropdownMenuItem>
                             {isAdmin && (
                               <>
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleHospitalStatus(h)}
+                                  className="text-xs font-medium cursor-pointer flex items-center gap-2 py-2"
+                                >
+                                  <RefreshCw className="w-4 h-4 text-slate-600" />
+                                  <span>Mark as {h.status === "ACTIVE" ? "Inactive" : "Active"}</span>
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleOpenEdit(h)}
                                   className="text-xs font-medium cursor-pointer flex items-center gap-2 py-2"
@@ -761,365 +1327,275 @@ data.hospitals?.forEach((h: any, index: number) => {
         )}
       </Card>
 
-      {/* DIALOG 1: ADD / EDIT PARTNER CLINIC */}
+      {/* DIALOG 1: ADD / EDIT PARTNER CLINIC WITH MULTI-STEP WIZARD */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-2xl rounded-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-              <Building2 className="w-5 h-5 text-teal-600" /> {selectedHospital ? "Edit partner hospital details" : "Register partner hospital"}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Provide basic, medical specialization, contact, and donor deal financial configurations.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Form Tabs */}
-          <div className="flex border-b border-slate-100 dark:border-slate-900 mb-4 text-xs font-semibold">
-            <button
-              onClick={() => setFormTab("basic")}
-              className={`pb-2.5 px-3 border-b-2 transition-all ${formTab === "basic" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            >
-              Basic Info
-            </button>
-            <button
-              onClick={() => setFormTab("contact")}
-              className={`pb-2.5 px-3 border-b-2 transition-all ${formTab === "contact" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            >
-              Contact & Address
-            </button>
-            <button
-              onClick={() => setFormTab("medical")}
-              className={`pb-2.5 px-3 border-b-2 transition-all ${formTab === "medical" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-            >
-              Medical Config
-            </button>
-            {isAdmin && (
-              <button
-                onClick={() => setFormTab("financial")}
-                className={`pb-2.5 px-3 border-b-2 transition-all ${formTab === "financial" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-              >
-                Financial Settings
-              </button>
-            )}
+        <DialogContent className="max-w-2xl rounded-3xl max-h-[90vh] overflow-y-auto p-0 border border-slate-200 dark:border-slate-800 shadow-2xl">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-teal-50/70 via-slate-50/50 to-emerald-50/40 dark:from-slate-900 dark:to-teal-950/30 p-6 pb-4 border-b border-slate-100 dark:border-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-teal-600/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 ring-1 ring-teal-500/20">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  {selectedHospital ? "Edit Hospital / ART Clinic Details" : "Register Hospital / ART Clinic"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Set hospital identity, business type, tax/invoicing preferences, and donor deals. Branch details (Address, Reg No, GST, Treatment Doctors) are added under branches.
+                </DialogDescription>
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleCreateOrUpdate} className="space-y-4 text-xs">
-            {/* TAB 1: BASIC INFORMATION */}
-            {formTab === "basic" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Hospital Name *</label>
+          <form onSubmit={handleCreateOrUpdate} className="p-6 space-y-5 text-xs">
+            {/* Guidance banner */}
+            <div className="p-3 bg-teal-50/70 dark:bg-teal-950/30 rounded-2xl border border-teal-200/60 dark:border-teal-900/40 flex items-start gap-2.5 text-xs text-teal-800 dark:text-teal-300">
+              <Building2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+              <span>
+                Enter the primary hospital/clinic entity details below. After saving, you can add each branch (with its own Address, ART Reg No, GST, and Treatment Doctors).
+              </span>
+            </div>
+
+            {/* 1. CLINIC IDENTIFICATION & TYPE */}
+            <div className="space-y-3">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>1. Hospital Identification & Type</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>Hospital / ART Clinic Name <span className="text-red-500">*</span></span>
+                    {formFields.name?.trim() && <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Filled</span>}
+                  </label>
                   <input
                     type="text"
                     required
                     value={formFields.name}
                     onChange={(e) => setFormFields({ ...formFields, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. Apollo Fertility"
                   />
                 </div>
+
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Short Name *</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                    <span>Short Name / Code <span className="text-red-500">*</span></span>
+                    {formFields.shortName?.trim() && <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Filled</span>}
+                  </label>
                   <input
                     type="text"
                     required
                     value={formFields.shortName}
                     onChange={(e) => setFormFields({ ...formFields, shortName: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono"
+                    placeholder="e.g. APOLLO"
                   />
                 </div>
-                {/* <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Hospital Code *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formFields.code}
-                    onChange={(e) => setFormFields({ ...formFields, code: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                  />
-                </div> */}
+
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Registration Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formFields.registrationNumber}
-                    onChange={(e) => setFormFields({ ...formFields, registrationNumber: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                  />
-                </div>
-                {/* <div className="space-y-1">
-                  <label className="font-bold text-slate-700">License Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formFields.licenseNumber}
-                    onChange={(e) => setFormFields({ ...formFields, licenseNumber: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                  />
-                </div> */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">GST Number</label>
-                  <input
-                    type="text"
-                    value={formFields.gstNumber}
-                    onChange={(e) => setFormFields({ ...formFields, gstNumber: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                  />
-                </div>
-                {/* <div className="space-y-1">
-                  <label className="font-bold text-slate-700">PAN Number</label>
-                  <input
-                    type="text"
-                    value={formFields.panNumber}
-                    onChange={(e) => setFormFields({ ...formFields, panNumber: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                  />
-                </div> */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Active Status</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    <span>Hospital Type <span className="text-red-500">*</span></span>
+                  </label>
                   <select
-                    value={formFields.status}
-                    onChange={(e) => setFormFields({ ...formFields, status: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
+                    value={formFields.hospitalType}
+                    onChange={(e) => setFormFields({ ...formFields, hospitalType: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
                   >
-                    <option value="ACTIVE">Active</option>
-                    <option value="INACTIVE">Inactive</option>
-                    <option value="SUSPENDED">Suspended</option>
+                    <option value="Proprietor">Proprietor</option>
+                    <option value="LLP">LLP</option>
+                    <option value="Private Limited">Private Limited</option>
+                    <option value="Trust / Society">Trust / Society</option>
+                    <option value="Other Option">Other Option</option>
                   </select>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* TAB 2: CONTACT & ADDRESS */}
-            {formTab === "contact" && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Contact Person *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formFields.contactPerson}
-                      onChange={(e) => setFormFields({ ...formFields, contactPerson: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Email Address (Hospital) *</label>
-                    <input
-                      type="email"
-                      required
-                      value={formFields.email}
-                      onChange={(e) => setFormFields({ ...formFields, email: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Contact Number (Hospital) *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formFields.mobileNumber}
-                      onChange={(e) => setFormFields({ ...formFields, mobileNumber: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Emergency Number</label>
-                    <input
-                      type="text"
-                      value={formFields.emergencyNumber}
-                      onChange={(e) => setFormFields({ ...formFields, emergencyNumber: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="border-t pt-3 space-y-3">
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Address Line 1 *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formFields.addressLine1}
-                      onChange={(e) => setFormFields({ ...formFields, addressLine1: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Address Line 2</label>
-                    <input
-                      type="text"
-                      value={formFields.addressLine2}
-                      onChange={(e) => setFormFields({ ...formFields, addressLine2: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700">City *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formFields.city}
-                        onChange={(e) => setFormFields({ ...formFields, city: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700">State *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formFields.state}
-                        onChange={(e) => setFormFields({ ...formFields, state: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700">Country *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formFields.country}
-                        onChange={(e) => setFormFields({ ...formFields, country: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700">Pincode *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formFields.pincode}
-                        onChange={(e) => setFormFields({ ...formFields, pincode: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                      />
-                    </div>
-                  </div>
-                </div>
+            {/* 2. INVOICING & TAX SETTINGS */}
+            <div className="space-y-3 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800">
+                <FileText className="w-3.5 h-3.5" />
+                <span>2. Invoicing & Tax Settings</span>
               </div>
-            )}
 
-            {/* TAB 3: MEDICAL CONFIGURATION */}
-            {formTab === "medical" && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Hospital Type *</label>
-                    <select
-                      value={formFields.hospitalType}
-                      onChange={(e) => setFormFields({ ...formFields, hospitalType: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none"
-                    >
-                      <option value="Proprietor">Proprietor</option>
-                      <option value="LLP">LLP</option>
-                      <option value="Private Limited">Private Limited</option>
-                      <option value="Other Option">Other Option</option>
-                    </select>
-                  </div>
-                  {/* <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Transplant License Number *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formFields.transplantLicenseNumber}
-                      onChange={(e) => setFormFields({ ...formFields, transplantLicenseNumber: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 pt-4">
-                    <input
-                      type="checkbox"
-                      id="icu"
-                      checked={formFields.icuAvailability}
-                      onChange={(e) => setFormFields({ ...formFields, icuAvailability: e.target.checked })}
-                      className="w-4 h-4 border rounded"
-                    />
-                    <label htmlFor="icu" className="font-bold text-slate-700">ICU Facility Available</label>
-                  </div> */}
-                </div>
-
-                {/* Tag list for Organ Supported */}
-                {/* <div className="space-y-2 border-t pt-3">
-                  <label className="font-bold text-slate-700">Organ Types Supported:</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. Oocyte, Kidney, Liver"
-                      value={newOrgan}
-                      onChange={(e) => setNewOrgan(e.target.value)}
-                      className="px-3 py-1.5 border rounded-xl text-xs focus:outline-none"
-                    />
-                    <Button type="button" onClick={addOrgan} size="sm" className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs">
-                      + Add
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {formFields.organTypesSupported.map((org: string) => (
-                      <span key={org} className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold border border-teal-100">
-                        {org} <XCircle className="w-3.5 h-3.5 text-teal-600 cursor-pointer" onClick={() => removeOrgan(org)} />
-                      </span>
-                    ))}
-                  </div>
-                </div> */}
-
-                {/* Tag list for Specializations */}
-                <div className="space-y-2 border-t pt-3">
-                  <label className="font-bold text-slate-700">Specializations:</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. IVF, Transplant surgery"
-                      value={newSpec}
-                      onChange={(e) => setNewSpec(e.target.value)}
-                      className="px-3 py-1.5 border rounded-xl text-xs focus:outline-none"
-                    />
-                    <Button type="button" onClick={addSpec} size="sm" className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs">
-                      + Add
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {formFields.specializations.map((spec: string) => (
-                      <span key={spec} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold border border-blue-100">
-                        {spec} <XCircle className="w-3.5 h-3.5 text-blue-600 cursor-pointer" onClick={() => removeSpec(spec)} />
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {formTab === "financial" && isAdmin && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Donor Deal (INR)</label>
-                  <input
-                    type="number"
-                    value={formFields.donorDealPrice}
-                    onChange={(e) => setFormFields({ ...formFields, donorDealPrice: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none"
-                  />
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Want Tax Invoice?</label>
+                  <select
+                    value={formFields.wantInvoice ? "YES" : "NO"}
+                    onChange={(e) => setFormFields({ ...formFields, wantInvoice: e.target.value === "YES" })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                  >
+                    <option value="YES">Yes (Generate Tax Invoice)</option>
+                    <option value="NO">No (Direct Receipt / Voucher)</option>
+                  </select>
                 </div>
+
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Profile Donor Deal (INR)</label>
-                  <input
-                    type="number"
-                    value={formFields.profiledonorDealPrice}
-                    onChange={(e) => setFormFields({ ...formFields, profiledonorDealPrice: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-xl focus:outline-none"
-                  />
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Standard TDS Rate (%)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="30"
+                      value={formFields.tdsPercentage}
+                      onChange={(e) => setFormFields({ ...formFields, tdsPercentage: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pr-8 font-mono"
+                      placeholder="Standard 2%"
+                    />
+                    <span className="absolute right-3 top-2 text-slate-400 font-bold">%</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">Standard TDS rate is 2% (Section 194C / 194J)</div>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Form actions */}
-            <div className="flex gap-3 justify-end pt-3 border-t">
-              <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)} className="rounded-xl text-xs">
+            {/* 3. DONOR DEALS & BANK SERVICE CHARGE */}
+            <div className="space-y-3 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+                <span className="flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5" />
+                  <span>3. ART Bank Donor Deals & Service Charge</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">Parent Hospital Level</span>
+              </div>
+
+              {/* Egg Donor Deals */}
+              <div className="bg-gradient-to-br from-teal-50/50 to-emerald-50/30 dark:from-teal-950/20 dark:to-emerald-950/10 p-3.5 rounded-xl border border-teal-100 dark:border-teal-900/40 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-teal-600"></span>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200">Egg Donor Deals</h4>
+                  <span className="text-[10px] text-teal-600 bg-teal-100 dark:bg-teal-950 px-1.5 py-0.5 rounded font-semibold ml-auto">Oocyte Gamete</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Normal Egg Donor Deal (₹)</label>
+                    <input
+                      type="number"
+                      value={formFields.eggDonorDealPrice}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setFormFields({ ...formFields, eggDonorDealPrice: val, donorDealPrice: val });
+                      }}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      placeholder="Default ₹65,000"
+                    />
+                    <span className="text-[10px] text-slate-400">Standard general egg donor deal</span>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Profile Egg Donor Deal (₹)</label>
+                    <input
+                      type="number"
+                      value={formFields.eggProfileDonorDealPrice}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setFormFields({ ...formFields, eggProfileDonorDealPrice: val, profiledonorDealPrice: val });
+                      }}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      placeholder="Default ₹85,000"
+                    />
+                    <span className="text-[10px] text-slate-400">Graduated / VIP / Premium egg donor</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sperm Donor Deals */}
+              <div className="bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10 p-3.5 rounded-xl border border-blue-100 dark:border-blue-900/40 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200">Sperm Donor Deals</h4>
+                  <span className="text-[10px] text-blue-600 bg-blue-100 dark:bg-blue-950 px-1.5 py-0.5 rounded font-semibold ml-auto">Semen Gamete</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Normal Sperm Donor Deal (₹)</label>
+                    <input
+                      type="number"
+                      value={formFields.spermDonorDealPrice}
+                      onChange={(e) => setFormFields({ ...formFields, spermDonorDealPrice: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-blue-500 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      placeholder="Default ₹15,000"
+                    />
+                    <span className="text-[10px] text-slate-400">Standard tested sperm donor deal</span>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Profile Sperm Donor Deal (₹)</label>
+                    <input
+                      type="number"
+                      value={formFields.spermProfileDonorDealPrice}
+                      onChange={(e) => setFormFields({ ...formFields, spermProfileDonorDealPrice: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-blue-500 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      placeholder="Default ₹25,000"
+                    />
+                    <span className="text-[10px] text-slate-400">Advanced profiling / Specific attributes</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service Charge & GST */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200">Bank Service Charge &amp; GST</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-700 dark:text-slate-300">Bank Service Charge (₹)</label>
+                    <input
+                      type="number"
+                      value={formFields.serviceCharge}
+                      onChange={(e) => setFormFields({ ...formFields, serviceCharge: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-purple-500 font-mono bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      placeholder="Default ₹5,000"
+                    />
+                    <span className="text-[10px] text-slate-400">SAC 999321 Professional ART Bank facilitation</span>
+                  </div>
+                  <div className="p-3 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/50 space-y-1 text-[11px]">
+                    <div className="font-bold text-purple-900 dark:text-purple-300 flex items-center justify-between">
+                      <span>GST 18% on Service Charge</span>
+                      <span className="font-mono text-purple-700 dark:text-purple-400 font-bold">+₹{Math.round((formFields.serviceCharge || 5000) * 0.18).toLocaleString()}</span>
+                    </div>
+                    <div className="text-slate-600 dark:text-slate-400 text-[10px] leading-relaxed">
+                      Donor expense reimbursement (SAC 999317) is exempt. GST applies on the service charge facilitation fee.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Footer */}
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsFormOpen(false)}
+                className="rounded-xl text-xs h-9 px-4 border-slate-200 dark:border-slate-800"
+              >
                 Cancel
               </Button>
-              <Button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1">
-                {selectedHospital ? "Save Changes" : "Register Clinic"}
+
+              <Button
+                type="submit"
+                disabled={!canSubmit || isSubmitting}
+                className={`rounded-xl text-xs h-9 px-5 gap-1.5 transition-all font-semibold ${
+                  canSubmit
+                    ? "bg-teal-600 hover:bg-teal-700 text-white shadow-sm shadow-teal-600/30 cursor-pointer"
+                    : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed"
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{selectedHospital ? "Save Changes" : "Submit Hospital & Add Branches"}</span>
+                  </>
+                )}
               </Button>
             </div>
           </form>
@@ -1128,7 +1604,7 @@ data.hospitals?.forEach((h: any, index: number) => {
 
       {/* DIALOG 2: VIEW HOSPITAL DETAILS DASHBOARD */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl rounded-2xl overflow-y-auto max-h-[85vh]">
+        <DialogContent className="max-w-3xl rounded-2xl overflow-y-auto max-h-[88vh]">
           {selectedHospital && (
             <>
               <DialogHeader>
@@ -1136,29 +1612,36 @@ data.hospitals?.forEach((h: any, index: number) => {
                   <Building2 className="w-5 h-5 text-teal-600" /> {selectedHospital.name} Dashboard
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500">
-                  Partner clinic records, deal configuration, and pricing history audit.
+                  Partner clinic records, branches, contact, and financial details.
                 </DialogDescription>
               </DialogHeader>
 
               {/* Tabs for details */}
-              <div className="flex border-b border-slate-100 dark:border-slate-900 mb-4 text-xs font-semibold">
+              <div className="flex border-b border-slate-100 dark:border-slate-900 mb-4 text-xs font-semibold overflow-x-auto pb-0.5">
                 <button
                   onClick={() => setDetailTab("info")}
-                  className={`pb-2.5 px-3 border-b-2 transition-all ${detailTab === "info" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                  className={`pb-2.5 px-3 border-b-2 transition-all whitespace-nowrap cursor-pointer ${detailTab === "info" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                 >
                   General Details
+                </button>
+                <button
+                  onClick={() => setDetailTab("branches")}
+                  className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${detailTab === "branches" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                >
+                  <GitBranch className="w-3.5 h-3.5" />
+                  Branches ({selectedHospital.branches?.length || 0})
                 </button>
                 {isAdmin && (
                   <>
                     <button
                       onClick={() => setDetailTab("financial")}
-                      className={`pb-2.5 px-3 border-b-2 transition-all ${detailTab === "financial" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                      className={`pb-2.5 px-3 border-b-2 transition-all whitespace-nowrap cursor-pointer ${detailTab === "financial" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                     >
                       Donor Deal Info
                     </button>
                     <button
                       onClick={() => setDetailTab("history")}
-                      className={`pb-2.5 px-3 border-b-2 transition-all ${detailTab === "history" ? "border-teal-600 text-teal-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                      className={`pb-2.5 px-3 border-b-2 transition-all whitespace-nowrap cursor-pointer ${detailTab === "history" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                     >
                       Pricing Change Log
                     </button>
@@ -1172,18 +1655,30 @@ data.hospitals?.forEach((h: any, index: number) => {
                   <div className="space-y-4">
                     {/* Basic Grid */}
                     <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
-                      {/* <div><span className="text-slate-400">Hospital Code:</span> <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedHospital.code}</span></div> */}
-                      {/* <div><span className="text-slate-400">License Number:</span> <span className="font-semibold">{selectedHospital.licenseNumber}</span></div>
-                      <div><span className="text-slate-400">GST Number:</span> <span>{selectedHospital.gstNumber || "—"}</span></div>
-                      <div><span className="text-slate-400">PAN Number:</span> <span>{selectedHospital.panNumber || "—"}</span></div> */}
-                      <div><span className="text-slate-400">Registration ID:</span> <span>{selectedHospital.registrationNumber}</span></div>
-                      {/* <div><span className="text-slate-400">Transplant License:</span> <span className="font-semibold">{selectedHospital.transplantLicenseNumber}</span></div> */}
+                      <div><span className="text-slate-400">Registration ID:</span> <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedHospital.registrationNumber}</span></div>
+                      <div>
+                        <span className="text-slate-400">Treating Doctors:</span>{" "}
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          {selectedHospital.doctors && selectedHospital.doctors.length > 0
+                            ? selectedHospital.doctors.map((d: any) => typeof d === "string" ? d : d.name).join(", ")
+                            : selectedHospital.doctorName || "—"}
+                        </span>
+                      </div>
+                      <div><span className="text-slate-400">Default Pickup / OPU:</span> <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedHospital.pickupLocation || selectedHospital.city || "—"}</span></div>
+                      <div>
+                        <span className="text-slate-400">Tax Invoice:</span>{" "}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${selectedHospital.wantInvoice !== false ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" : "bg-amber-100 text-amber-700"}`}>
+                          {selectedHospital.wantInvoice !== false ? "YES (Required)" : "NO (Direct)"}
+                        </span>
+                      </div>
+                      <div><span className="text-slate-400">Standard TDS Rate:</span> <span className="font-bold font-mono text-orange-600">{selectedHospital.tdsPercentage ?? 2}%</span></div>
+                      <div><span className="text-slate-400">GST Number:</span> <span className="font-mono">{selectedHospital.gstNumber || "—"}</span></div>
                     </div>
 
                     {/* Contact & Address */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <h4 className="font-bold text-slate-700 border-b pb-0.5">Contact Details</h4>
+                        <h4 className="font-bold text-slate-700 dark:text-slate-300 border-b pb-0.5">Contact Details</h4>
                         <div><span className="text-slate-400">Person:</span> <span className="font-semibold">{selectedHospital.contactPerson}</span></div>
                         <div className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400" /> <span>{selectedHospital.email}</span></div>
                         <div className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-slate-400" /> <span>{selectedHospital.mobileNumber}</span></div>
@@ -1192,7 +1687,7 @@ data.hospitals?.forEach((h: any, index: number) => {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <h4 className="font-bold text-slate-700 border-b pb-0.5">Address Location</h4>
+                        <h4 className="font-bold text-slate-700 dark:text-slate-300 border-b pb-0.5">Address Location</h4>
                         <div className="flex gap-1.5">
                           <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                           <div>
@@ -1205,23 +1700,13 @@ data.hospitals?.forEach((h: any, index: number) => {
                       </div>
                     </div>
 
-                    {/* Specializations & Organs */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t">
-                      {/* <div className="space-y-1">
-                        <div className="font-bold text-slate-700">Supported Organs:</div>
-                        <div className="flex flex-wrap gap-1">
-                          {selectedHospital.organTypesSupported?.map((org: string) => (
-                            <span key={org} className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded-lg text-[10px] font-semibold border border-teal-100">
-                              {org}
-                            </span>
-                          ))}
-                        </div>
-                      </div> */}
+                    {/* Specializations */}
+                    <div className="grid grid-cols-1 gap-4 pt-2 border-t dark:border-slate-800">
                       <div className="space-y-1">
-                        <div className="font-bold text-slate-700">Clinics & Specializations:</div>
+                        <div className="font-bold text-slate-700 dark:text-slate-300">Specializations:</div>
                         <div className="flex flex-wrap gap-1">
                           {selectedHospital.specializations?.map((spec: string) => (
-                            <span key={spec} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-[10px] font-semibold border border-blue-100">
+                            <span key={spec} className="bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-lg text-[10px] font-semibold border border-blue-100 dark:border-blue-900/50">
                               {spec}
                             </span>
                           ))}
@@ -1231,21 +1716,180 @@ data.hospitals?.forEach((h: any, index: number) => {
                   </div>
                 )}
 
+                {/* TAB: BRANCHES IN DASHBOARD */}
+                {detailTab === "branches" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b dark:border-slate-800">
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white">Active Branches & IVF Centers</div>
+                        <div className="text-[10px] text-slate-400">Network centers associated with {selectedHospital.name}</div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => openBranchManager(selectedHospital)}
+                        className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1.5 h-8"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Manage / Add Branch
+                      </Button>
+                    </div>
+
+                    {(!selectedHospital.branches || selectedHospital.branches.length === 0) ? (
+                      <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                        <GitBranch className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                        <div className="font-semibold text-slate-700 dark:text-slate-300">Single Location Center</div>
+                        <div className="text-[11px] text-slate-400 max-w-xs mx-auto mt-0.5">
+                          This clinic currently has no additional branches registered.
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openBranchManager(selectedHospital)}
+                          className="mt-3 rounded-xl text-xs gap-1 text-teal-600 border-teal-200"
+                        >
+                          <Plus className="w-3 h-3" /> Add Branch
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2.5">
+                        {selectedHospital.branches.map((b: any, idx: number) => (
+                          <div
+                            key={b._id || idx}
+                            className={`p-3 rounded-xl border ${
+                              b.isMainBranch
+                                ? "bg-teal-50/40 dark:bg-teal-950/20 border-teal-300 dark:border-teal-800"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                                  {b.branchName}
+                                </span>
+                                {b.branchCode && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600">
+                                    {b.branchCode}
+                                  </span>
+                                )}
+                                {b.isMainBranch && (
+                                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                                    ★ Main
+                                  </span>
+                                )}
+                                {b.registrationNumber && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200/50">
+                                    Reg: {b.registrationNumber}
+                                  </span>
+                                )}
+                                {b.gstNumber && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-200/50">
+                                    GST: {b.gstNumber}
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${b.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                                {b.status || "ACTIVE"}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-[11px] text-slate-600 dark:text-slate-400">
+                              {((b.doctors && b.doctors.length > 0) || b.doctorName) && (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Stethoscope className="w-3 h-3 text-teal-600 shrink-0" />
+                                  <span>
+                                    {b.doctors && b.doctors.length > 0
+                                      ? b.doctors.map((d: any) => typeof d === "string" ? d : d.name).join(", ")
+                                      : `Dr. ${b.doctorName}`}
+                                  </span>
+                                </div>
+                              )}
+                              {(b.contactPerson || b.mobileNumber) && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{b.contactPerson ? `${b.contactPerson}: ` : ""}{b.mobileNumber || "—"}</span>
+                                </div>
+                              )}
+                              {(b.city || b.state) && (
+                                <div className="flex items-center gap-1.5 sm:col-span-2">
+                                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{[b.addressLine1, b.city, b.state, b.pincode].filter(Boolean).join(", ")}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* TAB: FINANCIAL DEAL INFO (Admin only) */}
                 {detailTab === "financial" && isAdmin && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
-                      <div className="space-y-0.5">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Standard Hospital Deal Price</div>
-                        <div className="text-sm font-bold text-teal-600 font-mono">
-                          ₹{Number(selectedHospital.donorDealPrice || 0).toLocaleString()} {selectedHospital.currency || "INR"}
+                    {/* EGG DONOR DEALS */}
+                    <div className="p-3.5 bg-gradient-to-br from-teal-50/60 to-emerald-50/40 dark:bg-slate-900 rounded-xl border border-teal-100 dark:border-teal-900/50 space-y-2">
+                      <div className="font-bold text-teal-800 dark:text-teal-300 flex items-center justify-between">
+                        <span>Egg Donor Deal Rates</span>
+                        <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-semibold">Oocyte</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-teal-50 shadow-xs">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">Normal Deal</div>
+                          <div className="text-base font-bold text-teal-700 font-mono">
+                            ₹{Number(selectedHospital.eggDonorDealPrice || selectedHospital.donorDealPrice || 65000).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-teal-50 shadow-xs">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">Profile Deal</div>
+                          <div className="text-base font-bold text-purple-700 font-mono">
+                            ₹{Number(selectedHospital.eggProfileDonorDealPrice || selectedHospital.profiledonorDealPrice || 85000).toLocaleString()}
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-0.5">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Profile Donor Deal Price</div>
-                        <div className="text-sm font-bold text-purple-600 font-mono">
-                          ₹{Number(selectedHospital.profiledonorDealPrice || 0).toLocaleString()} {selectedHospital.currency || "INR"}
+                    </div>
+
+                    {/* SPERM DONOR DEALS */}
+                    <div className="p-3.5 bg-gradient-to-br from-blue-50/60 to-indigo-50/40 dark:bg-slate-900 rounded-xl border border-blue-100 dark:border-blue-900/50 space-y-2">
+                      <div className="font-bold text-blue-800 dark:text-blue-300 flex items-center justify-between">
+                        <span>Sperm Donor Deal Rates</span>
+                        <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">Semen</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-blue-50 shadow-xs">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">Normal Deal</div>
+                          <div className="text-base font-bold text-blue-700 font-mono">
+                            ₹{Number(selectedHospital.spermDonorDealPrice || 15000).toLocaleString()}
+                          </div>
                         </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-blue-50 shadow-xs">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">Profile Deal</div>
+                          <div className="text-base font-bold text-purple-700 font-mono">
+                            ₹{Number(selectedHospital.spermProfileDonorDealPrice || 25000).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SERVICE FEE & TAX */}
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-xl border space-y-2">
+                      <div className="font-bold text-slate-800 dark:text-slate-200">Bank Service Charge & Tax Summary</div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">Service Charge (SAC 999321)</div>
+                          <div className="text-sm font-bold text-slate-800 dark:text-slate-200 font-mono">
+                            ₹{Number(selectedHospital.serviceCharge || 5000).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border">
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">GST Applicable (18% on SC)</div>
+                          <div className="text-sm font-bold text-emerald-600 font-mono">
+                            +₹{Math.round((selectedHospital.serviceCharge || 5000) * 0.18).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Total Service Fee with 18% GST: ₹{(Number(selectedHospital.serviceCharge || 5000) * 1.18).toLocaleString()} | Standard TDS: {selectedHospital.tdsPercentage ?? 2}%
                       </div>
                     </div>
                   </div>
@@ -1275,6 +1919,465 @@ data.hospitals?.forEach((h: any, index: number) => {
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG 3: DEDICATED QUICK BRANCH MANAGER MODAL */}
+      <Dialog open={isBranchModalOpen} onOpenChange={setIsBranchModalOpen}>
+        <DialogContent className="max-w-2xl rounded-3xl max-h-[85vh] overflow-y-auto p-0 border border-slate-200 dark:border-slate-800 shadow-2xl">
+          {branchModalHospital && (
+            <>
+              {/* Header */}
+              <div className="bg-gradient-to-r from-teal-50/80 via-slate-50/50 to-emerald-50/40 dark:from-slate-900 dark:to-teal-950/30 p-6 pb-4 border-b border-slate-100 dark:border-slate-800/80">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-teal-600/10 text-teal-600 flex items-center justify-center shrink-0 ring-1 ring-teal-500/20">
+                      <GitBranch className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">
+                        {branchModalHospital.name}
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                        Manage clinic branches, in-charges, pickup points, and branch-specific financial deals.
+                      </DialogDescription>
+                    </div>
+                  </div>
+
+                  {!isModalAddingBranch && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setModalBranchForm(initialBranchForm);
+                        setEditingModalBranchId(null);
+                        setIsModalAddingBranch(true);
+                      }}
+                      className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1.5 h-8.5 shadow-xs shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add New Branch
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4 text-xs">
+                {/* Branch Add / Edit Form */}
+                {isModalAddingBranch && (
+                  <div className="p-4 rounded-2xl bg-teal-50/40 dark:bg-teal-950/20 border border-teal-200/80 dark:border-teal-900/60 space-y-3.5 animate-in fade-in-50 duration-200">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-bold text-teal-900 dark:text-teal-300 text-xs flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                        {editingModalBranchId ? "Edit Branch" : "Add New Clinic Branch"}
+                      </h5>
+                      <span className="text-[10px] text-teal-600 font-mono font-semibold">
+                        {editingModalBranchId ? "Editing" : "New Branch"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">
+                          Branch Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={modalBranchForm.branchName}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, branchName: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          placeholder="e.g. Indiranagar Branch or South Delhi Center"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Branch Code</label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.branchCode}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, branchCode: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono"
+                          placeholder="e.g. IND-01"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">
+                          ART Registration No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={modalBranchForm.registrationNumber}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, registrationNumber: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono uppercase"
+                          placeholder="e.g. MH/ART/2023/001"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">
+                          GSTIN (Tax ID)
+                        </label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.gstNumber}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, gstNumber: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono uppercase"
+                          placeholder="e.g. 27AAAAA0000A1Z5"
+                        />
+                      </div>
+
+                      {/* Multiple Doctors Input for this Branch */}
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Stethoscope className="w-4 h-4 text-teal-600" />
+                            <span>Treating Doctors for this Branch:</span>
+                          </span>
+                          {modalBranchForm.doctors && modalBranchForm.doctors.length > 0 && (
+                            <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                              {modalBranchForm.doctors.length} {modalBranchForm.doctors.length === 1 ? "doctor" : "doctors"}
+                            </span>
+                          )}
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newModalBranchDoctor}
+                            onChange={(e) => setNewModalBranchDoctor(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addModalBranchDoctor();
+                              }
+                            }}
+                            placeholder="e.g. Dr. Sunita Rao (MBBS, MS)"
+                            className="flex-1 px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            onClick={addModalBranchDoctor}
+                            size="sm"
+                            className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs h-9 cursor-pointer gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Add Doctor
+                          </Button>
+                        </div>
+                        {modalBranchForm.doctors && modalBranchForm.doctors.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {modalBranchForm.doctors.map((doc: string, idx: number) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200/60"
+                              >
+                                <Stethoscope className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                <span>{doc.startsWith("Dr.") ? doc : `Dr. ${doc}`}</span>
+                                <XCircle
+                                  className="w-3.5 h-3.5 text-purple-400 hover:text-purple-700 cursor-pointer ml-0.5"
+                                  onClick={() => removeModalBranchDoctor(idx)}
+                                />
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Contact Person</label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.contactPerson}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, contactPerson: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          placeholder="e.g. Center Manager"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Contact Phone</label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.mobileNumber}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, mobileNumber: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          placeholder="e.g. +91 98765 43210"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Branch Email</label>
+                        <input
+                          type="email"
+                          value={modalBranchForm.email}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, email: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          placeholder="e.g. branch@clinic.com"
+                        />
+                      </div>
+
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Address Line 1</label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.addressLine1}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, addressLine1: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          placeholder="Street, building, floor"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">State</label>
+                        <select
+                          value={modalBranchForm.state}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, state: e.target.value, city: "" })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                        >
+                          <option value="">Select State</option>
+                          {INDIAN_STATES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">City</label>
+                        {modalBranchForm.state && STATE_CITIES[modalBranchForm.state] ? (
+                          <select
+                            value={modalBranchForm.city}
+                            onChange={(e) => setModalBranchForm({ ...modalBranchForm, city: e.target.value })}
+                            className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          >
+                            <option value="">Select City</option>
+                            {STATE_CITIES[modalBranchForm.state].map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={modalBranchForm.city}
+                            onChange={(e) => setModalBranchForm({ ...modalBranchForm, city: e.target.value })}
+                            className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                            placeholder="e.g. Mumbai"
+                          />
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Pincode</label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.pincode}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, pincode: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono"
+                          placeholder="e.g. 400001"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-700 dark:text-slate-300">Default OPU / Pickup Location</label>
+                        <input
+                          type="text"
+                          value={modalBranchForm.pickupLocation}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, pickupLocation: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                          placeholder="e.g. OT 2"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2 flex items-center justify-between gap-2 pt-1 border-t border-teal-200/50">
+                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Branch Status:</span>
+                        <select
+                          value={modalBranchForm.status}
+                          onChange={(e) => setModalBranchForm({ ...modalBranchForm, status: e.target.value })}
+                          className="px-2.5 py-1 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                        >
+                          <option value="ACTIVE">Active Branch</option>
+                          <option value="INACTIVE">Inactive Branch</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-teal-200/60 dark:border-teal-900/40">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isBranchActionLoading}
+                        onClick={() => {
+                          setIsModalAddingBranch(false);
+                          setEditingModalBranchId(null);
+                          setModalBranchForm(initialBranchForm);
+                        }}
+                        className="rounded-xl text-xs h-8"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isBranchActionLoading}
+                        onClick={handleModalSaveBranch}
+                        className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs h-8 gap-1.5 shadow-xs"
+                      >
+                        {isBranchActionLoading ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            {editingModalBranchId ? "Update Branch" : "Add Branch"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Branches List */}
+                {(!branchModalHospital.branches || branchModalHospital.branches.length === 0) ? (
+                  <div className="text-center py-10 px-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400 mx-auto flex items-center justify-center mb-3 ring-1 ring-teal-500/20">
+                      <GitBranch className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">No Branches Added Yet</h4>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                      This clinic only has its primary address. You can add branches or IVF satellite centers now.
+                    </p>
+                    {!isModalAddingBranch && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setModalBranchForm(initialBranchForm);
+                          setEditingModalBranchId(null);
+                          setIsModalAddingBranch(true);
+                        }}
+                        variant="outline"
+                        className="mt-4 rounded-xl text-xs gap-1.5 border-teal-200 text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add First Branch
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {branchModalHospital.branches.map((b: any, index: number) => (
+                      <div
+                        key={b._id || index}
+                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-teal-500/40 transition-all shadow-xs"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 dark:text-white text-sm">
+                                {b.branchName}
+                              </span>
+                              {b.branchCode && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                  {b.branchCode}
+                                </span>
+                              )}
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                b.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400" : "bg-slate-100 text-slate-500"
+                              }`}>
+                                {b.status || "ACTIVE"}
+                              </span>
+                            </div>
+                            {(b.registrationNumber || b.gstNumber) && (
+                              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                {b.registrationNumber && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-semibold">
+                                    Reg: {b.registrationNumber}
+                                  </span>
+                                )}
+                                {b.gstNumber && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40 font-semibold">
+                                    GST: {b.gstNumber}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {((b.doctors && b.doctors.length > 0) || b.doctorName) && (
+                              <div className="text-[11px] text-teal-700 dark:text-teal-400 font-medium flex items-center gap-1 mt-1 flex-wrap">
+                                <Stethoscope className="w-3.5 h-3.5 shrink-0" />
+                                <span>
+                                  {b.doctors && b.doctors.length > 0
+                                    ? b.doctors.map((d: any) => typeof d === "string" ? d : d.name).join(", ")
+                                    : `Dr. ${b.doctorName}`}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const bDoctors = Array.isArray(b.doctors) && b.doctors.length > 0
+                                  ? b.doctors.map((d: any) => typeof d === "string" ? d : d.name).filter(Boolean)
+                                  : (b.doctorName ? b.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
+                                setModalBranchForm({ ...b, doctors: bDoctors });
+                                setNewModalBranchDoctor("");
+                                setEditingModalBranchId(b._id);
+                                setIsModalAddingBranch(true);
+                              }}
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-teal-600 rounded-lg cursor-pointer"
+                              title="Edit Branch"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleModalDeleteBranch(b._id)}
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-rose-600 rounded-lg cursor-pointer"
+                              title="Delete Branch"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/60 pt-2.5">
+                          {(b.contactPerson || b.mobileNumber) && (
+                            <div className="flex items-center gap-1.5">
+                              <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate">
+                                {b.contactPerson ? `${b.contactPerson} • ` : ""}
+                                {b.mobileNumber || "—"}
+                              </span>
+                            </div>
+                          )}
+                          {b.email && (
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate">{b.email}</span>
+                            </div>
+                          )}
+                          {(b.city || b.state) && (
+                            <div className="flex items-center gap-1.5 sm:col-span-2">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate">
+                                {[b.addressLine1, b.city, b.state, b.pincode].filter(Boolean).join(", ")}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
