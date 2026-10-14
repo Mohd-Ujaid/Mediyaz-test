@@ -2,8 +2,16 @@ import { MongoClient } from "mongodb";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://mdujjaid0786_db_user:hGvZqnj32Bm3KOrc@cluster0.yvprhjr.mongodb.net/mediyaz";
-const authSecret = process.env.BETTER_AUTH_SECRET || "your_32_character_secret_key";
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.error("FATAL ERROR: MONGODB_URI environment variable is required.");
+  process.exit(1);
+}
+const authSecret = process.env.BETTER_AUTH_SECRET;
+if (!authSecret) {
+  console.error("FATAL ERROR: BETTER_AUTH_SECRET environment variable is required.");
+  process.exit(1);
+}
 
 async function main() {
   const args = process.argv.slice(2);

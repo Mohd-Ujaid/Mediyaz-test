@@ -13,6 +13,8 @@ import CompletedFileInvoicePdfDocument, {
 import mongoose from "mongoose";
 import { formatDotDate, numberToWordsIndian } from "@/lib/invoice-utils";
 
+export const maxDuration = 30;
+
 export async function GET(req: Request) {
   try {
     const reqHeaders = await headers();

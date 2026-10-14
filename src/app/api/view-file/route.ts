@@ -127,7 +127,10 @@ export async function GET(req: Request) {
       "Content-Disposition",
       `${download ? "attachment" : "inline"}; filename="${encodeURIComponent(customFilename)}"`
     );
-    headers.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+    // Prevent public CDN and proxy caching of sensitive medical documents and donor PII
+    headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
+    headers.set("Pragma", "no-cache");
+    headers.set("Expires", "0");
 
     return new NextResponse(arrayBuffer, {
       status: 200,

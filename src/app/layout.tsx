@@ -10,8 +10,18 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mediyaz Art Bank | Premium International Fertility & Sperm Bank Platform",
-  description: "Enterprise-level reproductive healthcare, cryogenic sperm banking, and specialist fertility platform.",
+  title: "Mediyaz Art Bank | Clinical Operations & Administrative Portal",
+  description: "Administrative portal for Mediyaz ART Bank clinical operations.",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
+  },
 };
 
 export default function RootLayout({

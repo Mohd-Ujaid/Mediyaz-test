@@ -212,29 +212,37 @@ export default function AdminLayoutClient({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Fetch sidebar badge counts
+  // Fetch sidebar badge counts via ultra-lightweight endpoint
   useEffect(() => {
+    let isMounted = true;
     async function fetchBadgeCounts() {
       try {
-        const res = await fetch("/api/stats");
+        const res = await fetch("/api/stats/badges");
         const data = await res.json();
-        if (data.success && data.stats) {
+        if (isMounted && data.success && data.badges) {
           setBadgeCounts({
-            pendingInvoices: data.stats.pendingInvoicesCount || 0,
-            eggReview: data.stats.pendingRegistrations || 0,
-            spermReview: 0,
-            completedFilesEgg: data.stats.approvedRegistrations || 0,
-            completedFilesSperm: 0,
+            pendingInvoices: data.badges.pendingInvoices || 0,
+            eggReview: data.badges.eggReview || 0,
+            spermReview: data.badges.spermReview || 0,
+            completedFilesEgg: data.badges.completedFilesEgg || 0,
+            completedFilesSperm: data.badges.completedFilesSperm || 0,
           });
         }
-      } catch (err) {
-        // Non-fatal
+      } catch {
+        // Non-fatal network fallback
       }
     }
+
     if (session) {
       fetchBadgeCounts();
+      // Periodically refresh badge counts every 60 seconds without hammering on route transitions
+      const interval = setInterval(fetchBadgeCounts, 60 * 1000);
+      return () => {
+        isMounted = false;
+        clearInterval(interval);
+      };
     }
-  }, [session, pathname]);
+  }, [session]);
 
   useEffect(() => {
     if (pathname && pathname !== "/admin" && pathname !== "/login") {

@@ -74,7 +74,7 @@ export async function POST(req: Request) {
         else if (cleanEmail && duplicate.contactInfo?.emailAddress?.toLowerCase() === cleanEmail) matchedField = "Email address";
         return NextResponse.json({
           success: false,
-          error: `This ${matchedField} is already registered in the Mediyaz Donor Registry (ID: ${duplicate.registrationId}). Under ART Act regulations, duplicate registrations are not permitted.`
+          error: `This ${matchedField} is already registered in the Mediyaz Donor Registry. Under ART Act regulations, duplicate registrations are not permitted.`
         }, { status: 400 });
       }
 

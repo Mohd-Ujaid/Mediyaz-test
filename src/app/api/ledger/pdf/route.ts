@@ -18,6 +18,8 @@ import DonorLedgerPdfDocument, {
 } from "@/features/pdf-generator/ledger/DonorLedgerPdfDocument";
 import { formatDotDate } from "@/lib/invoice-utils";
 
+export const maxDuration = 30;
+
 export async function GET(req: Request) {
   try {
     const reqHeaders = await headers();

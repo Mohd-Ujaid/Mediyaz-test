@@ -6,22 +6,14 @@ const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/mediya
 
 let client: MongoClient;
 
-if (process.env.NODE_ENV === "development") {
-  if (!(global as any)._mongoClient) {
-    (global as any)._mongoClient = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 2000,
-      maxPoolSize: 10,
-      minPoolSize: 1,
-    });
-  }
-  client = (global as any)._mongoClient;
-} else {
-  client = new MongoClient(MONGODB_URI, {
-    serverSelectionTimeoutMS: 2000,
+if (!(global as any)._mongoClient) {
+  (global as any)._mongoClient = new MongoClient(MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000,
     maxPoolSize: 10,
     minPoolSize: 1,
   });
 }
+client = (global as any)._mongoClient;
 
 const db = client.db();
 

@@ -9,6 +9,8 @@ import PrintableRegistrationDocument from "@/features/pdf-generator/components/P
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 
+export const maxDuration = 30;
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
