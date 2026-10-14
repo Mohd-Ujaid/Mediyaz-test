@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CustomPagination } from "@/components/ui/custom-pagination";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 
 interface EmployeeDoc {
   name: string;
@@ -416,10 +417,7 @@ export default function AdminEmployeesPage() {
       {/* Main Table Card */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="text-center py-20 text-slate-500 text-xs">
-            <RefreshCw className="w-8 h-8 text-teal-500 animate-spin mx-auto mb-2" />
-            Connecting to database & loading staff...
-          </div>
+          <DataTableSkeleton rows={6} />
         ) : paginatedEmployees.length === 0 ? (
           <div className="text-center py-20 text-slate-400 text-xs">No matching employee records found.</div>
         ) : (

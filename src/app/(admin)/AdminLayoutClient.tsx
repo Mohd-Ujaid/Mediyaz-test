@@ -29,9 +29,11 @@ import {
   Calendar,
   Receipt,
   Database,
-  BookOpen
+  BookOpen,
+  Stethoscope
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
+import { GlobalSearchModal } from "@/components/layout/GlobalSearchModal";
 
 import {
   Sidebar,
@@ -74,6 +76,7 @@ interface SidebarLinkItem {
   icon: React.ComponentType<{ className?: string }>;
   requiredPermission: string;
   badge?: string;
+  badgeKey?: string;
 }
 
 interface SidebarGroupSection {
@@ -86,15 +89,37 @@ const sidebarNavigation: SidebarGroupSection[] = [
     title: "Clinical Operations",
     items: [
       { href: "/dashboard", label: "Executive Dashboard", icon: LayoutDashboard, requiredPermission: "VIEW_DASHBOARD" },
-      
+      { href: "/hospitals/leaderboard", label: "Clinic Performance", icon: Award, requiredPermission: "VIEW_HOSPITALS" },
     ]
   },
   {
-    title: "ART Clinic Network",
+    title: "Registration",
     items: [
-      { href: "/hospitals", label: "Registered ART Clinics", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
-      { href: "/hospitals/leaderboard", label: "Clinic Performance", icon: Award, requiredPermission: "VIEW_HOSPITALS" },
-      
+      { href: "/donor-registrations/egg", label: "Egg Registrations", icon: Heart, requiredPermission: "VIEW_REGISTRATIONS" },
+      { href: "/donor-registrations/sperm", label: "Sperm Registrations", icon: Dna, requiredPermission: "VIEW_REGISTRATIONS" },
+      { href: "/hospitals", label: "Hospital Registration", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
+      { href: "/hospitals?view=doctors", label: "Doctor Registration", icon: Stethoscope, requiredPermission: "VIEW_HOSPITALS" },
+    ]
+  },
+  {
+    title: "Registration Management",
+    items: [
+      { href: "/manage-registrations", label: "Egg Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS", badgeKey: "eggReview" },
+      { href: "/manage-sperm-registrations", label: "Sperm Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS", badgeKey: "spermReview" },
+    ]
+  },
+  {
+    title: "Completed Files",
+    items: [
+      { href: "/completed-files/egg", label: "Egg Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "completedFilesEgg" },
+      { href: "/completed-files/sperm", label: "Sperm Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "completedFilesSperm" },
+    ]
+  },
+  {
+    title: "Billing & Accounts",
+    items: [
+      { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "pendingInvoices" },
+      { href: "/ledger", label: "Accounts Ledger (Laser)", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
     ]
   },
   {
@@ -104,32 +129,16 @@ const sidebarNavigation: SidebarGroupSection[] = [
     ]
   },
   {
-    title: "Completed Files",
-    items: [
-      { href: "/completed-files/egg", label: "Egg Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/completed-files/sperm", label: "Sperm Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS" },
-    ]
-  },
-  {
-    title: "Billing & Accounts",
-    items: [
-      { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/ledger", label: "Accounts Ledger (Laser)", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
-    ]
-  },
-  {
-    title: "Registration",
-    items: [
-      { href: "/manage-registrations", label: "Egg Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
-      { href: "/manage-sperm-registrations", label: "Sperm Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
-      { href: "/donor-registrations/egg", label: "Egg Registrations", icon: Heart, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/donor-registrations/sperm", label: "Sperm Registrations", icon: Dna, requiredPermission: "VIEW_REGISTRATIONS" },
-    ]
-  },
-  {
     title: "Previous Records",
     items: [
       { href: "/previous-data", label: "Previous Donor Data", icon: Database, requiredPermission: "VIEW_REGISTRATIONS" },
+    ]
+  },
+  {
+    title: "System & Security",
+    items: [
+      { href: "/users", label: "User & Role Management", icon: ShieldCheck, requiredPermission: "VIEW_USERS" },
+      { href: "/employees", label: "Staff & Team Directory", icon: Users, requiredPermission: "VIEW_USERS" },
     ]
   },
   
@@ -184,15 +193,55 @@ export default function AdminLayoutClient({
   initialUnreadCount = 0,
   defaultOpen = true,
 }: AdminLayoutClientProps) {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname || "";
   const router = useRouter();
 
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [badgeCounts, setBadgeCounts] = useState<Record<string, number>>({});
+
+  // Keyboard shortcut for Global Search (Ctrl+K or Cmd+K)
   useEffect(() => {
-    if (pathname !== "/admin" && pathname !== "/login") {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Fetch sidebar badge counts
+  useEffect(() => {
+    async function fetchBadgeCounts() {
+      try {
+        const res = await fetch("/api/stats");
+        const data = await res.json();
+        if (data.success && data.stats) {
+          setBadgeCounts({
+            pendingInvoices: data.stats.pendingInvoicesCount || 0,
+            eggReview: data.stats.pendingRegistrations || 0,
+            spermReview: 0,
+            completedFilesEgg: data.stats.approvedRegistrations || 0,
+            completedFilesSperm: 0,
+          });
+        }
+      } catch (err) {
+        // Non-fatal
+      }
+    }
+    if (session) {
+      fetchBadgeCounts();
+    }
+  }, [session, pathname]);
+
+  useEffect(() => {
+    if (pathname && pathname !== "/admin" && pathname !== "/login") {
       if (!session) {
         router.push("/login");
       } else {
-        const role = (session.user as any)?.role;
+        const role = (session?.user as any)?.role;
         const isAllowedRole = ["ADMIN", "SUPER_ADMIN"].includes(role);
         if (!isAllowedRole) {
           router.push("/login");
@@ -217,7 +266,7 @@ export default function AdminLayoutClient({
     return null;
   }
 
-  const userPermissions = (session.user as any)?.permissions || [];
+  const userPermissions = (session?.user as any)?.permissions || [];
   const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
 
   const filteredLinks = sidebarNavigation.map(group => ({
@@ -281,6 +330,7 @@ export default function AdminLayoutClient({
                   {group.items.map((item) => {
                     const isActive = pathname === (basePath + item.href) || pathname === item.href;
                     const IconComponent = item.icon;
+                    const count = item.badgeKey ? badgeCounts[item.badgeKey] || 0 : 0;
 
                     return (
                       <SidebarMenuItem key={item.href}>
@@ -293,13 +343,28 @@ export default function AdminLayoutClient({
                               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium"
                           }`}
                           render={
-                            <Link href={basePath + item.href} aria-label={item.label}>
+                            <Link href={basePath + item.href} aria-label={item.label} className="w-full flex items-center gap-2.5">
                               <IconComponent
                                 className={`w-4 h-4 shrink-0 transition-colors ${
                                   isActive ? "text-white" : "text-slate-500 group-hover:text-[#285b63]"
                                 }`}
                               />
-                              <span className="truncate whitespace-nowrap group-data-[collapsible=icon]:hidden">{item.label}</span>
+                              <span className="truncate whitespace-nowrap group-data-[collapsible=icon]:hidden flex-1">{item.label}</span>
+                              {count > 0 && (
+                                <span
+                                  className={`group-data-[collapsible=icon]:hidden px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                                    isActive
+                                      ? "bg-white text-[#285b63]"
+                                      : item.badgeKey === "pendingInvoices"
+                                      ? "bg-rose-100 text-rose-700"
+                                      : item.badgeKey?.includes("Review")
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-teal-100 text-teal-800"
+                                  }`}
+                                >
+                                  {count}
+                                </span>
+                              )}
                             </Link>
                           }
                         />
@@ -339,7 +404,31 @@ export default function AdminLayoutClient({
           </div>
 
           {/* Center / Right controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+
+            {/* Global Search Trigger (Ctrl+K / ⌘K) */}
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 hover:bg-slate-100 hover:border-slate-300 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 text-xs transition-all cursor-pointer shadow-2xs"
+              title="Search donors, clinics, invoices... (Ctrl+K)"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <span className="font-medium text-slate-600 dark:text-slate-300">Quick Search...</span>
+              <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-2xs">
+                Ctrl K
+              </kbd>
+            </button>
+
+            {/* Mobile Search Button */}
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(true)}
+              className="sm:hidden p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+              title="Search (Ctrl+K)"
+            >
+              <Search className="w-4 h-4" />
+            </button>
 
             {/* Notification Bell */}
             <NotificationBell 
@@ -354,10 +443,10 @@ export default function AdminLayoutClient({
                 render={
                   <button
                     type="button"
-                    aria-label={session.user?.name ? `${session.user.name}'s account menu` : "User account menu"}
+                    aria-label={session?.user?.name ? `${session.user.name}'s account menu` : "User account menu"}
                     className="flex items-center justify-center p-0.5 rounded-full hover:ring-2 hover:ring-[#285b63]/30 transition-all cursor-pointer group"
                   >
-                    {session.user?.image ? (
+                    {session?.user?.image ? (
                       <img
                         src={session.user.image}
                         alt={session.user.name || "Profile"}
@@ -365,7 +454,7 @@ export default function AdminLayoutClient({
                       />
                     ) : (
                       <div className="w-9 h-9 rounded-full bg-[#285b63] text-white flex items-center justify-center font-bold text-sm shadow-xs group-hover:scale-105 transition-transform">
-                        {session.user?.name?.charAt(0).toUpperCase() || "M"}
+                        {session?.user?.name?.charAt(0).toUpperCase() || "M"}
                       </div>
                     )}
                   </button>
@@ -374,7 +463,7 @@ export default function AdminLayoutClient({
               <DropdownMenuContent side="bottom" align="end" className="w-64 rounded-2xl p-2 shadow-xl border-slate-200/90 bg-white">
                 {/* Account Header */}
                 <div className="p-3 rounded-xl bg-slate-50/90 border border-slate-100 mb-1.5 flex items-center gap-3">
-                  {session.user?.image ? (
+                  {session?.user?.image ? (
                     <img
                       src={session.user.image}
                       alt={session.user.name || "Profile"}
@@ -382,15 +471,15 @@ export default function AdminLayoutClient({
                     />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-[#285b63] text-white flex items-center justify-center font-bold text-sm shadow-2xs shrink-0">
-                      {session.user?.name?.charAt(0).toUpperCase() || "M"}
+                      {session?.user?.name?.charAt(0).toUpperCase() || "M"}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-slate-900 truncate">
-                      {session.user?.name || "Mediyaz Administrator"}
+                      {session?.user?.name || "Mediyaz Administrator"}
                     </p>
                     <p className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
-                      {session.user?.email || "admin@mediyaz.org"}
+                      {session?.user?.email || "admin@mediyaz.org"}
                     </p>
                     <div className="mt-1.5">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-[#285b63] border border-teal-200/70">
@@ -447,6 +536,11 @@ export default function AdminLayoutClient({
           {children}
         </main>
 
+        {/* Global Ctrl+K Search Dialog */}
+        <GlobalSearchModal
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+        />
       </SidebarInset>
     </SidebarProvider>
   );

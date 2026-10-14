@@ -22,7 +22,11 @@ import {
   Clock,
   History,
   FileText,
-  MoreHorizontal
+  MoreHorizontal,
+  KeyRound,
+  EyeOff,
+  Copy,
+  Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -32,6 +36,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 
 interface LoginRecord {
   date: string;
@@ -86,8 +91,25 @@ export default function AdminUsersPage() {
   // Form State
   const [editForm, setEditForm] = useState<any>({});
   const [createForm, setCreateForm] = useState<any>({
-    name: "", email: "", phone: "", role: "RECIPIENT", department: "General", permissions: "READ_PORTAL"
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    role: "ADMIN",
+    department: "Administration",
+    permissions: "VIEW_DASHBOARD, VIEW_REGISTRATIONS, VIEW_REG_CHECKS"
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+
+  const generateRandomPassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%";
+    let pass = "Med#";
+    for (let i = 0; i < 8; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return pass + "!";
+  };
 
   // Bulk state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -200,29 +222,36 @@ export default function AdminUsersPage() {
       userId: user._id,
       name: user.name,
       email: user.email,
+      password: "",
       phone: user.phone || "",
       role: user.role,
       department: user.department || "General",
       permissions: user.permissions ? user.permissions.join(", ") : "READ_PORTAL"
     });
+    setShowEditPassword(false);
     setIsEditOpen(true);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload: any = {
+        userId: editForm.userId,
+        name: editForm.name,
+        email: editForm.email,
+        phone: editForm.phone,
+        role: editForm.role,
+        department: editForm.department,
+        permissions: editForm.permissions ? editForm.permissions.split(",").map((p: string) => p.trim()) : []
+      };
+      if (editForm.password && editForm.password.trim().length >= 6) {
+        payload.password = editForm.password.trim();
+      }
+
       const res = await fetch("/api/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: editForm.userId,
-          name: editForm.name,
-          email: editForm.email,
-          phone: editForm.phone,
-          role: editForm.role,
-          department: editForm.department,
-          permissions: editForm.permissions.split(",").map((p: string) => p.trim())
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
@@ -246,17 +275,30 @@ export default function AdminUsersPage() {
         body: JSON.stringify({
           name: createForm.name,
           email: createForm.email,
+          password: createForm.password,
           phone: createForm.phone,
           role: createForm.role,
           department: createForm.department,
-          permissions: createForm.permissions.split(",").map((p: string) => p.trim())
+          permissions: createForm.permissions ? createForm.permissions.split(",").map((p: string) => p.trim()) : ["READ_PORTAL"]
         })
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("User account created!");
+        if (data.initialPassword) {
+          toast.success(`User created! Generated Password: ${data.initialPassword}`, { duration: 12000 });
+        } else {
+          toast.success(`User account (${createForm.role}) created successfully!`);
+        }
         setIsCreateOpen(false);
-        setCreateForm({ name: "", email: "", phone: "", role: "RECIPIENT", department: "General", permissions: "READ_PORTAL" });
+        setCreateForm({
+          name: "",
+          email: "",
+          password: "",
+          phone: "",
+          role: "ADMIN",
+          department: "Administration",
+          permissions: "VIEW_DASHBOARD, VIEW_REGISTRATIONS, VIEW_REG_CHECKS"
+        });
         loadUsers();
       } else {
         toast.error(data.error || "Creation failed.");
@@ -415,10 +457,7 @@ export default function AdminUsersPage() {
       {/* Main Table Card */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="text-center py-20 text-slate-500 text-xs">
-            <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-2" />
-            Connecting to database & loading profiles...
-          </div>
+          <DataTableSkeleton rows={6} />
         ) : paginatedUsers.length === 0 ? (
           <div className="text-center py-20 text-slate-400 text-xs">No matching user accounts found.</div>
         ) : (
@@ -710,6 +749,38 @@ export default function AdminUsersPage() {
               <Input type="email" value={editForm.email || ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
             </div>
             <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                  Reset Password (Optional)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, password: generateRandomPassword() })}
+                  className="text-[11px] text-teal-700 hover:underline flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3" /> Generate
+                </button>
+              </div>
+              <div className="relative">
+                <Input
+                  type={showEditPassword ? "text" : "password"}
+                  placeholder="Leave blank to keep existing password"
+                  value={editForm.password || ""}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEditPassword(!showEditPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500">Only fill this if you want to reset the user's login password.</p>
+            </div>
+            <div className="space-y-1">
               <label className="font-semibold text-slate-700 dark:text-slate-300">Phone Number</label>
               <Input value={editForm.phone || ""} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
             </div>
@@ -747,27 +818,61 @@ export default function AdminUsersPage() {
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="rounded-2xl max-w-md bg-white dark:bg-slate-900 border dark:border-slate-800 p-6">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Register User Account</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">Manually insert new user credentials into database.</DialogDescription>
+            <DialogTitle className="text-lg font-bold">Register Admin / Staff User</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Create an administrative or staff account with full Better-Auth portal login credentials.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
             <div className="space-y-1">
               <label className="font-semibold">Full Name</label>
-              <Input value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} required />
+              <Input placeholder="e.g. Dr. Rajesh Verma" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} required />
             </div>
             <div className="space-y-1">
               <label className="font-semibold">Email Address</label>
-              <Input type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} required />
+              <Input type="email" placeholder="e.g. rajesh@mediyaz.com" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} required />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 text-teal-700" />
+                  Portal Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCreateForm({ ...createForm, password: generateRandomPassword() })}
+                  className="text-[11px] text-teal-700 hover:underline flex items-center gap-1 font-medium"
+                >
+                  <Sparkles className="w-3 h-3" /> Auto-Generate
+                </button>
+              </div>
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Min 6 characters (or click Auto-Generate)"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500">Leave blank to auto-generate a secure password automatically.</p>
             </div>
             <div className="space-y-1">
               <label className="font-semibold">Phone Number</label>
-              <Input value={createForm.phone} onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })} />
+              <Input placeholder="+91 9876543210" value={createForm.phone} onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="font-semibold">Role</label>
                 <select 
-                  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 focus:outline-none"
+                  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 focus:outline-none font-medium"
                   value={createForm.role}
                   onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
                 >
@@ -778,16 +883,18 @@ export default function AdminUsersPage() {
               </div>
               <div className="space-y-1">
                 <label className="font-semibold">Department</label>
-                <Input value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
+                <Input placeholder="e.g. Clinical Operations" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
               </div>
             </div>
             <div className="space-y-1">
-              <label className="font-semibold">Access Permissions (Comma Separated)</label>
-              <Input value={createForm.permissions} onChange={(e) => setCreateForm({ ...createForm, permissions: e.target.value })} />
+              <label className="font-semibold">Access Permissions</label>
+              <Input placeholder="VIEW_DASHBOARD, VIEW_REGISTRATIONS (or * for Super Admin)" value={createForm.permissions} onChange={(e) => setCreateForm({ ...createForm, permissions: e.target.value })} />
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-800">
               <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="rounded-xl text-xs">Cancel</Button>
-              <Button type="submit" className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs">Create Account</Button>
+              <Button type="submit" className="rounded-xl bg-[#285b63] hover:bg-[#1d464d] text-white text-xs">
+                Create & Grant Access
+              </Button>
             </div>
           </form>
         </DialogContent>

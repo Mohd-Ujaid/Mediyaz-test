@@ -909,13 +909,12 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
 
   if (status === "APPROVED" && oldValues.status !== "APPROVED") {
     const { User, UserRole } = await import("@/models/User");
-    const { Donor } = await import("@/models/Donor");
     
     const email = registration.contactInfo?.emailAddress ? registration.contactInfo.emailAddress.toLowerCase().trim() : null;
     let user = email ? await User.findOne({ email }) : null;
     if (!user && email) {
       user = await User.create({
-        name: registration.personalInfo?.fullName || "Egg Donor",
+        name: registration.personalInfo?.fullName || (isEgg ? "Egg Donor" : "Sperm Donor"),
         email: email,
         phone: registration.contactInfo?.mobileNumber || "",
         role: UserRole.DONOR,
@@ -927,61 +926,17 @@ export async function updateAdminRegistrationStatus(bodyData: any, session: any)
       await user.save();
     }
 
-    let donorRecord = user ? await Donor.findOne({ user: user._id }) : null;
-    let resolvedDonorId = donorId || registration.donorId || donorRecord?.donorId;
+    let resolvedDonorId = donorId || registration.donorId;
     if (!resolvedDonorId) {
-      const count = await Donor.countDocuments();
+      const targetModel: any = isEgg
+        ? (await import("@/models/EggDonorRegistration")).EggDonorRegistration
+        : (await import("@/models/SpermDonorRegistration")).SpermDonorRegistration;
+      const count = await targetModel.countDocuments({ donorId: { $exists: true, $ne: "" } });
       const prefix = isEgg ? "MED-ED" : "MED-SD";
       resolvedDonorId = `${prefix}-${new Date().getFullYear()}-${String(count + 1001).padStart(4, "0")}`;
     }
 
     registration.donorId = resolvedDonorId;
-
-    if (!donorRecord && user) {
-      donorRecord = await Donor.create({
-        user: user._id,
-        donorId: resolvedDonorId,
-        personalInformation: {
-          dateOfBirth: registration.personalInfo?.dateOfBirth ? new Date(registration.personalInfo.dateOfBirth) : new Date(),
-          gender: registration.personalInfo?.gender || (isEgg ? "Female" : "Male"),
-          bloodGroup: registration.personalInfo?.bloodGroup || "O+",
-          nationality: registration.personalInfo?.nationality || "Indian",
-          address: registration.contactInfo?.currentAddress || "Not Provided",
-          maritalStatus: registration.personalInfo?.maritalStatus || "Single",
-        },
-        physicalAttributes: {
-          height: Number(registration.personalInfo.height?.replace(/\D/g, "")) || 170,
-          weight: Number(registration.personalInfo.weight?.replace(/\D/g, "")) || 65,
-          eyeColor: registration.personalInfo.eyeColor || "Brown",
-          hairColor: registration.personalInfo.hairColor || "Black",
-          skinTone: registration.personalInfo.complexion || "Medium",
-        },
-        contactInformation: {
-          emergencyContactName: registration.emergencyContact?.contactPersonName || "",
-          emergencyContactPhone: registration.emergencyContact?.phoneNumber || "",
-          city: registration.contactInfo.city || "",
-          state: registration.contactInfo.state || "",
-          country: registration.personalInfo.nationality || "India",
-          pinCode: registration.contactInfo.pincode || "",
-        },
-        medicalInformation: {
-          eligibility: true,
-          hemoglobin: 14.5,
-          bloodPressure: "120/80",
-          allergies: registration.medicalInfo?.allergies || "None",
-          diseases: registration.medicalInfo?.medicalHistory || "None",
-          medications: registration.medicalInfo?.currentMedications || "None",
-          medicalNotes: adminNotes || "",
-        },
-        donationInformation: {
-          totalDonations: 0,
-          certificates: [],
-        },
-        donationStatus: "ACTIVE",
-        approvalStatus: "APPROVED",
-        createdBy: session.user.name || "Admin Console",
-      });
-    }
 
     // If there's an associated referral, link referredDonorId
     const Referral = (await import("@/models/Referral")).Referral;
@@ -1094,8 +1049,10 @@ export async function patchAdminRegistrationFields(id: string, updateObj: Record
     "consent.signatureDate",
     "documents.extraAttachment",
     "documents.form13",
+    "documents.form14",
     "documents.affidavit",
     "form13",
+    "form14",
     "affidavit",
     "pickupDate",
     "pickupLocation",

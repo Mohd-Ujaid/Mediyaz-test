@@ -1,37 +1,27 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { Donor } from "@/models/Donor";
-import { auth } from "@/server/auth";
-import { headers } from "next/headers";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 
 export async function GET(req: Request) {
   try {
-    // Available donor search is public and de-identified
-
     await connectToDatabase();
     
-    // Models are registered via imports
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
     const bloodGroup = searchParams.get("bloodGroup") || "";
-    const gender = searchParams.get("gender") || "";
     const ageMin = parseInt(searchParams.get("ageMin") || "18");
     const ageMax = parseInt(searchParams.get("ageMax") || "60");
 
-    // Fetch all active, approved donors (Sperm Donors - Male only)
     const query: any = {
-      donationStatus: "ACTIVE",
-      approvalStatus: "APPROVED",
-      "personalInformation.gender": "Male"
+      status: { $in: ["APPROVED", "FILE_COMPLETED", "DOCUMENTS_VERIFIED"] },
     };
 
     if (bloodGroup) {
-      query["personalInformation.bloodGroup"] = bloodGroup;
+      query["personalInfo.bloodGroup"] = bloodGroup;
     }
 
-    const rawDonors = await Donor.find(query).sort({ createdAt: -1 });
+    const rawDonors = await SpermDonorRegistration.find(query).sort({ createdAt: -1 }).lean();
 
-    // Helper to calculate age
     const calculateAge = (dob: Date | string) => {
       if (!dob) return 0;
       const birth = new Date(dob);
@@ -44,48 +34,44 @@ export async function GET(req: Request) {
       return age;
     };
 
-    // Filter and sanitize donor data
-    const sanitizedDonors = rawDonors.map(donor => {
-      const age = calculateAge(donor.personalInformation?.dateOfBirth);
+    const sanitizedDonors = rawDonors.map((donor: any) => {
+      const age = calculateAge(donor.personalInfo?.dateOfBirth);
 
-      // Return sanitized object
       return {
         _id: donor._id,
-        donorId: donor.donorId,
+        donorId: donor.registrationId,
         age,
-        gender: donor.personalInformation?.gender || "Not Specified",
-        bloodGroup: donor.personalInformation?.bloodGroup || "TBD",
-        nationality: donor.personalInformation?.nationality || "Indian",
+        gender: "Male",
+        bloodGroup: donor.personalInfo?.bloodGroup || "TBD",
+        nationality: "Indian",
         physicalAttributes: {
-          height: donor.physicalAttributes?.height || 170,
-          weight: donor.physicalAttributes?.weight || 65,
-          eyeColor: donor.physicalAttributes?.eyeColor || "Brown",
-          hairColor: donor.physicalAttributes?.hairColor || "Black",
-          skinTone: donor.physicalAttributes?.skinTone || "Medium",
+          height: Number(donor.personalInfo?.height) || 170,
+          weight: Number(donor.personalInfo?.weight) || 65,
+          eyeColor: donor.personalInfo?.eyeColor || "Brown",
+          hairColor: donor.personalInfo?.hairColor || "Black",
+          skinTone: donor.personalInfo?.complexion || "Medium",
         },
-        tags: donor.tags || [],
+        tags: [],
         updatedAt: donor.updatedAt || donor.createdAt,
-        donationStatus: donor.donationStatus
+        donationStatus: "ACTIVE",
       };
-    }).filter(donor => {
-      // Age filter
-      if (donor.age < ageMin || donor.age > ageMax) return false;
+    }).filter((donor: any) => {
+      if (donor.age > 0 && (donor.age < ageMin || donor.age > ageMax)) return false;
 
-      // Search filter (searches donorId or nationality)
       if (search) {
-        const queryStr = search.toLowerCase();
-        const matchesId = donor.donorId.toLowerCase().includes(queryStr);
-        const matchesNationality = donor.nationality.toLowerCase().includes(queryStr);
-        return matchesId || matchesNationality;
+        const s = search.toLowerCase();
+        return donor.donorId.toLowerCase().includes(s) || donor.bloodGroup.toLowerCase().includes(s);
       }
-
       return true;
     });
 
-    return NextResponse.json({ success: true, donors: sanitizedDonors });
-
+    return NextResponse.json({
+      success: true,
+      donors: sanitizedDonors,
+      total: sanitizedDonors.length,
+    });
   } catch (error: any) {
-    console.error("Fetch available donors error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    console.error("Recipient available donors error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

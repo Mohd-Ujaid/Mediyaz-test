@@ -118,34 +118,30 @@ export async function GET(req: Request) {
       ];
     }
 
-    // Compute overall stats for all egg donor registrations
-    const [
-      totalAll,
-      totalNew,
-      totalUnderReview,
-      totalDocsVerified,
-      totalAffidavit,
-      totalApprovedStrict,
-      totalWaitingForm13,
-      totalFileCompleted,
-      totalCompleted,
-      totalRejected,
-      totalDraft,
-      totalSuspended,
-    ] = await Promise.all([
-      EggDonorRegistration.countDocuments(),
-      EggDonorRegistration.countDocuments({ status: { $in: ["NEW", "SUBMITTED"] } }),
-      EggDonorRegistration.countDocuments({ status: "UNDER_REVIEW" }),
-      EggDonorRegistration.countDocuments({ status: "DOCUMENTS_VERIFIED" }),
-      EggDonorRegistration.countDocuments({ status: "AFFIDAVIT_UPLOADED" }),
-      EggDonorRegistration.countDocuments({ status: "APPROVED" }),
-      EggDonorRegistration.countDocuments({ status: "WAITING_FORM13" }),
-      EggDonorRegistration.countDocuments({ status: "FILE_COMPLETED" }),
-      EggDonorRegistration.countDocuments({ status: "COMPLETED" }),
-      EggDonorRegistration.countDocuments({ status: "REJECTED" }),
-      EggDonorRegistration.countDocuments({ status: "DRAFT" }),
-      EggDonorRegistration.countDocuments({ status: "SUSPENDED" }),
+    // High-performance single-pass status aggregation (replaces 12 separate count queries)
+    const statusAggregation = await EggDonorRegistration.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } }
     ]);
+    const countMap: Record<string, number> = {};
+    let totalAll = 0;
+    for (const item of statusAggregation) {
+      if (item._id) {
+        countMap[item._id] = item.count;
+        totalAll += item.count;
+      }
+    }
+
+    const totalNew = (countMap["NEW"] || 0) + (countMap["SUBMITTED"] || 0);
+    const totalUnderReview = countMap["UNDER_REVIEW"] || 0;
+    const totalDocsVerified = countMap["DOCUMENTS_VERIFIED"] || 0;
+    const totalAffidavit = countMap["AFFIDAVIT_UPLOADED"] || 0;
+    const totalApprovedStrict = countMap["APPROVED"] || 0;
+    const totalWaitingForm13 = countMap["WAITING_FORM13"] || 0;
+    const totalFileCompleted = countMap["FILE_COMPLETED"] || 0;
+    const totalCompleted = countMap["COMPLETED"] || 0;
+    const totalRejected = countMap["REJECTED"] || 0;
+    const totalDraft = countMap["DRAFT"] || 0;
+    const totalSuspended = countMap["SUSPENDED"] || 0;
 
     const totalOtherUntilApproved =
       totalUnderReview + totalDocsVerified + totalAffidavit + totalRejected + totalSuspended;

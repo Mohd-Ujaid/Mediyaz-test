@@ -32,8 +32,10 @@ import {
   Receipt,
   Percent,
   Stethoscope,
+  SlidersHorizontal,
 } from "lucide-react";
 import { CompletedFileInvoiceModal } from "./CompletedFileInvoiceModal";
+import { formatDotDate } from "@/lib/invoice-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,6 +53,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 
 interface DocItem {
   key: string;
@@ -129,6 +132,17 @@ export function CompletedFilesDirectory({
   const [hospitalPaymentFilter, setHospitalPaymentFilter] = useState("ALL");
   const [donorTypeFilter, setDonorTypeFilter] = useState<string>(initialDonorType);
 
+  // Table Density and Visible Columns
+  const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable");
+  const [visibleColumns, setVisibleColumns] = useState({
+    donorProfile: true,
+    hospital: true,
+    hospitalDeal: true,
+    donorDeal: true,
+    docStatus: true,
+    scheduleDates: true,
+  });
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -155,6 +169,7 @@ export function CompletedFilesDirectory({
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [invoiceModalReadOnly, setInvoiceModalReadOnly] = useState(false);
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
   const [downloadingZipId, setDownloadingZipId] = useState<string | null>(null);
 
@@ -323,6 +338,7 @@ export function CompletedFilesDirectory({
       check("Donor Signature", "identity", docs.signature),
       check("PAN Card", "identity", docs.panCard || docs.pan),
       check("Form 13 / ART Donor Affidavit", "legal", docs.form13, reg?.form13),
+      check("Form 14 / Screening Certificate", "legal", docs.form14, reg?.form14),
       check("Insurance Policy", "legal", docs.insurance, labs.insurance),
       check("Blood Group & Routine Report", "medical", labs.bloodReport),
       check("Viral Markers (HIV, HBsAg, HCV, VDRL)", "medical", labs.viralMarkersReport, labs.viralMarkers),
@@ -525,10 +541,80 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
     }
   };
 
-  // Open Invoice Generator & Dispatch Modal
-  const handleOpenInvoiceModal = (reg: any) => {
+  // Open Invoice Generator & Dispatch Modal (or View Mode if already generated)
+  const handleOpenInvoiceModal = async (reg: any, readOnly = false) => {
     setSelectedReg(reg);
+    setInvoiceModalReadOnly(readOnly);
     setIsInvoiceModalOpen(true);
+
+    const isAlreadyGenerated = Boolean(
+      reg.clinicDeal?.isInvoiceGenerated ||
+      reg.isInvoiceGenerated ||
+      (reg.clinicDeal?.invoiceNumber && String(reg.clinicDeal.invoiceNumber).trim() !== "") ||
+      (reg.invoiceNumber && String(reg.invoiceNumber).trim() !== "")
+    );
+
+    if (!readOnly && !isAlreadyGenerated) {
+      try {
+        const isEgg = (reg.donorType || donorTypeFilter) !== "sperm";
+        const hosp = typeof reg.assignedHospital === "object" ? reg.assignedHospital : null;
+        const defaultServiceCharge = hosp?.serviceCharge || 5000;
+        const defaultDealPrice = Number(
+          reg.clinicDeal?.totalAmount ||
+          reg.clinicDeal?.hospitalDealPrice ||
+          (isEgg ? (hosp?.eggDonorDealPrice || 60000) : (hosp?.spermDonorDealPrice || 15000))
+        );
+        const donorReimbursement = Math.max(0, defaultDealPrice - defaultServiceCharge);
+        const numOnly = reg.registrationId?.replace(/\D/g, "");
+        const invNum = numOnly ? numOnly.slice(-3) || "54" : "54";
+        const invDate = reg.pickupDate ? formatDotDate(reg.pickupDate) : formatDotDate(new Date());
+
+        const res = await fetch("/api/hospitals/completed-files", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            registrationId: reg.registrationId,
+            donorType: isEgg ? "egg" : "sperm",
+            invoiceNumber: invNum,
+            invoiceDate: invDate,
+            pickupDate: invDate,
+            opuLocation: reg.opuLocation || hosp?.shortName || hosp?.name || "Mediworld Fertility Centre",
+            isInvoiceGenerated: true,
+            clinicDeal: {
+              isInvoiceGenerated: true,
+              invoiceNumber: invNum,
+              invoiceDate: invDate,
+              hospitalDealPrice: defaultDealPrice,
+              totalAmount: defaultDealPrice,
+              serviceCharge: defaultServiceCharge,
+              donorReimbursement,
+              gstAmount: Math.round(defaultServiceCharge * 0.18),
+              tdsPercentage: 2,
+              tdsAmount: Math.round(defaultDealPrice * 0.02),
+              netReceivableAmount: Math.max(
+                0,
+                defaultDealPrice - Math.round(defaultDealPrice * 0.02) + Math.round(defaultServiceCharge * 0.18)
+              ),
+            },
+            donorDeal: {
+              compensationAmount: donorReimbursement,
+            },
+          }),
+        });
+
+        const resData = await res.json();
+        if (resData.success && resData.registration) {
+          setSelectedReg(resData.registration);
+          toast.success(`Invoice #${invNum} generated! Record entered in Invoice Tracker & Ledger.`);
+          loadCompletedFiles();
+        } else {
+          toast.error(resData.error || "Failed to generate invoice");
+        }
+      } catch (e) {
+        console.warn("Auto-save invoice on generation:", e);
+        toast.error("Error generating invoice");
+      }
+    }
   };
 
   // Open Payment Update Modal
@@ -1011,54 +1097,183 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
         )}
       </div>
 
+      {/* Table Control Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1">
+        <div className="text-xs text-muted-foreground">
+          Showing <span className="font-bold text-foreground">{registrations.length}</span> of{" "}
+          <span className="font-bold text-foreground">{totalCount}</span> completed records
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* Density Switcher */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setTableDensity("compact")}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                tableDensity === "compact"
+                  ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+              title="Compact density"
+            >
+              Compact
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableDensity("comfortable")}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                tableDensity === "comfortable"
+                  ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+              title="Comfortable density"
+            >
+              Comfortable
+            </button>
+          </div>
+
+          {/* Column Visibility Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2.5 rounded-lg border-slate-200 dark:border-slate-700 text-xs font-semibold gap-1.5 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                  Columns
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-52 p-2 space-y-1">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-1">
+                Toggle Columns
+              </div>
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.donorProfile}
+                  onChange={(e) => setVisibleColumns((prev) => ({ ...prev, donorProfile: e.target.checked }))}
+                  className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                Donor Profile
+              </label>
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.hospital}
+                  onChange={(e) => setVisibleColumns((prev) => ({ ...prev, hospital: e.target.checked }))}
+                  className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                Assigned Hospital
+              </label>
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.hospitalDeal}
+                  onChange={(e) => setVisibleColumns((prev) => ({ ...prev, hospitalDeal: e.target.checked }))}
+                  className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                Hospital Deal & Payment
+              </label>
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.donorDeal}
+                  onChange={(e) => setVisibleColumns((prev) => ({ ...prev, donorDeal: e.target.checked }))}
+                  className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                {resolvedDonorDealLabel}
+              </label>
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.docStatus}
+                  onChange={(e) => setVisibleColumns((prev) => ({ ...prev, docStatus: e.target.checked }))}
+                  className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                Documents Status
+              </label>
+              <label className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.scheduleDates}
+                  onChange={(e) => setVisibleColumns((prev) => ({ ...prev, scheduleDates: e.target.checked }))}
+                  className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                Schedule Dates
+              </label>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
       {/* Main Table */}
       <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[72vh] overflow-y-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-muted/50 border-b text-muted-foreground font-bold uppercase tracking-wider text-[11px]">
+              <tr className="sticky top-0 z-20 backdrop-blur-md bg-muted/95 border-b text-muted-foreground font-bold uppercase tracking-wider text-[11px] shadow-2xs">
                 <th className="p-4">Registration ID</th>
                 <th className="p-4">Donor ID</th>
-                <th className="p-4">Donor Profile</th>
-                <th className="p-4">Assigned Hospital</th>
-                <th className="p-4">Hospital Deal & Payment</th>
-                <th className="p-4">{resolvedDonorDealLabel}</th>
-                <th className="p-4">Documents Status</th>
-                <th className="p-4">Schedule Dates</th>
-                <th className="p-4 text-right">Actions</th>
+                {visibleColumns.donorProfile && <th className="p-4">Donor Profile</th>}
+                {visibleColumns.hospital && <th className="p-4">Assigned Hospital</th>}
+                {visibleColumns.hospitalDeal && <th className="p-4">Hospital Deal & Payment</th>}
+                {visibleColumns.donorDeal && <th className="p-4">{resolvedDonorDealLabel}</th>}
+                {visibleColumns.docStatus && <th className="p-4">Documents Status</th>}
+                {visibleColumns.scheduleDates && <th className="p-4">Schedule Dates</th>}
+                <th className="p-4 text-right sticky right-0 z-30 bg-muted/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {loading ? (
-                <tr>
-                  <td colSpan={9} className="p-12 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <RefreshCw className="w-8 h-8 animate-spin text-teal-600" />
-                      <span className="font-semibold text-sm">Loading completed files...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : registrations.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="p-12 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <FileCheck className="w-12 h-12 text-muted-foreground/40" />
-                      <span className="font-bold text-base text-foreground">No Completed Files Found</span>
-                      <p className="text-xs max-w-sm">
-                        No registrations currently match your filter criteria. Try adjusting your search query or status filter.
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={handleResetFilters}
-                        className="mt-2 text-xs rounded-xl h-8"
-                      >
-                        Clear Filters
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                registrations.map((reg) => {
+              {(() => {
+                const activeColSpan =
+                  2 +
+                  (visibleColumns.donorProfile ? 1 : 0) +
+                  (visibleColumns.hospital ? 1 : 0) +
+                  (visibleColumns.hospitalDeal ? 1 : 0) +
+                  (visibleColumns.donorDeal ? 1 : 0) +
+                  (visibleColumns.docStatus ? 1 : 0) +
+                  (visibleColumns.scheduleDates ? 1 : 0) +
+                  1;
+                const cellPad = tableDensity === "compact" ? "py-2 px-3 text-[11px]" : "p-4 text-xs";
+
+                if (loading) {
+                  return (
+                    <TableSkeletonRows
+                      columns={activeColSpan}
+                      rows={6}
+                      density={tableDensity}
+                    />
+                  );
+                }
+
+                if (registrations.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={activeColSpan} className="p-12 text-center text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <FileCheck className="w-12 h-12 text-muted-foreground/40" />
+                          <span className="font-bold text-base text-foreground">No Completed Files Found</span>
+                          <p className="text-xs max-w-sm">
+                            No registrations currently match your filter criteria. Try adjusting your search query or status filter.
+                          </p>
+                          <Button
+                            variant="outline"
+                            onClick={handleResetFilters}
+                            className="mt-2 text-xs rounded-xl h-8"
+                          >
+                            Clear Filters
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return registrations.map((reg) => {
                   const hosp = typeof reg.assignedHospital === "object" ? reg.assignedHospital : null;
                   const isHospPaid = reg.clinicDeal?.isPaymentReceived || reg.clinicDeal?.paymentStatus === "RECEIVED";
                   const isDonorPaid = reg.isDonorPaid || reg.donorDeal?.paymentStatus === "PAID";
@@ -1068,9 +1283,9 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                   const allDocsUploaded = uploadedCount === totalDocsCount;
 
                   return (
-                    <tr key={reg._id || reg.registrationId} className="hover:bg-muted/30 transition-colors">
+                    <tr key={reg._id || reg.registrationId} className="group/row hover:bg-muted/30 transition-colors">
                       {/* 1. Registration ID */}
-                      <td className="p-4 align-top">
+                      <td className={`${cellPad} align-top`}>
                         <div className="flex items-center gap-1.5 font-bold text-foreground">
                           <span>{reg.registrationId}</span>
                           <button
@@ -1100,7 +1315,7 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       </td>
 
                       {/* 2. Donor ID */}
-                      <td className="p-4 align-top">
+                      <td className={`${cellPad} align-top`}>
                         {reg.donorId ? (
                           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20 font-mono font-bold text-xs">
                             {reg.donorId}
@@ -1111,219 +1326,248 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       </td>
 
                       {/* 3. Donor Profile */}
-                      <td className="p-4 align-top">
-                        <div className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                          {reg.personalInfo?.fullName || "N/A"}
-                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
-                            {reg.personalInfo?.bloodGroup || "O+"}
-                          </span>
-                        </div>
-                        {(reg.personalInfo?.husbandName || reg.personalInfo?.spouseName) && (
-                          <div className="text-[11px] text-muted-foreground">
-                            Spouse: <span className="font-medium text-foreground">{reg.personalInfo.husbandName || reg.personalInfo.spouseName}</span>
+                      {visibleColumns.donorProfile && (
+                        <td className={`${cellPad} align-top`}>
+                          <div className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                            {reg.personalInfo?.fullName || "N/A"}
+                            <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
+                              {reg.personalInfo?.bloodGroup || "O+"}
+                            </span>
                           </div>
-                        )}
-                        <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
-                          {reg.personalInfo?.age ? <span>{reg.personalInfo.age} yrs</span> : null}
-                          {reg.contactInfo?.city ? <span>• {reg.contactInfo.city}</span> : null}
-                          {reg.contactInfo?.mobileNumber ? <span>• {reg.contactInfo.mobileNumber}</span> : null}
-                        </div>
-                      </td>
+                          {(reg.personalInfo?.husbandName || reg.personalInfo?.spouseName) && (
+                            <div className="text-[11px] text-muted-foreground">
+                              Spouse: <span className="font-medium text-foreground">{reg.personalInfo.husbandName || reg.personalInfo.spouseName}</span>
+                            </div>
+                          )}
+                          <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                            {reg.personalInfo?.age ? <span>{reg.personalInfo.age} yrs</span> : null}
+                            {reg.contactInfo?.city ? <span>• {reg.contactInfo.city}</span> : null}
+                            {reg.contactInfo?.mobileNumber ? <span>• {reg.contactInfo.mobileNumber}</span> : null}
+                          </div>
+                        </td>
+                      )}
 
                       {/* 4. Assigned Hospital */}
-                      <td className="p-4 align-top">
-                        {hosp ? (
-                          <div>
-                            <div className="font-bold text-foreground flex items-center gap-1.5">
-                              <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                              <span className="truncate max-w-[180px]">{hosp.name}</span>
+                      {visibleColumns.hospital && (
+                        <td className={`${cellPad} align-top`}>
+                          {hosp ? (
+                            <div>
+                              <div className="font-bold text-foreground flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                                <span className="truncate max-w-[180px]">{hosp.name}</span>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5">
+                                {hosp.city ? `${hosp.city}, ` : ""}{hosp.state || "India"}
+                              </div>
+                              {reg.assignedDoctor ? (
+                                <div className="mt-1 flex items-center gap-1 text-[10px] text-purple-700 dark:text-purple-300 font-semibold bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-200/60 w-fit">
+                                  <Stethoscope className="w-3 h-3 text-purple-600 shrink-0" />
+                                  <span>{reg.assignedDoctor.startsWith("Dr.") ? reg.assignedDoctor : `Dr. ${reg.assignedDoctor}`}</span>
+                                </div>
+                              ) : hosp.doctorName ? (
+                                <div className="text-[10px] text-slate-500 mt-0.5">
+                                  Dr: {hosp.doctorName}
+                                </div>
+                              ) : null}
+                              {hosp.contactPerson && !reg.assignedDoctor && (
+                                <div className="text-[10px] text-muted-foreground">
+                                  Contact: {hosp.contactPerson}
+                                </div>
+                              )}
                             </div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">
-                              {hosp.city ? `${hosp.city}, ` : ""}{hosp.state || "India"}
+                          ) : (
+                            <div className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>No Clinic Assigned</span>
                             </div>
-                            {reg.assignedDoctor ? (
-                              <div className="mt-1 flex items-center gap-1 text-[10px] text-purple-700 dark:text-purple-300 font-semibold bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-200/60 w-fit">
-                                <Stethoscope className="w-3 h-3 text-purple-600 shrink-0" />
-                                <span>{reg.assignedDoctor.startsWith("Dr.") ? reg.assignedDoctor : `Dr. ${reg.assignedDoctor}`}</span>
-                              </div>
-                            ) : hosp.doctorName ? (
-                              <div className="text-[10px] text-slate-500 mt-0.5">
-                                Dr: {hosp.doctorName}
-                              </div>
-                            ) : null}
-                            {hosp.contactPerson && !reg.assignedDoctor && (
-                              <div className="text-[10px] text-muted-foreground">
-                                Contact: {hosp.contactPerson}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            <span>No Clinic Assigned</span>
-                          </div>
-                        )}
-                      </td>
+                          )}
+                        </td>
+                      )}
 
                       {/* 5. Hospital Deal & Hospital Payment Status */}
-                      <td className="p-4 align-top">
-                        <div className="font-black text-sm text-teal-700 dark:text-teal-300">
-                          ₹{(reg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-                          Tier: <span className="text-foreground">{reg.clinicDeal?.donorCategory || "Normal"} Donor</span>
-                        </div>
-                        <div className="mt-1.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              isHospPaid
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
-                                : reg.clinicDeal?.paymentStatus === "PARTIALLY_RECEIVED"
-                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300"
-                                : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300"
-                            }`}
-                          >
-                            {isHospPaid ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
-                            {isHospPaid ? "Payment Received" : reg.clinicDeal?.paymentStatus === "PARTIALLY_RECEIVED" ? "Partially Rec'd" : "Payment Pending"}
-                          </span>
-                        </div>
-
-                        {/* Invoice Status & Generation Indicator */}
-                        <div className="mt-1.5">
-                          {reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200">
-                              <Receipt className="w-2.5 h-2.5" />
-                              Inv #{reg.clinicDeal?.invoiceNumber || reg.invoiceNumber}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInvoiceModal(reg)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 transition-colors cursor-pointer"
-                              title="Invoice pending. Click to create invoice and record in Clinic Ledger"
-                            >
-                              <Receipt className="w-2.5 h-2.5" />
-                              Invoice Pending
-                            </button>
-                          )}
-                        </div>
-
-                        {isHospPaid ? (
-                          <div className="space-y-0.5 mt-0.5">
-                            <div className="text-[10px] text-emerald-600 font-bold">
-                              Collected: ₹{(reg.clinicDeal?.receivedAmount || reg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
-                            </div>
-                            {reg.clinicDeal?.tdsPercentage !== undefined && Number(reg.clinicDeal.tdsPercentage) > 0 ? (
-                              <div className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">
-                                TDS: ₹{(reg.clinicDeal?.tdsAmount || Math.round((reg.clinicDeal?.hospitalDealPrice || 0) * (reg.clinicDeal.tdsPercentage / 100))).toLocaleString("en-IN")} ({reg.clinicDeal.tdsPercentage}%)
-                              </div>
-                            ) : null}
+                      {visibleColumns.hospitalDeal && (
+                        <td className={`${cellPad} align-top`}>
+                          <div className="font-black text-sm text-teal-700 dark:text-teal-300">
+                            ₹{(reg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
                           </div>
-                        ) : null}
-                      </td>
+                          <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                            Tier: <span className="text-foreground">{reg.clinicDeal?.donorCategory || "Normal"} Donor</span>
+                          </div>
+                          <div className="mt-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                isHospPaid
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
+                                  : reg.clinicDeal?.paymentStatus === "PARTIALLY_RECEIVED"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300"
+                              }`}
+                            >
+                              {isHospPaid ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
+                              {isHospPaid ? "Payment Received" : reg.clinicDeal?.paymentStatus === "PARTIALLY_RECEIVED" ? "Partially Rec'd" : "Payment Pending"}
+                            </span>
+                          </div>
+
+                          {/* Invoice Status & Generation Indicator */}
+                          <div className="mt-1.5">
+                            {reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenInvoiceModal(reg, true)}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 transition-colors cursor-pointer"
+                                title="Invoice generated. Click to view PDF."
+                              >
+                                <Eye className="w-2.5 h-2.5 text-indigo-600" />
+                                View PDF (Inv #{reg.clinicDeal?.invoiceNumber || reg.invoiceNumber})
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenInvoiceModal(reg, false)}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 transition-colors cursor-pointer"
+                                title="Invoice pending. Click to generate invoice."
+                              >
+                                <Receipt className="w-2.5 h-2.5" />
+                                Generate Invoice
+                              </button>
+                            )}
+                          </div>
+
+                          {isHospPaid ? (
+                            <div className="space-y-0.5 mt-0.5">
+                              <div className="text-[10px] text-emerald-600 font-bold">
+                                Collected: ₹{(reg.clinicDeal?.receivedAmount || reg.clinicDeal?.hospitalDealPrice || 0).toLocaleString("en-IN")}
+                              </div>
+                              {reg.clinicDeal?.tdsPercentage !== undefined && Number(reg.clinicDeal.tdsPercentage) > 0 ? (
+                                <div className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">
+                                  TDS: ₹{(reg.clinicDeal?.tdsAmount || Math.round((reg.clinicDeal?.hospitalDealPrice || 0) * (reg.clinicDeal.tdsPercentage / 100))).toLocaleString("en-IN")} ({reg.clinicDeal.tdsPercentage}%)
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </td>
+                      )}
 
                       {/* 6. Donor Deal */}
-                      <td className="p-4 align-top">
-                        <div className="font-black text-sm text-blue-700 dark:text-blue-300">
-                          ₹{(reg.donorDeal?.compensationAmount || 0).toLocaleString("en-IN")}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {reg.donorDeal?.paymentTerms || "Full on Retrieval"}
-                        </div>
-                        <div className="mt-1.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isDonorPaid
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
-                                : reg.donorDeal?.paymentStatus === "PARTIALLY_PAID"
-                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300"
-                                : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300"
-                            }`}
-                          >
-                            {isDonorPaid ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
-                            {isDonorPaid ? "Donor Paid" : reg.donorDeal?.paymentStatus === "PARTIALLY_PAID" ? "Partially Paid" : "Donor Unpaid"}
-                          </span>
-                        </div>
-                        {(reg.donorDeal?.advanceAmount || 0) > 0 && !isDonorPaid ? (
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
-                            Adv: ₹{reg.donorDeal.advanceAmount} | Bal: ₹{reg.donorDeal.balanceAmount || 0}
+                      {visibleColumns.donorDeal && (
+                        <td className={`${cellPad} align-top`}>
+                          <div className="font-black text-sm text-blue-700 dark:text-blue-300">
+                            ₹{(reg.donorDeal?.compensationAmount || 0).toLocaleString("en-IN")}
                           </div>
-                        ) : null}
-                      </td>
+                          <div className="text-[10px] text-muted-foreground">
+                            {reg.donorDeal?.paymentTerms || "Full on Retrieval"}
+                          </div>
+                          <div className="mt-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isDonorPaid
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300"
+                                  : reg.donorDeal?.paymentStatus === "PARTIALLY_PAID"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300"
+                              }`}
+                            >
+                              {isDonorPaid ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
+                              {isDonorPaid ? "Donor Paid" : reg.donorDeal?.paymentStatus === "PARTIALLY_PAID" ? "Partially Paid" : "Donor Unpaid"}
+                            </span>
+                          </div>
+                          {(reg.donorDeal?.advanceAmount || 0) > 0 && !isDonorPaid ? (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              Adv: ₹{reg.donorDeal.advanceAmount} | Bal: ₹{reg.donorDeal.balanceAmount || 0}
+                            </div>
+                          ) : null}
+                        </td>
+                      )}
 
                       {/* 7. Document Status */}
-                      <td className="p-4 align-top">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReg(reg);
-                            setIsDocModalOpen(true);
-                          }}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
-                            allDocsUploaded
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300"
-                              : uploadedCount >= 5
-                              ? "bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300"
-                              : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300"
-                          }`}
-                          title="Click to inspect all document upload statuses"
-                        >
-                          {allDocsUploaded ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <FileWarning className="w-3.5 h-3.5 text-amber-600" />
-                          )}
-                          <span>{uploadedCount}/{totalDocsCount} Uploaded</span>
-                        </button>
+                      {visibleColumns.docStatus && (
+                        <td className={`${cellPad} align-top`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedReg(reg);
+                              setIsDocModalOpen(true);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                              allDocsUploaded
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                : uploadedCount >= 5
+                                ? "bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300"
+                                : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300"
+                            }`}
+                            title="Click to inspect all document upload statuses"
+                          >
+                            {allDocsUploaded ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <FileWarning className="w-3.5 h-3.5 text-amber-600" />
+                            )}
+                            <span>{uploadedCount}/{totalDocsCount} Uploaded</span>
+                          </button>
 
-                        <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
-                          <div className="flex items-center gap-1">
-                            <span className={regDocs.find(d => d.name.includes("Form 13"))?.isUploaded ? "text-emerald-600 font-semibold" : "text-rose-600"}>
-                              {regDocs.find(d => d.name.includes("Form 13"))?.isUploaded ? "✓ Form 13" : "✗ Form 13"}
-                            </span>
-                            <span>•</span>
-                            <span className={regDocs.find(d => d.name.includes("Viral Markers"))?.isUploaded ? "text-emerald-600 font-semibold" : "text-rose-600"}>
-                              {regDocs.find(d => d.name.includes("Viral Markers"))?.isUploaded ? "✓ Viral" : "✗ Viral"}
-                            </span>
+                          <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <span className={regDocs.find(d => d.name.includes("Form 13"))?.isUploaded ? "text-emerald-600 font-semibold" : "text-rose-600"}>
+                                {regDocs.find(d => d.name.includes("Form 13"))?.isUploaded ? "✓ Form 13" : "✗ Form 13"}
+                              </span>
+                              <span>•</span>
+                              <span className={regDocs.find(d => d.name.includes("Form 14"))?.isUploaded ? "text-emerald-600 font-semibold" : "text-rose-600"}>
+                                {regDocs.find(d => d.name.includes("Form 14"))?.isUploaded ? "✓ Form 14" : "✗ Form 14"}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
+                      )}
 
                       {/* 8. Schedule Dates */}
-                      <td className="p-4 align-top">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 text-[11px]">
-                            <span className="font-semibold text-muted-foreground w-14">Pickup:</span>
-                            <span className={`font-medium ${reg.pickupDate ? "text-foreground font-bold" : "text-muted-foreground italic"}`}>
-                              {formatDisplayDate(reg.pickupDate)}
-                            </span>
+                      {visibleColumns.scheduleDates && (
+                        <td className={`${cellPad} align-top`}>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[11px]">
+                              <span className="font-semibold text-muted-foreground w-14">Pickup:</span>
+                              <span className={`font-medium ${reg.pickupDate ? "text-foreground font-bold" : "text-muted-foreground italic"}`}>
+                                {formatDisplayDate(reg.pickupDate)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px]">
+                              <span className="font-semibold text-muted-foreground w-14">Recruit:</span>
+                              <span className={`font-medium ${reg.recruitmentDate ? "text-foreground font-bold" : "text-muted-foreground italic"}`}>
+                                {formatDisplayDate(reg.recruitmentDate)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[11px]">
+                              <span className="font-semibold text-muted-foreground w-14">Supply:</span>
+                              <span className={`font-medium ${reg.supplyDate ? "text-foreground font-bold" : "text-muted-foreground italic"}`}>
+                                {formatDisplayDate(reg.supplyDate)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 text-[11px]">
-                            <span className="font-semibold text-muted-foreground w-14">Recruit:</span>
-                            <span className={`font-medium ${reg.recruitmentDate ? "text-foreground font-bold" : "text-muted-foreground italic"}`}>
-                              {formatDisplayDate(reg.recruitmentDate)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[11px]">
-                            <span className="font-semibold text-muted-foreground w-14">Supply:</span>
-                            <span className={`font-medium ${reg.supplyDate ? "text-foreground font-bold" : "text-muted-foreground italic"}`}>
-                              {formatDisplayDate(reg.supplyDate)}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
+                        </td>
+                      )}
 
                       {/* 9. Actions */}
-                      <td className="p-4 align-top text-right">
-                        <div className="flex justify-end">
+                      <td className={`${cellPad} align-top text-right sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-card group-hover/row:bg-muted/40`}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedReg(reg);
+                              setIsDetailModalOpen(true);
+                            }}
+                            className="h-8 w-8 p-0 rounded-lg text-teal-600 hover:text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/50 cursor-pointer"
+                            title="Quick View Complete File"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               render={
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-8 w-8 p-0 rounded-lg text-slate-500 hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
-                                  title="Actions"
+                                  className="h-8 w-8 p-0 rounded-lg text-slate-500 hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                                  title="More Actions"
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
                                 </Button>
@@ -1340,20 +1584,24 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                                 <Eye className="w-4 h-4 text-slate-600 dark:text-slate-300" />
                                 View Complete File
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleOpenPaymentModal(reg)}
-                                className="cursor-pointer gap-2 text-xs font-semibold py-2 text-teal-600 focus:text-teal-700"
-                              >
-                                <CreditCard className="w-4 h-4 text-teal-600" />
-                                Hospital Payment
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleOpenInvoiceModal(reg)}
-                                className="cursor-pointer gap-2 text-xs font-semibold py-2 text-emerald-600 focus:text-emerald-700"
-                              >
-                                <Receipt className="w-4 h-4 text-emerald-600" />
-                                Generate / Send Invoice
-                              </DropdownMenuItem>
+                              {/* Consolidated Invoice Action (Single pathway for invoice & payment) */}
+                              {reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenInvoiceModal(reg, true)}
+                                  className="cursor-pointer gap-2 text-xs font-semibold py-2 text-indigo-600 focus:text-indigo-700"
+                                >
+                                  <Eye className="w-4 h-4 text-indigo-600" />
+                                  View Invoice (PDF)
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenInvoiceModal(reg, false)}
+                                  className="cursor-pointer gap-2 text-xs font-semibold py-2 text-emerald-600 focus:text-emerald-700"
+                                >
+                                  <Receipt className="w-4 h-4 text-emerald-600" />
+                                  Generate Invoice
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() => {
                                   setSelectedReg(reg);
@@ -1378,8 +1626,8 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       </td>
                     </tr>
                   );
-                })
-              )}
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -2116,27 +2364,30 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-teal-800 dark:text-teal-300">ART Clinic Deal</span>
                         <div className="flex items-center gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setIsDetailModalOpen(false);
-                              handleOpenInvoiceModal(selectedReg);
-                            }}
-                            className="h-6 px-2 text-[10px] text-emerald-700 dark:text-emerald-300 border-emerald-400/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-md gap-1"
-                          >
-                            <Receipt className="w-3 h-3 text-emerald-600" /> Invoice
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setIsDetailModalOpen(false);
-                              handleOpenPaymentModal(selectedReg);
-                            }}
-                            className="h-6 px-2 text-[10px] bg-teal-600 hover:bg-teal-700 text-white rounded-md gap-1"
-                          >
-                            <CreditCard className="w-3 h-3" /> Update Payment
-                          </Button>
+                          {selectedReg.clinicDeal?.invoiceNumber || selectedReg.invoiceNumber || selectedReg.clinicDeal?.isInvoiceGenerated || selectedReg.isInvoiceGenerated ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setIsDetailModalOpen(false);
+                                handleOpenInvoiceModal(selectedReg, true);
+                              }}
+                              className="h-6 px-2 text-[10px] text-indigo-700 dark:text-indigo-300 border-indigo-400/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-md gap-1"
+                            >
+                              <Eye className="w-3 h-3 text-indigo-600" /> View Invoice (PDF)
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setIsDetailModalOpen(false);
+                                handleOpenInvoiceModal(selectedReg, false);
+                              }}
+                              className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-md gap-1"
+                            >
+                              <Receipt className="w-3 h-3" /> Generate Invoice
+                            </Button>
+                          )}
                         </div>
                       </div>
                       <div><span className="text-muted-foreground">Assigned Clinic:</span> <span className="font-semibold text-foreground">{typeof selectedReg.assignedHospital === "object" ? selectedReg.assignedHospital?.name : "None"}</span></div>
@@ -2522,8 +2773,12 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
       {selectedReg && (
         <CompletedFileInvoiceModal
           isOpen={isInvoiceModalOpen}
-          onClose={() => setIsInvoiceModalOpen(false)}
+          onClose={() => {
+            setIsInvoiceModalOpen(false);
+            loadCompletedFiles();
+          }}
           onInvoiceSaved={loadCompletedFiles}
+          readOnly={invoiceModalReadOnly}
           registration={selectedReg}
           donorType={
             selectedReg.donorType === "sperm" || donorTypeFilter === "sperm"

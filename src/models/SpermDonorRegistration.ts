@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { IDonorFileRef } from "./DonorRegistration";
+import { IDonorFileRef } from "./types";
 
 export interface ISpermDonorRegistration extends Document {
   registrationId: string;
@@ -158,11 +158,13 @@ export interface ISpermDonorRegistration extends Document {
     signature?: IDonorFileRef;
     insurance?: IDonorFileRef;
     form13?: IDonorFileRef;
+    form14?: IDonorFileRef;
     affidavit?: IDonorFileRef;
     extraAttachment?: IDonorFileRef;
     otherDocument?: IDonorFileRef;
   };
   form13?: IDonorFileRef;
+  form14?: IDonorFileRef;
   affidavit?: IDonorFileRef;
   isDonorPaid?: boolean;
   paidAt?: Date | null;
@@ -475,11 +477,13 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
       signature: fileRefSubSchema,
       insurance: fileRefSubSchema,
       form13: fileRefSubSchema,
+      form14: fileRefSubSchema,
       affidavit: fileRefSubSchema,
       extraAttachment: fileRefSubSchema,
       otherDocument: fileRefSubSchema,
     },
     form13: fileRefSubSchema,
+    form14: fileRefSubSchema,
     affidavit: fileRefSubSchema,
     isDonorPaid: { type: Boolean, default: false },
     paidAt: { type: Date, default: null },
@@ -572,7 +576,7 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
       receivedAt: { type: Date, default: null },
       paymentReference: { type: String, default: "" },
       invoiceNumber: { type: String, default: "" },
-      invoiceDate: { type: Date, default: null },
+      invoiceDate: { type: Schema.Types.Mixed, default: null },
       tdsPercentage: { type: Number, default: 10 },
       tdsAmount: { type: Number, default: 0 },
       serviceCharge: { type: Number, default: 0 },
@@ -612,6 +616,10 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
 SpermDonorRegistrationSchema.index({ "personalInfo.aadhaarNumber": 1 });
 SpermDonorRegistrationSchema.index({ status: 1 });
 SpermDonorRegistrationSchema.index({ "contactInfo.emailAddress": 1 });
+SpermDonorRegistrationSchema.index({ donorId: 1 }, { sparse: true });
+SpermDonorRegistrationSchema.index({ assignedHospital: 1 });
+SpermDonorRegistrationSchema.index({ status: 1, createdAt: -1 });
+SpermDonorRegistrationSchema.index({ sampleCollectionDate: 1 });
 
 export const SpermDonorRegistration =
   mongoose.models?.SpermDonorRegistration ||

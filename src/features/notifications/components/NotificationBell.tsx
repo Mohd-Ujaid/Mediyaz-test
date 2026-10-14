@@ -52,7 +52,8 @@ export function NotificationBell({
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const router = useRouter();
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname || "";
   const basePath = pathname.startsWith("/employee") ? "/employee" : "/admin";
 
   // Sync state if initial props change (e.g., on server-side navigation refresh)

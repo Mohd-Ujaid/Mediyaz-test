@@ -1,8 +1,19 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
+
+async function findRegistration(id: string) {
+  let doc: any = await EggDonorRegistration.findOne({ registrationId: id });
+  let model: any = EggDonorRegistration;
+  if (!doc) {
+    doc = await SpermDonorRegistration.findOne({ registrationId: id });
+    model = SpermDonorRegistration;
+  }
+  return { doc, model };
+}
 
 // GET a single registration by registrationId
 export async function GET(
@@ -22,7 +33,7 @@ export async function GET(
 
     await connectToDatabase();
     const { id } = await params;
-    const registration = await DonorRegistration.findOne({ registrationId: id });
+    const { doc: registration } = await findRegistration(id);
     if (!registration) {
       return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     }
@@ -55,38 +66,66 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    // Only allow safe fields to be updated via this endpoint
     const allowedFields = [
       "personalInfo.fullName",
+      "personalInfo.fatherName",
+      "personalInfo.motherName",
+      "personalInfo.husbandName",
+      "personalInfo.spouseName",
       "personalInfo.dateOfBirth",
+      "personalInfo.bloodGroup",
+      "personalInfo.education",
+      "personalInfo.occupation",
+      "personalInfo.height",
+      "personalInfo.weight",
+      "personalInfo.eyeColor",
+      "personalInfo.hairColor",
+      "personalInfo.complexion",
       "personalInfo.aadhaarNumber",
-      "personalInfo.age",
-      "contactInfo.currentAddress",
+      "personalInfo.panNumber",
       "contactInfo.mobileNumber",
-      "consent.signatureDate",
-      "documents.extraAttachment",
+      "contactInfo.emailAddress",
+      "contactInfo.currentAddress",
+      "contactInfo.permanentAddress",
+      "contactInfo.city",
+      "contactInfo.state",
+      "contactInfo.pincode",
+      "adminNotes",
+      "status",
+      "assignedHospital",
+      "clinicDeal",
+      "semenAnalysisDetails",
     ];
 
-    const updateObj: Record<string, any> = {};
-    for (const key of Object.keys(body)) {
-      if (allowedFields.includes(key)) {
-        updateObj[key] = body[key];
+    const update: any = {};
+    for (const field of allowedFields) {
+      if (field.includes(".")) {
+        const [parent, child] = field.split(".");
+        if (body[parent] && body[parent][child] !== undefined) {
+          update[field] = body[parent][child];
+        }
+      } else if (body[field] !== undefined) {
+        update[field] = body[field];
       }
     }
 
-    if (Object.keys(updateObj).length === 0) {
-      return NextResponse.json({ success: false, error: "No valid fields to update." }, { status: 400 });
+    // Direct path updates
+    for (const key of Object.keys(body)) {
+      if (allowedFields.includes(key)) {
+        update[key] = body[key];
+      }
     }
 
-    const updated = await DonorRegistration.findOneAndUpdate(
+    const { doc: registration, model } = await findRegistration(id);
+    if (!registration) {
+      return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+    }
+
+    const updated = await model.findOneAndUpdate(
       { registrationId: id },
-      { $set: updateObj },
+      { $set: update },
       { new: true }
     );
-
-    if (!updated) {
-      return NextResponse.json({ success: false, error: "Registration not found." }, { status: 404 });
-    }
 
     return NextResponse.json({ success: true, registration: updated });
   } catch (error: any) {

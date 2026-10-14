@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { IDonorFileRef } from "./DonorRegistration";
+import { IDonorFileRef } from "./types";
 
 export interface IEggDonorRegistration extends Document {
   registrationId: string;
@@ -109,10 +109,12 @@ export interface IEggDonorRegistration extends Document {
     affidavit?: IDonorFileRef;
     insurance?: IDonorFileRef;
     form13?: IDonorFileRef;
+    form14?: IDonorFileRef;
     extraAttachment?: IDonorFileRef;
     otherDocument?: IDonorFileRef;
   };
   form13?: IDonorFileRef;
+  form14?: IDonorFileRef;
 
   managementDocs?: {
     viralMarkers?: IDonorFileRef;
@@ -407,10 +409,12 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
       affidavit: fileRefSubSchema,
       insurance: fileRefSubSchema,
       form13: fileRefSubSchema,
+      form14: fileRefSubSchema,
       extraAttachment: fileRefSubSchema,
       otherDocument: fileRefSubSchema,
     },
     form13: fileRefSubSchema,
+    form14: fileRefSubSchema,
 
     managementDocs: {
       viralMarkers: fileRefSubSchema,
@@ -513,7 +517,7 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
       receivedAt: { type: Date, default: null },
       paymentReference: { type: String, default: "" },
       invoiceNumber: { type: String, default: "" },
-      invoiceDate: { type: Date, default: null },
+      invoiceDate: { type: Schema.Types.Mixed, default: null },
       tdsPercentage: { type: Number, default: 10 },
       tdsAmount: { type: Number, default: 0 },
       serviceCharge: { type: Number, default: 0 },
@@ -560,6 +564,10 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
 EggDonorRegistrationSchema.index({ "personalInfo.aadhaarNumber": 1 });
 EggDonorRegistrationSchema.index({ status: 1 });
 EggDonorRegistrationSchema.index({ "contactInfo.emailAddress": 1 });
+EggDonorRegistrationSchema.index({ donorId: 1 }, { sparse: true });
+EggDonorRegistrationSchema.index({ assignedHospital: 1 });
+EggDonorRegistrationSchema.index({ status: 1, createdAt: -1 });
+EggDonorRegistrationSchema.index({ pickupDate: 1 });
 
 if (mongoose.models && (mongoose.models as any).EggDonorRegistration) {
   delete (mongoose.models as any).EggDonorRegistration;

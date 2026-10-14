@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { 
   FileText, 
   Download, 
@@ -18,243 +20,413 @@ import {
   FileSpreadsheet,
   Gift,
   Award,
-  Share2
+  Share2,
+  Building2,
+  Receipt,
+  Dna,
+  ShieldCheck,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Layers,
+  Search,
+  X
 } from "lucide-react";
 import { toast } from "sonner";
 
 type ReportCategory = 
-  | "inventory" 
-  | "donors" 
-  | "employees" 
-  | "donations" 
-  | "requests"
-  | "inquiries"
   | "registrations"
+  | "inquiries"
+  | "hospitals"
+  | "financial"
+  | "donors"
+  | "inventory"
   | "marketing";
 
+const formatInr = (amount: number) => {
+  return "₹" + (amount || 0).toLocaleString("en-IN");
+};
+
 export default function AdminReportsPage() {
-  const [category, setCategory] = useState<ReportCategory>("inquiries");
+  const [category, setCategory] = useState<ReportCategory>("registrations");
   const [dataList, setDataList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Filter States
+  const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [bloodGroup, setBloodGroup] = useState("");
   const [status, setStatus] = useState("");
+  const [gameteType, setGameteType] = useState<"all" | "egg" | "sperm">("all");
 
   async function loadReportData() {
     setLoading(true);
     try {
-      let endpoint = `/api/${category}`;
-      
-      // Map categories to endpoints
-      if (category === "inventory") {
-        endpoint = "/api/stats"; 
+      if (category === "registrations") {
+        const [eggRes, spermRes] = await Promise.all([
+          fetch("/api/donor-registrations/egg?limit=1000").then(r => r.json()).catch(() => ({ registrations: [] })),
+          fetch("/api/donor-registrations/sperm?limit=1000").then(r => r.json()).catch(() => ({ registrations: [] }))
+        ]);
+        const eggList = (eggRes.registrations || []).map((r: any) => ({ ...r, donorType: "egg" }));
+        const spermList = (spermRes.registrations || []).map((r: any) => ({ ...r, donorType: "sperm" }));
+        setDataList([...eggList, ...spermList]);
       } else if (category === "inquiries") {
-        endpoint = "/api/donor-queries";
-      } else if (category === "registrations") {
-        endpoint = "/api/donor-registration/admin";
-      } else if (category === "marketing") {
-        endpoint = "/api/referrals";
-      }
-
-      const res = await fetch(endpoint);
-      const data = await res.json();
-
-      if (category === "inventory") {
+        const res = await fetch("/api/donor-queries?limit=1000");
+        const data = await res.json();
+        setDataList(data.inquiries || []);
+      } else if (category === "hospitals") {
+        const res = await fetch("/api/hospitals?limit=1000");
+        const data = await res.json();
+        setDataList(data.hospitals || []);
+      } else if (category === "financial") {
+        const res = await fetch("/api/invoices?limit=1000");
+        const data = await res.json();
+        setDataList(data.invoices || []);
+      } else if (category === "donors") {
+        const res = await fetch("/api/donors?limit=1000");
+        const data = await res.json();
+        setDataList(data.donors || []);
+      } else if (category === "inventory") {
+        const res = await fetch("/api/stats");
+        const data = await res.json();
         if (data.success && data.stats) {
           setDataList(data.stats.bloodGroupStats || []);
+        } else {
+          setDataList([]);
         }
-      } else if (category === "donors") {
-        setDataList(data.donors || []);
-      } else if (category === "employees") {
-        setDataList(data.employees || []);
-      } else if (category === "donations") {
-        setDataList(data.donations || []);
-      } else if (category === "requests") {
-        setDataList(data.requests || []);
-      } else if (category === "inquiries") {
-        setDataList(data.inquiries || []);
-      } else if (category === "registrations") {
-        setDataList(data.registrations || []);
       } else if (category === "marketing") {
+        const res = await fetch("/api/referrals?limit=1000");
+        const data = await res.json();
         const refs = data.referrals || [];
-        // Group by marketing source for counts
-        const counts: Record<string, number> = {};
+        const counts: Record<string, { count: number; totalRewards: number; paidCount: number }> = {};
         refs.forEach((r: any) => {
           const src = r.sourceReferralType || "Website";
-          counts[src] = (counts[src] || 0) + 1;
+          if (!counts[src]) {
+            counts[src] = { count: 0, totalRewards: 0, paidCount: 0 };
+          }
+          counts[src].count += 1;
+          counts[src].totalRewards += (r.rewardAmount || 0);
+          if (r.rewardStatus === "Paid") {
+            counts[src].paidCount += 1;
+          }
         });
-        const mapped = Object.entries(counts).map(([source, count]) => ({
+        const mapped = Object.entries(counts).map(([source, stats]) => ({
           source,
-          count,
+          count: stats.count,
+          totalRewards: stats.totalRewards,
+          paidCount: stats.paidCount
         }));
         setDataList(mapped);
       }
     } catch (err) {
-      toast.error("Failed to load report data from database.");
+      console.error("Report data load error:", err);
+      toast.error("Failed to load reporting dataset.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    setStatus("");
+    setBloodGroup("");
+    setStartDate("");
+    setEndDate("");
+    setSearch("");
+    setGameteType("all");
     loadReportData();
   }, [category]);
 
-  // Apply Client-Side Filters
-  const getFilteredData = () => {
-    let filtered = [...dataList];
+  // Apply Multi-Parameter Filters
+  const filteredReportData = useMemo(() => {
+    let result = [...dataList];
 
-    // 1. Blood Group Filter
-    if (bloodGroup) {
-      if (category === "inventory") {
-        filtered = filtered.filter(item => item.bloodGroup === bloodGroup);
-      } else if (category === "donors") {
-        filtered = filtered.filter(item => item.personalInformation?.bloodGroup === bloodGroup);
-      } else if (category === "donations" || category === "requests") {
-        filtered = filtered.filter(item => item.bloodGroup === bloodGroup);
-      } else if (category === "registrations") {
-        filtered = filtered.filter(item => item.personalInfo?.bloodGroup === bloodGroup);
-      }
+    // 1. Text Search Filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(item => {
+        if (category === "registrations") {
+          return (
+            (item.registrationId || "").toLowerCase().includes(q) ||
+            (item.personalInfo?.fullName || "").toLowerCase().includes(q) ||
+            (item.contactInfo?.mobileNumber || "").toLowerCase().includes(q) ||
+            (item.assignedHospital?.name || "").toLowerCase().includes(q)
+          );
+        }
+        if (category === "inquiries") {
+          return (
+            (item.fullName || "").toLowerCase().includes(q) ||
+            (item.mobileNumber || "").toLowerCase().includes(q) ||
+            (item.city || "").toLowerCase().includes(q)
+          );
+        }
+        if (category === "hospitals") {
+          return (
+            (item.name || "").toLowerCase().includes(q) ||
+            (item.registrationNumber || "").toLowerCase().includes(q) ||
+            (item.city || "").toLowerCase().includes(q) ||
+            (item.contactPerson || "").toLowerCase().includes(q)
+          );
+        }
+        if (category === "financial") {
+          return (
+            (item.invoiceNumber || "").toLowerCase().includes(q) ||
+            (item.registrationId || "").toLowerCase().includes(q) ||
+            (item.donorName || "").toLowerCase().includes(q) ||
+            (item.hospitalName || "").toLowerCase().includes(q)
+          );
+        }
+        if (category === "donors") {
+          return (
+            (item.donorCode || item.donorId || "").toLowerCase().includes(q) ||
+            (item.personalInformation?.name || "").toLowerCase().includes(q)
+          );
+        }
+        if (category === "marketing") {
+          return (item.source || "").toLowerCase().includes(q);
+        }
+        return true;
+      });
     }
 
-    // 2. Status Filter
-    if (status) {
-      if (category === "donors") {
-        filtered = filtered.filter(item => item.donationStatus === status);
-      } else if (category === "employees") {
-        filtered = filtered.filter(item => item.status === status);
-      } else if (category === "donations" || category === "requests") {
-        filtered = filtered.filter(item => item.status === status);
+    // 2. Gamete Type Filter
+    if (gameteType !== "all") {
+      if (category === "registrations") {
+        result = result.filter(item => item.donorType === gameteType);
       } else if (category === "inquiries") {
-        filtered = filtered.filter(item => item.status === status);
-      } else if (category === "registrations") {
-        filtered = filtered.filter(item => item.status === status);
+        result = result.filter(item => item.donationInterest === gameteType);
+      } else if (category === "donors") {
+        result = result.filter(item => item.gameteType === gameteType);
       }
     }
 
-    // 3. Date Range Filter
+    // 3. Blood Group Filter
+    if (bloodGroup) {
+      if (category === "registrations") {
+        result = result.filter(item => (item.personalInfo?.bloodGroup || "").toUpperCase() === bloodGroup.toUpperCase());
+      } else if (category === "donors") {
+        result = result.filter(item => (item.bloodType || item.personalInformation?.bloodGroup || "").toUpperCase() === bloodGroup.toUpperCase());
+      } else if (category === "inventory") {
+        result = result.filter(item => (item.bloodGroup || "").toUpperCase() === bloodGroup.toUpperCase());
+      }
+    }
+
+    // 4. Status Filter
+    if (status) {
+      if (category === "registrations" || category === "inquiries" || category === "hospitals") {
+        result = result.filter(item => item.status === status);
+      } else if (category === "financial") {
+        result = result.filter(item => item.paymentStatus === status);
+      } else if (category === "donors") {
+        result = result.filter(item => item.availability === status || item.donationStatus === status);
+      }
+    }
+
+    // 5. Date Range Filter
     if (startDate) {
       const start = new Date(startDate).getTime();
-      filtered = filtered.filter(item => {
-        const dateVal = item.createdAt || item.donationDate || item.requiredDate;
+      result = result.filter(item => {
+        const dateVal = item.createdAt || item.invoiceDate || item.date;
         return dateVal ? new Date(dateVal).getTime() >= start : true;
       });
     }
     if (endDate) {
-      const end = new Date(endDate).getTime();
-      filtered = filtered.filter(item => {
-        const dateVal = item.createdAt || item.donationDate || item.requiredDate;
+      const end = new Date(endDate).getTime() + 86400000;
+      result = result.filter(item => {
+        const dateVal = item.createdAt || item.invoiceDate || item.date;
         return dateVal ? new Date(dateVal).getTime() <= end : true;
       });
     }
 
-    return filtered;
-  };
+    return result;
+  }, [dataList, category, search, gameteType, bloodGroup, status, startDate, endDate]);
 
-  const filteredReportData = getFilteredData();
+  // Summary Metrics Computation for Active Filtered Set
+  const reportSummary = useMemo(() => {
+    const totalRecords = filteredReportData.length;
 
-  // Export CSV
+    if (category === "financial") {
+      let totalBilled = 0;
+      let totalReceived = 0;
+      let settledCount = 0;
+      filteredReportData.forEach(item => {
+        const billed = Number(item.totalAgreedAmount || item.amount || 0);
+        const received = Number(item.receivedAmount || (item.paymentStatus === "RECEIVED" ? billed : 0));
+        totalBilled += billed;
+        totalReceived += received;
+        if (item.paymentStatus === "RECEIVED") settledCount++;
+      });
+      return {
+        totalRecords,
+        metric1Label: "Total Invoiced Gross",
+        metric1Value: formatInr(totalBilled),
+        metric2Label: "Total Payments Received",
+        metric2Value: formatInr(totalReceived),
+        metric3Label: "Outstanding Receivables",
+        metric3Value: formatInr(Math.max(0, totalBilled - totalReceived)),
+        metric4Label: "Settled Invoices",
+        metric4Value: `${settledCount} / ${totalRecords}`
+      };
+    }
+
+    if (category === "registrations") {
+      const approvedCount = filteredReportData.filter(r => r.status === "APPROVED" || r.status === "COMPLETED" || r.status === "FILE_COMPLETED").length;
+      const eggCount = filteredReportData.filter(r => r.donorType === "egg").length;
+      const spermCount = filteredReportData.filter(r => r.donorType === "sperm").length;
+      return {
+        totalRecords,
+        metric1Label: "Approved & Completed",
+        metric1Value: approvedCount,
+        metric2Label: "Egg Donor Dossiers",
+        metric2Value: eggCount,
+        metric3Label: "Sperm Donor Files",
+        metric3Value: spermCount,
+        metric4Label: "Approval Rate",
+        metric4Value: totalRecords > 0 ? `${Math.round((approvedCount / totalRecords) * 100)}%` : "0%"
+      };
+    }
+
+    if (category === "hospitals") {
+      const activeCount = filteredReportData.filter(h => h.status === "ACTIVE").length;
+      const totalDoctors = filteredReportData.reduce((sum, h) => sum + (h.doctors?.length || 0), 0);
+      return {
+        totalRecords,
+        metric1Label: "Active IVF Centers",
+        metric1Value: activeCount,
+        metric2Label: "Treating Specialists",
+        metric2Value: totalDoctors,
+        metric3Label: "Verified Centers",
+        metric3Value: `${activeCount} / ${totalRecords}`,
+        metric4Label: "Clinical Network",
+        metric4Value: "Pan-India"
+      };
+    }
+
+    if (category === "marketing") {
+      const totalInquiries = filteredReportData.reduce((sum, item) => sum + item.count, 0);
+      const totalRewards = filteredReportData.reduce((sum, item) => sum + (item.totalRewards || 0), 0);
+      return {
+        totalRecords,
+        metric1Label: "Referral Inquiries",
+        metric1Value: totalInquiries,
+        metric2Label: "Rewards Accrued",
+        metric2Value: formatInr(totalRewards),
+        metric3Label: "Marketing Channels",
+        metric3Value: totalRecords,
+        metric4Label: "Top Channel",
+        metric4Value: filteredReportData[0]?.source || "Direct"
+      };
+    }
+
+    return {
+      totalRecords,
+      metric1Label: "Total Filtered Items",
+      metric1Value: totalRecords,
+      metric2Label: "Compliance Check",
+      metric2Value: "Verified",
+      metric3Label: "Audit State",
+      metric3Value: "Active",
+      metric4Label: "Export Ready",
+      metric4Value: "Yes"
+    };
+  }, [filteredReportData, category]);
+
+  // Export to CSV / Excel
   const handleExportCSV = () => {
     if (filteredReportData.length === 0) {
-      toast.error("No data available to export.");
+      toast.error("No report data available to export.");
       return;
     }
 
     let headers: string[] = [];
     let rows: any[][] = [];
 
-    if (category === "inventory") {
-      headers = ["Donor Blood Group", "Cryo-vials Stored", "Status"];
+    if (category === "registrations") {
+      headers = ["Reg ID", "Full Name", "Gamete Type", "Blood Group", "Aadhaar", "Phone", "Email", "Assigned Clinic", "Status", "Date Submitted"];
+      rows = filteredReportData.map(reg => [
+        reg.registrationId || "",
+        reg.personalInfo?.fullName || "Anonymous",
+        (reg.donorType || "").toUpperCase(),
+        reg.personalInfo?.bloodGroup || "",
+        reg.personalInfo?.aadhaarNumber || "",
+        reg.contactInfo?.mobileNumber || "",
+        reg.contactInfo?.emailAddress || "",
+        reg.assignedHospital?.name || "Unassigned",
+        reg.status || "",
+        new Date(reg.createdAt).toLocaleDateString("en-IN")
+      ]);
+    } else if (category === "financial") {
+      headers = ["Invoice No", "Reg ID", "Donor Name", "Assigned Clinic", "Gross Billed (₹)", "Received (₹)", "Balance (₹)", "Status", "Invoice Date"];
+      rows = filteredReportData.map(inv => {
+        const billed = Number(inv.totalAgreedAmount || inv.amount || 0);
+        const received = Number(inv.receivedAmount || (inv.paymentStatus === "RECEIVED" ? billed : 0));
+        return [
+          inv.invoiceNumber || "",
+          inv.registrationId || "",
+          inv.donorName || "",
+          inv.hospitalName || "",
+          billed,
+          received,
+          Math.max(0, billed - received),
+          inv.paymentStatus || "",
+          inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString("en-IN") : ""
+        ];
+      });
+    } else if (category === "inquiries") {
+      headers = ["Candidate Name", "Gamete Interest", "Phone", "Email", "City", "State", "Status", "Date Inquired"];
+      rows = filteredReportData.map(inq => [
+        inq.fullName || "",
+        (inq.donationInterest || "").toUpperCase(),
+        inq.mobileNumber || "",
+        inq.emailAddress || "",
+        inq.city || "",
+        inq.state || "",
+        inq.status || "",
+        new Date(inq.createdAt).toLocaleDateString("en-IN")
+      ]);
+    } else if (category === "hospitals") {
+      headers = ["Clinic Name", "Reg Number", "City", "State", "Contact Person", "Phone", "Treating Doctors", "Status"];
+      rows = filteredReportData.map(h => [
+        h.name || "",
+        h.registrationNumber || "",
+        h.city || "",
+        h.state || "",
+        h.contactPerson || "",
+        h.contactPhone || h.phone || "",
+        (h.doctors || []).map((d: any) => d.name).join("; "),
+        h.status || ""
+      ]);
+    } else if (category === "donors") {
+      headers = ["Donor ID", "Gamete", "Blood Group", "Age", "Height", "Availability", "Status"];
+      rows = filteredReportData.map(d => [
+        d.donorCode || d.donorId || "",
+        (d.gameteType || "").toUpperCase(),
+        d.bloodType || d.personalInformation?.bloodGroup || "",
+        d.age || "",
+        d.heightFormatted || `${d.heightCm} cm` || "",
+        d.availability || "",
+        d.donationStatus || ""
+      ]);
+    } else if (category === "inventory") {
+      headers = ["Blood Group", "Donor Specimens Count", "Stock Classification"];
       rows = filteredReportData.map(item => [
         item.bloodGroup,
         item.units,
-        item.units > 15 ? "Sufficient" : item.units > 5 ? "Moderate" : "Critical Low"
-      ]);
-    } else if (category === "donors") {
-      headers = ["Donor ID", "Name", "Blood Group", "Gender", "Total Cycles", "Last Collection", "Status"];
-      rows = filteredReportData.map(d => [
-        d.donorId,
-        d.user?.name || "Anonymous",
-        d.personalInformation?.bloodGroup || "N/A",
-        d.personalInformation?.gender || "N/A",
-        d.donationInformation?.totalDonations || 0,
-        d.donationInformation?.lastDonationDate ? new Date(d.donationInformation.lastDonationDate).toLocaleDateString() : "Never",
-        d.donationStatus
-      ]);
-    } else if (category === "employees") {
-      headers = ["Employee ID", "Name", "Designation", "Department", "Shift", "Salary", "Status"];
-      rows = filteredReportData.map(emp => [
-        emp.employeeId,
-        emp.name,
-        emp.designation,
-        emp.department,
-        emp.shift,
-        `₹${emp.salary.toLocaleString()}`,
-        emp.status
-      ]);
-    } else if (category === "donations") {
-      headers = ["Collection ID", "Donor Name", "Blood Group", "Vials", "Date", "Sperm Conc.", "Status"];
-      rows = filteredReportData.map(don => [
-        don._id,
-        don.donor?.user?.name || "Anonymous",
-        don.bloodGroup,
-        don.units,
-        new Date(don.donationDate).toLocaleDateString(),
-        don.hemoglobin || "N/A",
-        don.status
-      ]);
-    } else if (category === "requests") {
-      headers = ["Request ID", "Recipient Name", "Blood Group", "Vials Requested", "IVF Clinic", "Urgency", "Status"];
-      rows = filteredReportData.map(req => [
-        req._id,
-        req.user?.name || "Anonymous",
-        req.bloodGroup,
-        req.units,
-        req.hospitalName,
-        req.urgency,
-        req.status
-      ]);
-    } else if (category === "inquiries") {
-      headers = ["Inquiry ID", "Name", "Contact Phone", "Email", "Interest", "Height (cm)", "Weight (kg)", "Hair Color", "Eye Color", "Skin Tone", "Location", "Time Prefer", "Status", "Date Created"];
-      rows = filteredReportData.map(inq => [
-        inq._id,
-        inq.fullName,
-        inq.mobileNumber,
-        inq.emailAddress,
-        inq.donationInterest,
-        inq.height || "N/A",
-        inq.weight || "N/A",
-        inq.hairColor || "N/A",
-        inq.eyeColor || "N/A",
-        inq.skinTone || "N/A",
-        `${inq.city}, ${inq.state}`,
-        inq.preferredContactTime,
-        inq.status,
-        new Date(inq.createdAt).toLocaleDateString()
-      ]);
-    } else if (category === "registrations") {
-      headers = ["Registration ID", "Name", "Donor Type", "Blood Group", "Aadhaar", "Email", "Phone", "Status", "Date Submitted"];
-      rows = filteredReportData.map(reg => [
-        reg.registrationId,
-        reg.personalInfo?.fullName || "N/A",
-        reg.donorType,
-        reg.personalInfo?.bloodGroup || "N/A",
-        reg.personalInfo?.aadhaarNumber || "N/A",
-        reg.contactInfo?.emailAddress || "N/A",
-        reg.contactInfo?.mobileNumber || "N/A",
-        reg.status,
-        new Date(reg.createdAt).toLocaleDateString()
+        item.units > 10 ? "Adequate" : item.units > 3 ? "Moderate" : "Low Inventory"
       ]);
     } else if (category === "marketing") {
-      headers = ["Marketing Source Channel", "Referral Counts", "Percentage Share (%)"];
-      const total = filteredReportData.reduce((sum, item) => sum + item.count, 0) || 1;
+      headers = ["Attribution Source", "Inquiries Count", "Rewards Accrued (₹)", "Paid Count"];
       rows = filteredReportData.map(item => [
         item.source,
         item.count,
-        ((item.count / total) * 100).toFixed(1) + "%"
+        item.totalRewards || 0,
+        item.paidCount || 0
       ]);
     }
 
@@ -264,286 +436,576 @@ export default function AdminReportsPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${category}_analytical_report_${Date.now()}.csv`);
+    link.setAttribute("download", `${category}_analytical_audit_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success(`Successfully exported ${category.toUpperCase()} report to CSV/Excel format.`);
+    toast.success(`Successfully exported ${category.toUpperCase()} analytical report.`);
   };
 
   return (
-    <div className="space-y-6 pb-12 print:bg-white print:p-0">
+    <div className="space-y-6 pb-12 print:bg-white print:p-0 animate-in fade-in duration-200">
       
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
+      {/* Executive Console Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden border-b border-slate-200 dark:border-slate-800 pb-5">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <FileText className="w-6 h-6 text-rose-500" /> Analytical Reporting Console
-          </h1>
-          <p className="text-xs text-slate-500">
-            Generate, filter, and export administrative audits for donor queries, registrations, specimen stocks, and clinic roster logs.
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <FileSpreadsheet className="w-6 h-6 text-[#285b63]" />
+              Analytical Reporting &amp; Regulatory Console
+            </h1>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200">
+              Statutory Audits
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Generate, filter, and export administrative audits for donor dossiers, Form 13/14 filings, billing ledgers, and clinic quotas.
           </p>
         </div>
-        <Button onClick={loadReportData} variant="outline" className="rounded-xl text-xs gap-1 border-slate-200">
-          <RefreshCw className="w-3.5 h-3.5" /> Reload Data
-        </Button>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            onClick={loadReportData}
+            variant="outline"
+            size="sm"
+            disabled={loading}
+            className="rounded-xl text-xs h-9 gap-1.5 border-slate-200 dark:border-slate-800"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#285b63]" : "text-slate-500"}`} />
+            <span>Sync</span>
+          </Button>
+
+          <Button
+            onClick={handleExportCSV}
+            variant="outline"
+            size="sm"
+            className="rounded-xl text-xs h-9 gap-1.5 bg-teal-50 dark:bg-teal-950/50 border-teal-300 dark:border-teal-800 text-teal-800 dark:text-teal-200 font-bold hover:bg-teal-100"
+          >
+            <Download className="w-3.5 h-3.5 text-teal-600" />
+            <span>Export Excel / CSV</span>
+          </Button>
+
+          <Button
+            onClick={() => window.print()}
+            variant="outline"
+            size="sm"
+            className="rounded-xl text-xs h-9 gap-1.5 border-slate-200 dark:border-slate-800"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print Dossier</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Switcher Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 print:hidden">
+      {/* Domain Switcher Ribbon (7 Categories) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 print:hidden">
         {[
-          { id: "inquiries", label: "Donor Inquiries", desc: "Pre-registration logs", icon: FileText, color: "text-orange-500" },
-          { id: "registrations", label: "Donor Applications", desc: "Completed wizard files", icon: Users, color: "text-rose-500" },
-          { id: "marketing", label: "Marketing Sources", desc: "Traffic & ads share", icon: TrendingUp, color: "text-amber-500" },
-          { id: "inventory", label: "Inventory Stock", desc: "Specimen cryo-vials", icon: Droplet, color: "text-rose-500 fill-rose-500/10" },
-          { id: "donors", label: "Approved Donors", desc: "Active donor profiles", icon: Users, color: "text-blue-500" },
-          { id: "employees", label: "Staff Roster", desc: "Staff designations", icon: Activity, color: "text-emerald-500" },
-          { id: "donations", label: "Collections", desc: "Specimen cycles", icon: Heart, color: "text-pink-500" },
-          { id: "requests", label: "Allocations", desc: "Clinic specimen orders", icon: FileSpreadsheet, color: "text-blue-600" }
+          { id: "registrations", label: "Registrations", desc: "Form 13 / 14 dossiers", icon: Users, color: "text-[#285b63]" },
+          { id: "financial", label: "Billing Ledger", desc: "Invoices & collections", icon: Receipt, color: "text-emerald-600" },
+          { id: "hospitals", label: "Clinic Network", desc: "Partner quotas & doctors", icon: Building2, color: "text-blue-600" },
+          { id: "inquiries", label: "Candidate Leads", desc: "Pre-screening logs", icon: FileText, color: "text-amber-600" },
+          { id: "donors", label: "Approved Donors", desc: "Verified ART inventory", icon: Heart, color: "text-rose-600" },
+          { id: "inventory", label: "Blood Census", desc: "Specimen stock breakdown", icon: Droplet, color: "text-rose-500" },
+          { id: "marketing", label: "Attribution", desc: "Marketing source shares", icon: TrendingUp, color: "text-purple-600" }
         ].map((cat) => (
           <button
             key={cat.id}
             onClick={() => setCategory(cat.id as any)}
-            className={`p-3.5 rounded-2xl border text-left transition-all ${
+            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
               category === cat.id 
-                ? "border-teal-500 bg-teal-500/5 ring-1 ring-teal-500/25 shadow-sm" 
+                ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 ring-1 ring-teal-500/30 shadow-xs" 
                 : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900"
             }`}
           >
-            <cat.icon className={`w-4 h-4 mb-2.5 ${cat.color}`} />
-            <div className="font-bold text-xs text-slate-900 dark:text-white leading-none">{cat.label}</div>
-            <div className="text-[9px] text-slate-500 mt-1">{cat.desc}</div>
+            <cat.icon className={`w-4 h-4 mb-2 ${cat.color}`} />
+            <div className="font-extrabold text-xs text-slate-900 dark:text-white leading-tight">{cat.label}</div>
+            <div className="text-[9px] text-slate-400 mt-0.5 leading-snug line-clamp-1">{cat.desc}</div>
           </button>
         ))}
       </div>
 
-      {/* Filters Dashboard */}
-      <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 space-y-4 print:hidden">
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500">Start Date</label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      {/* Real-time Summary Cards for Active Filtered Set */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
+        <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{reportSummary.metric1Label}</span>
+          <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 tabular-nums">
+            {reportSummary.metric1Value}
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-slate-500">End Date</label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </Card>
+        <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{reportSummary.metric2Label}</span>
+          <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 tabular-nums">
+            {reportSummary.metric2Value}
           </div>
-          {["inventory", "donors", "donations", "requests", "registrations"].includes(category) && (
+        </Card>
+        <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{reportSummary.metric3Label}</span>
+          <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 tabular-nums">
+            {reportSummary.metric3Value}
+          </div>
+        </Card>
+        <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{reportSummary.metric4Label}</span>
+          <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 tabular-nums">
+            {reportSummary.metric4Value}
+          </div>
+        </Card>
+      </div>
+
+      {/* Advanced Filter Studio */}
+      <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 space-y-3 print:hidden shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+          
+          {/* Search Box */}
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-[10px] font-bold uppercase text-slate-400">Search Filter</label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by ID, candidate name, phone, or clinic..."
+                className="pl-9 h-9 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Gamete Type Filter */}
+          {["registrations", "inquiries", "donors"].includes(category) && (
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500">Blood Group</label>
-              <select 
-                className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
-                value={bloodGroup}
-                onChange={(e) => setBloodGroup(e.target.value)}
+              <label className="text-[10px] font-bold uppercase text-slate-400">Gamete Stream</label>
+              <select
+                value={gameteType}
+                onChange={(e) => setGameteType(e.target.value as any)}
+                className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs font-semibold focus:outline-none"
               >
-                <option value="">All Groups</option>
-                {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(bg => <option key={bg} value={bg}>{bg}</option>)}
+                <option value="all">All Gametes (Egg &amp; Sperm)</option>
+                <option value="egg">Egg Donors Only</option>
+                <option value="sperm">Sperm Donors Only</option>
               </select>
             </div>
           )}
-          {!["inventory", "marketing"].includes(category) && (
+
+          {/* Status Filter */}
+          {["registrations", "financial", "inquiries", "hospitals", "donors"].includes(category) && (
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500">Status</label>
-              <select 
-                className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
+              <label className="text-[10px] font-bold uppercase text-slate-400">Workflow Status</label>
+              <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
+                className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs font-semibold focus:outline-none"
               >
                 <option value="">All Statuses</option>
+                {category === "registrations" && (
+                  <>
+                    <option value="APPROVED">APPROVED (In Management)</option>
+                    <option value="WAITING_FORM13">WAITING_FORM13</option>
+                    <option value="FILE_COMPLETED">FILE_COMPLETED</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="SUBMITTED">SUBMITTED</option>
+                    <option value="REJECTED">REJECTED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </>
+                )}
+                {category === "financial" && (
+                  <>
+                    <option value="RECEIVED">RECEIVED (Settled)</option>
+                    <option value="PARTIALLY_RECEIVED">PARTIALLY_RECEIVED</option>
+                    <option value="PENDING">PENDING</option>
+                    <option value="UNPAID">UNPAID</option>
+                  </>
+                )}
                 {category === "inquiries" && (
                   <>
                     <option value="New Inquiry">New Inquiry</option>
                     <option value="Contact Attempted">Contact Attempted</option>
                     <option value="Consultation Scheduled">Consultation Scheduled</option>
                     <option value="Consultation Completed">Consultation Completed</option>
-                    <option value="Registered">Registered</option>
-                    <option value="Rejected">Rejected</option>
                   </>
                 )}
-                {category === "registrations" && (
+                {category === "hospitals" && (
                   <>
-                    <option value="DRAFT">DRAFT</option>
-                    <option value="SUBMITTED">SUBMITTED</option>
-                    <option value="APPROVED">APPROVED</option>
-                    <option value="REJECTED">REJECTED</option>
-                    <option value="SUSPENDED">SUSPENDED</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">INACTIVE</option>
                   </>
                 )}
-
                 {category === "donors" && (
                   <>
-                    <option value="ACTIVE">ACTIVE</option>
-                    <option value="INACTIVE">INACTIVE</option>
-                  </>
-                )}
-                {category === "employees" && (
-                  <>
-                    <option value="ACTIVE">ACTIVE</option>
-                    <option value="INACTIVE">INACTIVE</option>
-                  </>
-                )}
-                {["donations", "requests"].includes(category) && (
-                  <>
-                    <option value="APPROVED">APPROVED</option>
-                    <option value="PENDING">PENDING</option>
-                    <option value="REJECTED">REJECTED</option>
+                    <option value="available">Available in Bank</option>
+                    <option value="allocated">Allocated to Clinic</option>
+                    <option value="quarantine">In Quarantine</option>
                   </>
                 )}
               </select>
             </div>
           )}
+
+          {/* Blood Group Filter */}
+          {["registrations", "donors", "inventory"].includes(category) && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold uppercase text-slate-400">Blood Group</label>
+              <select
+                value={bloodGroup}
+                onChange={(e) => setBloodGroup(e.target.value)}
+                className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs font-semibold focus:outline-none"
+              >
+                <option value="">All Blood Groups</option>
+                {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(bg => (
+                  <option key={bg} value={bg}>{bg}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Date Range Start */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-slate-400">From Date</label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-9 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+            />
+          </div>
+
+          {/* Date Range End */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase text-slate-400">To Date</label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-9 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+            />
+          </div>
+
         </div>
 
-        {/* Action triggers */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100 dark:border-slate-900">
-          <div className="text-xs font-semibold text-slate-600">
-            Preview matches: {filteredReportData.length} records filtered
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={handleExportCSV} variant="outline" className="h-8 rounded-lg text-xs gap-1 border-slate-200 bg-teal-500/5 hover:bg-teal-500/10 border-teal-500/35 text-teal-700 dark:text-teal-400">
-              <Download className="w-3.5 h-3.5" /> Download Excel/CSV Report
+        {/* Clear Filters Reset Button */}
+        {(search || startDate || endDate || bloodGroup || status || gameteType !== "all") && (
+          <div className="pt-2 flex justify-end border-t border-slate-100 dark:border-slate-900">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setStartDate("");
+                setEndDate("");
+                setBloodGroup("");
+                setStatus("");
+                setGameteType("all");
+              }}
+              className="text-xs text-rose-600 hover:text-rose-700 h-7 px-2 font-semibold cursor-pointer"
+            >
+              Reset Filters
             </Button>
-            <Button onClick={() => window.print()} variant="outline" className="h-8 rounded-lg text-xs gap-1 border-slate-200">
-              <Printer className="w-3.5 h-3.5" /> Print PDF Report
-            </Button>
           </div>
-        </div>
+        )}
       </Card>
 
-      {/* Report Preview Table */}
+      {/* Main Report Table Container */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden shadow-sm">
-        <CardHeader className="border-b border-slate-100 dark:border-slate-900 bg-slate-50/40 dark:bg-slate-900/10 py-3">
-          <CardTitle className="text-sm font-bold capitalize">{category} Audit Logs</CardTitle>
-          <CardDescription className="text-[10px] text-slate-400">Generated on {new Date().toLocaleString()}</CardDescription>
+        <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-extrabold capitalize text-slate-900 dark:text-white flex items-center gap-2">
+              <span>{category} Statutory Roster</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
+                {filteredReportData.length} records
+              </span>
+            </CardTitle>
+            <CardDescription className="text-[10px] text-slate-400" suppressHydrationWarning>
+              Audit snapshot compiled on {mounted ? new Date().toLocaleString("en-IN") : "statutory sync"}
+            </CardDescription>
+          </div>
+          <div className="text-xs font-semibold text-slate-500 print:hidden">
+            Scope: Pan-India ART Operations
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="text-center py-20 text-xs text-slate-500">Generating report pipeline...</div>
+            <DataTableSkeleton rows={8} />
           ) : filteredReportData.length === 0 ? (
-            <div className="text-center py-20 text-xs text-slate-400">No records found matching filters.</div>
+            <div className="text-center py-20 text-xs text-slate-400 font-medium flex flex-col items-center justify-center gap-2">
+              <AlertCircle className="w-8 h-8 text-slate-300" />
+              <span>No matching records found for the applied reporting filters.</span>
+            </div>
           ) : (
-            <div className="overflow-x-auto text-[11px]">
-              <table className="w-full text-left">
+            <div className="overflow-x-auto text-xs">
+              <table className="w-full text-left border-collapse">
                 
-                {/* 1. DONOR INQUIRIES PREVIEW */}
-                {category === "inquiries" && (
-                  <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
-                      <tr>
-                        <th className="p-3">Candidate</th>
-                        <th className="p-3">Interest</th>
-                        <th className="p-3">Contact</th>
-                        <th className="p-3">Location</th>
-                        <th className="p-3">Contact Time</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
-                      {filteredReportData.map((inq, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-bold">{inq.fullName}</td>
-                          <td className="p-3 capitalize font-semibold">{inq.donationInterest}</td>
-                          <td className="p-3 space-y-0.5">
-                            <div>{inq.mobileNumber}</div>
-                            <div className="text-[10px] text-slate-500">{inq.emailAddress}</div>
-                          </td>
-                          <td className="p-3">{inq.city}, {inq.state}</td>
-                          <td className="p-3">{inq.preferredContactTime}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700">{inq.status}</span>
-                          </td>
-                          <td className="p-3">{new Date(inq.createdAt).toLocaleDateString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </>
-                )}
-
-                {/* 2. DONOR REGISTRATIONS PREVIEW */}
+                {/* 1. REGISTRATIONS ROSTER */}
                 {category === "registrations" && (
                   <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
                       <tr>
-                        <th className="p-3">Reg ID</th>
-                        <th className="p-3">Name</th>
-                        <th className="p-3">Donor Type</th>
-                        <th className="p-3">Blood Group</th>
-                        <th className="p-3">Contact</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3">Date</th>
+                        <th className="p-3.5">Registration ID</th>
+                        <th className="p-3.5">Candidate Name</th>
+                        <th className="p-3.5">Gamete Stream</th>
+                        <th className="p-3.5">Blood Group</th>
+                        <th className="p-3.5">Contact Details</th>
+                        <th className="p-3.5">Assigned Clinic</th>
+                        <th className="p-3.5">Regulatory Status</th>
+                        <th className="p-3.5 text-right">Filing Date</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {filteredReportData.map((reg, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-mono font-bold text-teal-600">{reg.registrationId}</td>
-                          <td className="p-3 font-bold">{reg.personalInfo?.fullName || "Draft Donor"}</td>
-                          <td className="p-3 capitalize font-semibold">{reg.donorType}</td>
-                          <td className="p-3 font-bold text-rose-500">{reg.personalInfo?.bloodGroup || "—"}</td>
-                          <td className="p-3 space-y-0.5">
-                            <div>{reg.contactInfo?.mobileNumber || "—"}</div>
-                            <div className="text-[10px] text-slate-500">{reg.contactInfo?.emailAddress || "—"}</div>
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3.5 font-mono font-bold text-[#285b63] dark:text-teal-400">
+                            {reg.registrationId}
                           </td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700">{reg.status}</span>
+                          <td className="p-3.5 font-bold text-slate-900 dark:text-white">
+                            {reg.personalInfo?.fullName || "Altruistic Donor"}
                           </td>
-                          <td className="p-3">{new Date(reg.createdAt).toLocaleDateString()}</td>
+                          <td className="p-3.5 font-semibold">
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              reg.donorType === "egg"
+                                ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                                : "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"
+                            }`}>
+                              {reg.donorType === "egg" ? "🥚 EGG" : "🧬 SPERM"}
+                            </span>
+                          </td>
+                          <td className="p-3.5 font-bold text-rose-600 font-mono">
+                            {reg.personalInfo?.bloodGroup || "—"}
+                          </td>
+                          <td className="p-3.5 space-y-0.5 text-[11px]">
+                            <div className="font-medium text-slate-800 dark:text-slate-200">{reg.contactInfo?.mobileNumber || "—"}</div>
+                            <div className="text-[10px] text-slate-400">{reg.contactInfo?.emailAddress || ""}</div>
+                          </td>
+                          <td className="p-3.5 text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                            {reg.assignedHospital?.name || "Unassigned"}
+                          </td>
+                          <td className="p-3.5">
+                            <StatusBadge status={reg.status} size="xs" />
+                          </td>
+                          <td className="p-3.5 text-right text-slate-400 font-mono text-[11px]">
+                            {new Date(reg.createdAt).toLocaleDateString("en-IN")}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </>
                 )}
 
-
-
-                {/* 5. MARKETING CHANNELS PREVIEW */}
-                {category === "marketing" && (
+                {/* 2. FINANCIAL / INVOICES ROSTER */}
+                {category === "financial" && (
                   <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
                       <tr>
-                        <th className="p-3">Traffic Source Channel</th>
-                        <th className="p-3">Referral Inquiries Count</th>
-                        <th className="p-3">Distribution Share</th>
+                        <th className="p-3.5">Invoice #</th>
+                        <th className="p-3.5">Donor Dossier</th>
+                        <th className="p-3.5">Affiliate Clinic</th>
+                        <th className="p-3.5 text-right">Agreed Gross</th>
+                        <th className="p-3.5 text-right">Received</th>
+                        <th className="p-3.5 text-right">Balance Due</th>
+                        <th className="p-3.5">Settlement Status</th>
+                        <th className="p-3.5 text-right">Invoice Date</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
-                      {(() => {
-                        const total = filteredReportData.reduce((sum, item) => sum + item.count, 0) || 1;
-                        return filteredReportData.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                            <td className="p-3 font-bold text-slate-800 dark:text-slate-200">{item.source}</td>
-                            <td className="p-3 font-bold">{item.count} Inquiries</td>
-                            <td className="p-3 font-bold text-teal-600">{((item.count / total) * 100).toFixed(1)}%</td>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredReportData.map((inv, idx) => {
+                        const billed = Number(inv.totalAgreedAmount || inv.amount || 0);
+                        const received = Number(inv.receivedAmount || (inv.paymentStatus === "RECEIVED" ? billed : 0));
+                        const due = Math.max(0, billed - received);
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                            <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400">
+                              {inv.invoiceNumber}
+                            </td>
+                            <td className="p-3.5">
+                              <div className="font-bold text-slate-900 dark:text-white">{inv.donorName}</div>
+                              <div className="font-mono text-[10px] text-slate-400">{inv.registrationId}</div>
+                            </td>
+                            <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200">
+                              {inv.hospitalName}
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-bold text-slate-900 dark:text-white">
+                              {formatInr(billed)}
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              {formatInr(received)}
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
+                              {formatInr(due)}
+                            </td>
+                            <td className="p-3.5">
+                              <StatusBadge status={inv.paymentStatus} size="xs" />
+                            </td>
+                            <td className="p-3.5 text-right text-slate-400 font-mono text-[11px]">
+                              {inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString("en-IN") : "—"}
+                            </td>
                           </tr>
-                        ));
-                      })()}
+                        );
+                      })}
                     </tbody>
                   </>
                 )}
 
-                {/* 6. INVENTORY */}
-                {category === "inventory" && (
+                {/* 3. CANDIDATE INQUIRIES ROSTER */}
+                {category === "inquiries" && (
                   <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
                       <tr>
-                        <th className="p-3">Donor Blood Group</th>
-                        <th className="p-3">Vials Available</th>
-                        <th className="p-3">Status</th>
+                        <th className="p-3.5">Candidate Name</th>
+                        <th className="p-3.5">Gamete Interest</th>
+                        <th className="p-3.5">Phone &amp; Email</th>
+                        <th className="p-3.5">Location</th>
+                        <th className="p-3.5">Preferred Contact</th>
+                        <th className="p-3.5">Lead Status</th>
+                        <th className="p-3.5 text-right">Inquiry Date</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredReportData.map((inq, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3.5 font-bold text-slate-900 dark:text-white">
+                            {inq.fullName}
+                          </td>
+                          <td className="p-3.5 font-bold uppercase text-[10px]">
+                            {inq.donationInterest}
+                          </td>
+                          <td className="p-3.5 space-y-0.5 text-[11px]">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">{inq.mobileNumber}</div>
+                            <div className="text-[10px] text-slate-400">{inq.emailAddress}</div>
+                          </td>
+                          <td className="p-3.5 text-slate-600 dark:text-slate-400">
+                            {inq.city ? `${inq.city}, ${inq.state}` : "—"}
+                          </td>
+                          <td className="p-3.5 text-slate-500 text-[11px]">
+                            {inq.preferredContactTime || "Anytime"}
+                          </td>
+                          <td className="p-3.5">
+                            <StatusBadge status={inq.status} size="xs" />
+                          </td>
+                          <td className="p-3.5 text-right text-slate-400 font-mono text-[11px]">
+                            {new Date(inq.createdAt).toLocaleDateString("en-IN")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </>
+                )}
+
+                {/* 4. CLINIC NETWORK ROSTER */}
+                {category === "hospitals" && (
+                  <>
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
+                      <tr>
+                        <th className="p-3.5">Clinic Name</th>
+                        <th className="p-3.5">Reg Number</th>
+                        <th className="p-3.5">Location</th>
+                        <th className="p-3.5">Contact Person</th>
+                        <th className="p-3.5">Treating Doctors</th>
+                        <th className="p-3.5">Operational State</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredReportData.map((h, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3.5 font-bold text-slate-900 dark:text-white">
+                            {h.name}
+                          </td>
+                          <td className="p-3.5 font-mono text-slate-500">
+                            {h.registrationNumber || "—"}
+                          </td>
+                          <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                            {h.city}, {h.state}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">{h.contactPerson || "Primary Admin"}</div>
+                            <div className="text-[10px] text-slate-400">{h.contactPhone || h.phone || ""}</div>
+                          </td>
+                          <td className="p-3.5 text-[11px] text-purple-700 dark:text-purple-300 font-medium">
+                            {(h.doctors || []).length} registered specialists
+                          </td>
+                          <td className="p-3.5">
+                            <StatusBadge status={h.status || "ACTIVE"} size="xs" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </>
+                )}
+
+                {/* 5. APPROVED ART DONORS ROSTER */}
+                {category === "donors" && (
+                  <>
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
+                      <tr>
+                        <th className="p-3.5">Donor Code</th>
+                        <th className="p-3.5">Gamete Type</th>
+                        <th className="p-3.5">Blood Group</th>
+                        <th className="p-3.5">Age &amp; Height</th>
+                        <th className="p-3.5">Availability</th>
+                        <th className="p-3.5">Verification Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredReportData.map((d, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3.5 font-mono font-bold text-teal-600 dark:text-teal-400">
+                            {d.donorCode || d.donorId}
+                          </td>
+                          <td className="p-3.5 font-bold uppercase text-[10px]">
+                            {d.gameteType}
+                          </td>
+                          <td className="p-3.5 font-bold text-rose-600 font-mono">
+                            {d.bloodType || d.personalInformation?.bloodGroup}
+                          </td>
+                          <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                            {d.age} yrs • {d.heightFormatted || `${d.heightCm} cm`}
+                          </td>
+                          <td className="p-3.5">
+                            <StatusBadge status={d.availability || "available"} size="xs" />
+                          </td>
+                          <td className="p-3.5">
+                            <StatusBadge status={d.donationStatus || "ACTIVE"} size="xs" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </>
+                )}
+
+                {/* 6. BLOOD GROUP CENSUS ROSTER */}
+                {category === "inventory" && (
+                  <>
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
+                      <tr>
+                        <th className="p-3.5">Blood Group</th>
+                        <th className="p-3.5">Verified Donors Count</th>
+                        <th className="p-3.5">Inventory Classification</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {filteredReportData.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-bold text-rose-600">{item.bloodGroup}</td>
-                          <td className="p-3 font-bold">{item.units} Vials</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              item.units > 15 ? "bg-emerald-100 text-emerald-700" :
-                              item.units > 5 ? "bg-amber-100 text-amber-700" :
-                              "bg-red-100 text-red-700"
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3.5 font-bold font-mono text-base text-rose-600">
+                            {item.bloodGroup}
+                          </td>
+                          <td className="p-3.5 font-black font-mono text-slate-900 dark:text-white tabular-nums">
+                            {item.units} profiles
+                          </td>
+                          <td className="p-3.5">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                              item.units > 10
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : item.units > 3
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
                             }`}>
-                              {item.units > 15 ? "Sufficient" : item.units > 5 ? "Moderate" : "Critical Stock Alert"}
+                              {item.units > 10 ? "Adequate Inventory" : item.units > 3 ? "Moderate Stock" : "Critical Demand"}
                             </span>
                           </td>
                         </tr>
@@ -552,122 +1014,32 @@ export default function AdminReportsPage() {
                   </>
                 )}
 
-                {/* 7. DONORS */}
-                {category === "donors" && (
+                {/* 7. MARKETING & REFERRAL ATTRIBUTION */}
+                {category === "marketing" && (
                   <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
+                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800 text-[11px]">
                       <tr>
-                        <th className="p-3">Donor ID</th>
-                        <th className="p-3">Name</th>
-                        <th className="p-3">Blood Group</th>
-                        <th className="p-3">Total Cycles</th>
-                        <th className="p-3">Last Donation Date</th>
-                        <th className="p-3">Status</th>
+                        <th className="p-3.5">Acquisition Channel</th>
+                        <th className="p-3.5">Inquiries Generated</th>
+                        <th className="p-3.5">Rewards Accrued</th>
+                        <th className="p-3.5">Disbursed Count</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
-                      {filteredReportData.map((d, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-bold">{d.donorId}</td>
-                          <td className="p-3 font-semibold">{d.user?.name || "Anonymous"}</td>
-                          <td className="p-3">
-                            <span className="font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">{d.personalInformation?.bloodGroup}</span>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {filteredReportData.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                          <td className="p-3.5 font-bold text-slate-900 dark:text-white">
+                            {item.source}
                           </td>
-                          <td className="p-3">{d.donationInformation?.totalDonations || 0} Cycles</td>
-                          <td className="p-3">{d.donationInformation?.lastDonationDate ? new Date(d.donationInformation.lastDonationDate).toLocaleDateString() : "N/A"}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700`}>{d.donationStatus}</span>
+                          <td className="p-3.5 font-mono font-bold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {item.count} leads
                           </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </>
-                )}
-
-                {/* 8. STAFF */}
-                {category === "employees" && (
-                  <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
-                      <tr>
-                        <th className="p-3">Employee ID</th>
-                        <th className="p-3">Name</th>
-                        <th className="p-3">Designation</th>
-                        <th className="p-3">Department</th>
-                        <th className="p-3">Shift</th>
-                        <th className="p-3">Annual Salary</th>
-                        <th className="p-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
-                      {filteredReportData.map((emp, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-bold">{emp.employeeId}</td>
-                          <td className="p-3 font-semibold">{emp.name}</td>
-                          <td className="p-3 text-teal-600 font-bold">{emp.designation}</td>
-                          <td className="p-3">{emp.department}</td>
-                          <td className="p-3">{emp.shift}</td>
-                          <td className="p-3 font-bold">₹{emp.salary.toLocaleString()}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-150 text-emerald-700">{emp.status}</span>
+                          <td className="p-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {formatInr(item.totalRewards || 0)}
                           </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </>
-                )}
-
-                {/* 9. DONATIONS */}
-                {category === "donations" && (
-                  <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
-                      <tr>
-                        <th className="p-3">Donor</th>
-                        <th className="p-3">Blood Group</th>
-                        <th className="p-3">Vials</th>
-                        <th className="p-3">Collection Date</th>
-                        <th className="p-3">Sperm Conc.</th>
-                        <th className="p-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
-                      {filteredReportData.map((don, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-semibold">{don.donor?.user?.name || "Anonymous"}</td>
-                          <td className="p-3"><span className="font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">{don.bloodGroup}</span></td>
-                          <td className="p-3 font-bold">{don.units} Vials</td>
-                          <td className="p-3">{new Date(don.donationDate).toLocaleDateString()}</td>
-                          <td className="p-3">{don.hemoglobin ? `${don.hemoglobin} M/mL` : "N/A"}</td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">{don.status}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </>
-                )}
-
-                {/* 10. REQUESTS / ALLOCATIONS */}
-                {category === "requests" && (
-                  <>
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b dark:border-slate-800">
-                      <tr>
-                        <th className="p-3">Recipient</th>
-                        <th className="p-3">Blood Group</th>
-                        <th className="p-3">Vials Requested</th>
-                        <th className="p-3">IVF Clinic</th>
-                        <th className="p-3">Required Date</th>
-                        <th className="p-3">Urgency</th>
-                        <th className="p-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y dark:divide-slate-900">
-                      {filteredReportData.map((req, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
-                          <td className="p-3 font-semibold">{req.user?.name || "Anonymous"}</td>
-                          <td className="p-3"><span className="font-bold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded">{req.bloodGroup}</span></td>
-                          <td className="p-3 font-bold">{req.units} Vials</td>
-                          <td className="p-3">{req.hospitalName}</td>
-                          <td className="p-3">{new Date(req.requiredDate).toLocaleDateString()}</td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">{req.urgency}</span></td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">{req.status}</span></td>
+                          <td className="p-3.5 font-medium text-slate-500">
+                            {item.paidCount} payouts
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -28,9 +28,17 @@ import {
   Sparkles,
   Heart,
   Dna,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +47,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { CompletedFileInvoiceModal } from "@/features/completed-files/components/CompletedFileInvoiceModal";
+import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 
 const formatInr = (amount: number) => {
   return "₹" + (amount || 0).toLocaleString("en-IN");
@@ -67,9 +76,20 @@ export function InvoiceTrackerDirectory() {
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | PAID | PENDING | PARTIALLY_RECEIVED
   const [donorTypeFilter, setDonorTypeFilter] = useState("all"); // all | egg | sperm
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(12);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Table UX & Density controls
+  const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable");
+  const [visibleColumns, setVisibleColumns] = useState({
+    clinic: true,
+    pickup: true,
+    deal: true,
+    received: true,
+    pending: true,
+    status: true,
+  });
 
   // Modals state
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
@@ -120,7 +140,7 @@ export function InvoiceTrackerDirectory() {
 
   useEffect(() => {
     loadInvoices();
-  }, [currentPage, selectedHospitalId, statusFilter, donorTypeFilter]);
+  }, [currentPage, itemsPerPage, selectedHospitalId, statusFilter, donorTypeFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -625,33 +645,111 @@ export function InvoiceTrackerDirectory() {
           </div>
         </div>
 
+        {/* Table UX & Density Control Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-1 text-xs">
+          <div className="text-slate-500 font-medium text-[11px] flex items-center gap-1.5">
+            <span>Showing <strong className="text-slate-900 dark:text-slate-100">{invoices.length}</strong> of {totalCount || invoices.length} invoices</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Density Switcher */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setTableDensity("compact")}
+                className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                  tableDensity === "compact"
+                    ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                }`}
+                title="Compact view - fit more rows"
+              >
+                Compact
+              </button>
+              <button
+                type="button"
+                onClick={() => setTableDensity("comfortable")}
+                className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                  tableDensity === "comfortable"
+                    ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                }`}
+                title="Comfortable view - default spacing"
+              >
+                Comfortable
+              </button>
+            </div>
+
+            {/* Column Visibility Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2.5 text-[11px] rounded-lg gap-1.5 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3 h-3 text-slate-400" />
+                    <span>Columns</span>
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-[10px] text-slate-400 uppercase px-2 py-1">Visible Columns</div>
+                {[
+                  { key: "clinic", label: "ART Clinic Name" },
+                  { key: "pickup", label: "Pickup Date" },
+                  { key: "deal", label: "Deal Price" },
+                  { key: "received", label: "Received Amount" },
+                  { key: "pending", label: "Pending Balance" },
+                  { key: "status", label: "Payment Status" },
+                ].map((col) => (
+                  <label
+                    key={col.key}
+                    className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer select-none text-[11px] font-medium"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(visibleColumns as any)[col.key]}
+                      onChange={(e) =>
+                        setVisibleColumns((prev) => ({ ...prev, [col.key]: e.target.checked }))
+                      }
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span>{col.label}</span>
+                  </label>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
         {/* Table Content */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[72vh] border border-slate-200/80 dark:border-slate-800 rounded-2xl relative shadow-2xs">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-semibold text-[11px]">
-                <th className="py-3.5 px-4">Invoice #</th>
-                <th className="py-3.5 px-4">Registration & Donor</th>
-                <th className="py-3.5 px-4">ART Clinic Name</th>
-                <th className="py-3.5 px-4">Pickup Date</th>
-                <th className="py-3.5 px-4 text-right">Deal Price</th>
-                <th className="py-3.5 px-4 text-right">Received</th>
-                <th className="py-3.5 px-4 text-right">Pending</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+            <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
+              <tr className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[10px] tracking-wider whitespace-nowrap">
+                <th className={tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"}>Invoice #</th>
+                <th className={tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"}>Registration & Donor</th>
+                {visibleColumns.clinic && <th className={tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"}>ART Clinic Name</th>}
+                {visibleColumns.pickup && <th className={tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"}>Pickup Date</th>}
+                {visibleColumns.deal && <th className={`${tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"} text-right`}>Deal Price</th>}
+                {visibleColumns.received && <th className={`${tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"} text-right`}>Received</th>}
+                {visibleColumns.pending && <th className={`${tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"} text-right`}>Pending</th>}
+                {visibleColumns.status && <th className={`${tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"} text-center`}>Status</th>}
+                <th className={`${tableDensity === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"} text-right sticky right-0 z-20 bg-slate-50/95 dark:bg-slate-900/95 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]`}>Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
-                <tr>
-                  <td colSpan={9} className="py-16 text-center text-slate-400">
-                    <RefreshCw className="h-6 w-6 animate-spin mx-auto text-sky-600 mb-2" />
-                    Loading invoices & clinic deals...
-                  </td>
-                </tr>
+                <TableSkeletonRows
+                  columns={10}
+                  rows={6}
+                  density={tableDensity}
+                />
               ) : invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={10} className="py-16 text-center text-slate-500 dark:text-slate-400">
                     <Receipt className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-700 mb-2" />
                     No invoices match the selected filter criteria.
                   </td>
@@ -660,32 +758,33 @@ export function InvoiceTrackerDirectory() {
                 invoices.map((inv) => {
                   const isReceived = inv.paymentStatus === "RECEIVED";
                   const isPartial = inv.paymentStatus === "PARTIALLY_RECEIVED";
+                  const cellPad = tableDensity === "compact" ? "py-2 px-3 text-[11px]" : "py-3.5 px-4 text-xs";
 
                   return (
                     <tr
                       key={inv.registrationId}
-                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                      className="group/row hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       {/* Invoice No */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                          <Receipt className="h-3.5 w-3.5 text-sky-600" />
+                      <td className={cellPad}>
+                        <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 whitespace-nowrap">
+                          <Receipt className="h-3.5 w-3.5 text-teal-600" />
                           #{inv.invoiceNumber}
                         </div>
-                        <span className="text-[10px] text-slate-400">{inv.invoiceDate}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">{inv.invoiceDate}</span>
                       </td>
 
                       {/* Reg ID & Donor */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                      <td className={cellPad}>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
                           {inv.donorName}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
-                          <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 whitespace-nowrap">
+                          <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded">
                             {inv.registrationId}
                           </span>
                           <span
-                            className={`px-1 rounded text-[9px] font-bold ${
+                            className={`px-1 py-0.2 rounded text-[9px] font-bold ${
                               inv.donorType === "egg"
                                 ? "bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300"
                                 : "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300"
@@ -697,91 +796,90 @@ export function InvoiceTrackerDirectory() {
                       </td>
 
                       {/* ART Clinic */}
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-800 dark:text-slate-200 line-clamp-1">
-                          {inv.assignedHospital?.name || "Unassigned ART Clinic"}
-                        </div>
-                        {inv.assignedHospital?.code && (
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            Code: {inv.assignedHospital.code}
+                      {visibleColumns.clinic && (
+                        <td className={cellPad}>
+                          <div className="font-semibold text-slate-800 dark:text-slate-200 line-clamp-1">
+                            {inv.assignedHospital?.name || "Unassigned ART Clinic"}
                           </div>
-                        )}
-                      </td>
+                          {inv.assignedHospital?.code && (
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              Code: {inv.assignedHospital.code}
+                            </div>
+                          )}
+                        </td>
+                      )}
 
                       {/* Pickup Date */}
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
-                        {inv.pickupDate || "N/A"}
-                      </td>
+                      {visibleColumns.pickup && (
+                        <td className={`${cellPad} text-slate-600 dark:text-slate-400 whitespace-nowrap font-mono`}>
+                          {inv.pickupDate || "N/A"}
+                        </td>
+                      )}
 
                       {/* Deal Price */}
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-slate-100">
-                        {formatInr(inv.dealPrice)}
-                      </td>
+                      {visibleColumns.deal && (
+                        <td className={`${cellPad} text-right font-bold text-slate-900 dark:text-slate-100 font-mono whitespace-nowrap`}>
+                          {formatInr(inv.dealPrice)}
+                        </td>
+                      )}
 
                       {/* Received */}
-                      <td className="py-3.5 px-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatInr(inv.receivedAmount)}
-                      </td>
+                      {visibleColumns.received && (
+                        <td className={`${cellPad} text-right font-bold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap`}>
+                          {formatInr(inv.receivedAmount)}
+                        </td>
+                      )}
 
                       {/* Pending */}
-                      <td className="py-3.5 px-4 text-right font-bold text-rose-600 dark:text-rose-400">
-                        {formatInr(inv.pendingAmount)}
-                      </td>
+                      {visibleColumns.pending && (
+                        <td className={`${cellPad} text-right font-bold text-rose-600 dark:text-rose-400 font-mono whitespace-nowrap`}>
+                          {formatInr(inv.pendingAmount)}
+                        </td>
+                      )}
 
                       {/* Status */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            isReceived
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
-                              : isPartial
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
-                              : "bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300"
-                          }`}
-                        >
-                          {isReceived ? "PAID" : isPartial ? "PARTIAL" : "PENDING"}
-                        </span>
-                      </td>
+                      {visibleColumns.status && (
+                        <td className={`${cellPad} text-center whitespace-nowrap`}>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isReceived
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
+                                : isPartial
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
+                                : "bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300"
+                            }`}
+                          >
+                            {isReceived ? "PAID" : isPartial ? "PARTIAL" : "PENDING"}
+                          </span>
+                        </td>
+                      )}
 
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
+                      {/* Actions: Strictly one View PDF button and one Update Payment pathway */}
+                      <td className={`${cellPad} text-right whitespace-nowrap sticky right-0 z-10 bg-white group-hover/row:bg-slate-50 dark:bg-slate-950 dark:group-hover/row:bg-slate-900 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]`}>
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* View Invoice Modal */}
+                          {/* 1. Only One View PDF Button */}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewInvoice(inv)}
-                            className="h-8 px-2 text-sky-600 hover:text-sky-800 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40"
-                            title="View / Print Official Invoice"
+                            className="h-7 px-2 text-sky-600 hover:text-sky-800 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40 rounded-lg font-semibold text-xs gap-1 cursor-pointer"
+                            title="View Official Invoice PDF"
                           >
-                            <Eye className="h-3.5 w-3.5 mr-1" />
-                            Invoice
+                            <Eye className="h-3.5 w-3.5 text-sky-600" />
+                            View PDF
                           </Button>
 
-                          {/* Quick Settle / Edit Payment */}
+                          {/* 2. Only One Way to Fill/Update Payment */}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleOpenPayment(inv)}
-                            className="h-8 px-2 text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                            title="Record Payment Receipt"
+                            className="h-7 px-2 text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg font-semibold text-xs gap-1 cursor-pointer"
+                            title="Record / Update Payment Details"
                           >
-                            <CreditCard className="h-3.5 w-3.5 mr-1" />
-                            Settle
+                            <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+                            Update Payment
                           </Button>
-
-                          {/* One-click mark as paid if pending */}
-                          {!isReceived && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleQuickMarkPaid(inv)}
-                              className="h-8 w-8 p-0 text-slate-400 hover:text-emerald-600"
-                              title="Mark Full Paid in One Click"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -793,31 +891,96 @@ export function InvoiceTrackerDirectory() {
         </div>
 
         {/* Pagination Footer */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <div>
-              Showing page {currentPage} of {totalPages} ({totalCount} total invoices)
+        {totalCount > 0 && (
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div className="flex items-center gap-3">
+              <div>
+                Showing{" "}
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {Math.min((currentPage - 1) * itemsPerPage + 1, totalCount)}
+                </span>{" "}
+                to{" "}
+                <span className="font-bold text-slate-900 dark:text-slate-100">
+                  {Math.min(currentPage * itemsPerPage, totalCount)}
+                </span>{" "}
+                of{" "}
+                <span className="font-bold text-slate-900 dark:text-slate-100">{totalCount}</span>{" "}
+                invoices
+              </div>
+
+              <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 dark:border-slate-700 pl-3">
+                <span className="text-slate-400">Rows:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-7 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200"
+                >
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1 || loading}
-                className="h-8 px-2.5"
+                className="h-8 px-2.5 text-xs gap-1 rounded-lg"
               >
-                <ChevronLeft className="h-4 w-4 mr-1" />
+                <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
               </Button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                      acc.push("...");
+                    }
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    typeof p === "string" ? (
+                      <span key={`ellipsis-${idx}`} className="px-1 text-slate-400">
+                        ...
+                      </span>
+                    ) : (
+                      <Button
+                        key={p}
+                        variant={currentPage === p ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(p)}
+                        className={`h-8 w-8 p-0 text-xs rounded-lg ${
+                          currentPage === p
+                            ? "bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                            : "text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        {p}
+                      </Button>
+                    )
+                  )}
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages || loading}
-                className="h-8 px-2.5"
+                className="h-8 px-2.5 text-xs gap-1 rounded-lg"
               >
                 Next
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
@@ -944,11 +1107,12 @@ export function InvoiceTrackerDirectory() {
         </DialogContent>
       </Dialog>
 
-      {/* COMPLETED FILE INVOICE MODAL PREVIEW & DOWNLOAD */}
+      {/* COMPLETED FILE INVOICE MODAL PREVIEW & DOWNLOAD (STRICTLY VIEW-ONLY) */}
       {selectedInvoice && (
         <CompletedFileInvoiceModal
           isOpen={isInvoiceModalOpen}
           onClose={() => setIsInvoiceModalOpen(false)}
+          readOnly={true}
           registration={selectedInvoice}
           donorType={selectedInvoice.donorType === "sperm" ? "sperm" : "egg"}
         />

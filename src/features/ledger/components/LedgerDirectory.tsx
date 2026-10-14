@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -49,36 +49,23 @@ import {
   X,
   Maximize2,
   Minimize2,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 const formatInr = (amount: number) => {
   return "₹" + (amount || 0).toLocaleString("en-IN");
-};
-
-const toInputDate = (dateVal?: string) => {
-  if (!dateVal) return "";
-  if (dateVal.includes("-") && dateVal.length >= 10) return dateVal.split("T")[0];
-  const parts = dateVal.split(".");
-  if (parts.length === 3) {
-    const [d, m, y] = parts;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-  }
-  return "";
 };
 
 export function LedgerDirectory() {
   const [activeTab, setActiveTab] = useState<"clinic" | "donor">("clinic");
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   // ReactPdfViewer State (Identical to registration form viewer - works on both mobile and desktop)
@@ -120,27 +107,92 @@ export function LedgerDirectory() {
   // Filters
   const [search, setSearch] = useState("");
   const [selectedHospitalId, setSelectedHospitalId] = useState("ALL");
+  const [selectedBranch, setSelectedBranch] = useState("ALL");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | RECEIVED/PAID | PENDING | PARTIAL
   const [donorTypeFilter, setDonorTypeFilter] = useState("all"); // all | egg | sperm
+  const [hospitalsList, setHospitalsList] = useState<any[]>([]);
 
-  // Modals state
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [updateTarget, setUpdateTarget] = useState<"clinic" | "donor">("clinic");
-  const [updateForm, setUpdateForm] = useState({
-    registrationId: "",
-    donorType: "egg",
-    totalAmount: 0,
-    amount: 0,
-    status: "PENDING",
-    reference: "",
-    method: "bank_transfer",
-    notes: "",
-    invoiceNumber: "",
-    invoiceDate: "",
-    receivedDate: "",
-    tdsPercentage: 2,
-    tdsAmount: 0,
+  // Table Density and Columns
+  const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable");
+  const [visibleClinicCols, setVisibleClinicCols] = useState({
+    clinicName: true,
+    location: true,
+    opuLocation: true,
+    opuDate: true,
+    invoiceDate: true,
+    invoiceNo: true,
+    tdsGst: true,
+    creditDate: true,
   });
+
+  // Pagination State
+  const [clinicPage, setClinicPage] = useState(1);
+  const [clinicPageSize, setClinicPageSize] = useState(15);
+  const [donorPage, setDonorPage] = useState(1);
+  const [donorPageSize, setDonorPageSize] = useState(15);
+
+  // Memoized Pagination Slices
+  const totalClinicPages = Math.max(1, Math.ceil(clinicEntries.length / clinicPageSize));
+  const paginatedClinicEntries = useMemo(() => {
+    const start = (clinicPage - 1) * clinicPageSize;
+    return clinicEntries.slice(start, start + clinicPageSize);
+  }, [clinicEntries, clinicPage, clinicPageSize]);
+
+  const totalDonorPages = Math.max(1, Math.ceil(donorEntries.length / donorPageSize));
+  const paginatedDonorEntries = useMemo(() => {
+    const start = (donorPage - 1) * donorPageSize;
+    return donorEntries.slice(start, start + donorPageSize);
+  }, [donorEntries, donorPage, donorPageSize]);
+
+  // Page Numbers Helper
+  const getPageNumbers = (currentPage: number, totalPages: number) => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 4) {
+        pages.push(1, 2, 3, 4, 5, "...", totalPages);
+      } else if (currentPage >= totalPages - 3) {
+        pages.push(1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
+      }
+    }
+    return pages;
+  };
+
+  // Computed Available Branches for cascade
+  const availableBranches = useMemo(() => {
+    const branchesSet = new Set<string>();
+    if (selectedHospitalId && selectedHospitalId !== "ALL") {
+      const selectedHosp = hospitalsList.find((h: any) => h._id === selectedHospitalId);
+      if (selectedHosp?.branches && Array.isArray(selectedHosp.branches)) {
+        selectedHosp.branches.forEach((b: any) => {
+          const name = typeof b === "string" ? b : b.branchName || b.name;
+          if (name) branchesSet.add(name);
+        });
+      }
+    } else {
+      hospitalsList.forEach((h: any) => {
+        if (h?.branches && Array.isArray(h.branches)) {
+          h.branches.forEach((b: any) => {
+            const name = typeof b === "string" ? b : b.branchName || b.name;
+            if (name) branchesSet.add(name);
+          });
+        }
+      });
+    }
+
+    // Also include branches/locations already found in entries
+    clinicEntries.forEach((entry: any) => {
+      if (entry.donorOpuLocation && entry.donorOpuLocation !== "-") branchesSet.add(entry.donorOpuLocation);
+      if (entry.opuLocation && entry.opuLocation !== "-") branchesSet.add(entry.opuLocation);
+    });
+
+    return Array.from(branchesSet).filter(Boolean).sort();
+  }, [selectedHospitalId, hospitalsList, clinicEntries]);
 
   // Fetch Ledger Records
   async function loadLedgerData() {
@@ -149,6 +201,9 @@ export function LedgerDirectory() {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (selectedHospitalId && selectedHospitalId !== "ALL") params.append("hospitalId", selectedHospitalId);
+      if (selectedBranch && selectedBranch !== "ALL") params.append("branch", selectedBranch);
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
       if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
       if (donorTypeFilter) params.append("donorType", donorTypeFilter);
 
@@ -156,6 +211,9 @@ export function LedgerDirectory() {
       const data = await res.json();
 
       if (data.success) {
+        if (data.hospitals) {
+          setHospitalsList(data.hospitals);
+        }
         if (data.clinicLedger) {
           setClinicEntries(data.clinicLedger.entries || []);
           setClinicTotals(data.clinicLedger.totals || {});
@@ -177,11 +235,15 @@ export function LedgerDirectory() {
   }
 
   useEffect(() => {
+    setClinicPage(1);
+    setDonorPage(1);
     loadLedgerData();
-  }, [selectedHospitalId, statusFilter, donorTypeFilter]);
+  }, [selectedHospitalId, selectedBranch, startDate, endDate, statusFilter, donorTypeFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setClinicPage(1);
+    setDonorPage(1);
     loadLedgerData();
   };
 
@@ -191,6 +253,9 @@ export function LedgerDirectory() {
     params.append("type", type);
     if (isPreview) params.append("preview", "true");
     if (selectedHospitalId && selectedHospitalId !== "ALL") params.append("hospitalId", selectedHospitalId);
+    if (selectedBranch && selectedBranch !== "ALL") params.append("branch", selectedBranch);
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
     if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
     if (donorTypeFilter) params.append("donorType", donorTypeFilter);
     if (search) params.append("search", search);
@@ -245,6 +310,9 @@ export function LedgerDirectory() {
     const params = new URLSearchParams();
     params.append("type", t);
     if (selectedHospitalId && selectedHospitalId !== "ALL") params.append("hospitalId", selectedHospitalId);
+    if (selectedBranch && selectedBranch !== "ALL") params.append("branch", selectedBranch);
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
     if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
     if (donorTypeFilter) params.append("donorType", donorTypeFilter);
     if (search) params.append("search", search);
@@ -277,90 +345,6 @@ export function LedgerDirectory() {
   // Backwards compatibility alias
   const handleGeneratePdf = (type: "clinic" | "donor") => {
     handleViewPdf(type);
-  };
-
-  // Open Edit Modal for Clinic
-  const handleOpenClinicEdit = (entry: any) => {
-    setUpdateTarget("clinic");
-    const tdsRate = entry.tdsPercentage !== undefined && entry.tdsPercentage !== null ? Number(entry.tdsPercentage) : 2;
-    const tdsAmt = entry.tdsAmount !== undefined && entry.tdsAmount !== null ? Number(entry.tdsAmount) : Math.round((entry.dealPrice || 0) * (tdsRate / 100));
-    setUpdateForm({
-      registrationId: entry.registrationId,
-      donorType: entry.donorType || "egg",
-      totalAmount: entry.dealPrice,
-      amount: entry.receivedAmount || 0,
-      status: entry.paymentStatus,
-      reference: entry.paymentRef || "",
-      method: "bank_transfer",
-      notes: "",
-      invoiceNumber: entry.invoiceNumber || "",
-      invoiceDate: toInputDate(entry.invoiceDate),
-      receivedDate: toInputDate(entry.receivedDate),
-      tdsPercentage: tdsRate,
-      tdsAmount: tdsAmt,
-    });
-    setIsUpdateModalOpen(true);
-  };
-
-  // Open Edit Modal for Donor
-  const handleOpenDonorEdit = (entry: any) => {
-    setUpdateTarget("donor");
-    setUpdateForm({
-      registrationId: entry.registrationId,
-      donorType: entry.donorType || "egg",
-      totalAmount: entry.compensationAmount,
-      amount: entry.paidAmount || 0,
-      status: entry.paymentStatus,
-      reference: entry.paymentRef || "",
-      method: entry.paymentMethod || "bank_transfer",
-      notes: "",
-      invoiceNumber: "",
-      invoiceDate: "",
-      receivedDate: "",
-      tdsPercentage: 0,
-      tdsAmount: 0,
-    });
-    setIsUpdateModalOpen(true);
-  };
-
-  // Submit Update
-  const handleSubmitUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setActionLoading(true);
-    try {
-      const res = await fetch("/api/ledger", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          registrationId: updateForm.registrationId,
-          donorType: updateForm.donorType,
-          target: updateTarget,
-          status: updateForm.status,
-          amount: updateForm.amount,
-          reference: updateForm.reference,
-          method: updateForm.method,
-          notes: updateForm.notes,
-          invoiceNumber: updateForm.invoiceNumber,
-          invoiceDate: updateForm.invoiceDate,
-          receivedDate: updateForm.receivedDate,
-          tdsPercentage: updateForm.tdsPercentage,
-          tdsAmount: updateForm.tdsAmount,
-          dealPrice: updateForm.totalAmount,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(data.message || "Ledger updated successfully!");
-        setIsUpdateModalOpen(false);
-        loadLedgerData();
-      } else {
-        toast.error(data.error || "Failed to update ledger");
-      }
-    } catch {
-      toast.error("Network error while updating");
-    } finally {
-      setActionLoading(false);
-    }
   };
 
   // Export to Excel
@@ -522,50 +506,101 @@ export function LedgerDirectory() {
       {activeTab === "clinic" && (
         <div className="space-y-6">
           {/* Clinic Ledger KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Total Deal Payment (Billed)
-              </p>
-              <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                statusFilter === "ALL"
+                  ? "border-slate-800 dark:border-slate-200 bg-white dark:bg-slate-900 shadow-sm ring-2 ring-slate-400/20"
+                  : "border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Total Deal Billed
+                </p>
+                <Receipt className="w-3.5 h-3.5 text-slate-400" />
+              </div>
+              <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-2">
                 {formatInr(clinicTotals.totalDealPrice)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Across {clinicTotals.totalRecords} Completed Deals</p>
-            </div>
+              <p className="text-[11px] text-slate-500 mt-1">{clinicTotals.totalRecords} Completed Deals</p>
+            </button>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Total Payment Received
-              </p>
-              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("RECEIVED")}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                statusFilter === "RECEIVED"
+                  ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 shadow-sm ring-2 ring-emerald-500/20"
+                  : "border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Realized Inflow
+                </p>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              </div>
+              <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-2">
                 {formatInr(clinicTotals.totalReceived)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Realized Bank Collections</p>
-            </div>
+              <p className="text-[11px] text-slate-500 mt-1">Received Bank Inflow</p>
+            </button>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                Total Payment Pending
-              </p>
-              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-2">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("PENDING")}
+              className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+                statusFilter === "PENDING"
+                  ? "border-rose-600 bg-rose-50/50 dark:bg-rose-950/30 shadow-sm ring-2 ring-rose-500/20"
+                  : "border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-rose-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                  Outstanding Due
+                </p>
+                <Clock className="w-3.5 h-3.5 text-rose-500" />
+              </div>
+              <div className="text-xl font-black text-rose-600 dark:text-rose-400 mt-2">
                 {formatInr(clinicTotals.totalPending)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Total Outstanding Clinic Balance</p>
-            </div>
+              <p className="text-[11px] text-slate-500 mt-1">Pending Clinic Balance</p>
+            </button>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                Collection Rate
-              </p>
-              <div className="text-2xl font-bold text-teal-600 dark:text-teal-400 mt-2">
+            <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                  Collection Rate
+                </p>
+                <TrendingUp className="w-3.5 h-3.5 text-teal-500" />
+              </div>
+              <div className="text-xl font-black text-teal-600 dark:text-teal-400 mt-2">
                 {clinicTotals.collectionRate}%
               </div>
-              <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 mt-2 rounded-full overflow-hidden">
+              <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 mt-2.5 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-teal-500 transition-all duration-500"
+                  className="h-full bg-teal-500 transition-all duration-500 rounded-full"
                   style={{ width: `${clinicTotals.collectionRate}%` }}
                 />
               </div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/30">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                  Net Realized Margin
+                </p>
+                <BadgeCheck className="w-3.5 h-3.5 text-blue-600" />
+              </div>
+              <div className="text-xl font-black text-blue-700 dark:text-blue-300 mt-2">
+                {formatInr(Math.max(0, clinicTotals.totalReceived - donorTotals.totalPaid))}
+              </div>
+              <p className="text-[11px] text-blue-600/80 dark:text-blue-400 mt-1">
+                Inflow minus Donor Outflow
+              </p>
             </div>
           </div>
 
@@ -646,18 +681,73 @@ export function LedgerDirectory() {
               </form>
 
               <div className="flex flex-wrap items-center gap-2">
+                {/* ART Clinic Filter */}
                 <select
                   value={selectedHospitalId}
-                  onChange={(e) => setSelectedHospitalId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedHospitalId(e.target.value);
+                    setSelectedBranch("ALL");
+                  }}
                   className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
                 >
                   <option value="ALL">All ART Clinics</option>
-                  {clinicAccounts.map((a) => (
-                    <option key={a.hospitalId} value={a.hospitalId}>
-                      {a.hospitalName} ({a.totalCases})
+                  {hospitalsList.length > 0
+                    ? hospitalsList.map((h: any) => (
+                        <option key={h._id} value={h._id}>
+                          {h.name}
+                        </option>
+                      ))
+                    : clinicAccounts.map((a) => (
+                        <option key={a.hospitalId} value={a.hospitalId}>
+                          {a.hospitalName} ({a.totalCases})
+                        </option>
+                      ))}
+                </select>
+
+                {/* Branch Filter */}
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                >
+                  <option value="ALL">All Branches</option>
+                  {availableBranches.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
                     </option>
                   ))}
                 </select>
+
+                {/* Date Filter */}
+                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-9">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">From</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                  />
+                  <span className="text-[10px] uppercase font-bold text-slate-400">To</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                  />
+                  {(startDate || endDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                      }}
+                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                      title="Clear Dates"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
 
                 <select
                   value={statusFilter}
@@ -682,47 +772,130 @@ export function LedgerDirectory() {
               </div>
             </div>
 
+            {/* Table Control Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 text-xs">
+              <div className="text-slate-500 font-medium text-[11px] flex items-center gap-1.5">
+                <span>Showing <strong className="text-slate-900 dark:text-slate-100">{paginatedClinicEntries.length}</strong> of {clinicEntries.length} ledger transactions</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Density Switcher */}
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setTableDensity("compact")}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      tableDensity === "compact"
+                        ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                    title="Compact view - fit more rows"
+                  >
+                    Compact
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTableDensity("comfortable")}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      tableDensity === "comfortable"
+                        ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                    title="Comfortable view - default spacing"
+                  >
+                    Comfortable
+                  </button>
+                </div>
+
+                {/* Column Visibility Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2.5 text-[11px] rounded-lg gap-1.5 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                      >
+                        <SlidersHorizontal className="w-3 h-3 text-slate-400" />
+                        <span>Columns</span>
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl text-xs space-y-1">
+                    <div className="font-bold text-[10px] text-slate-400 uppercase px-2 py-1">Visible Columns</div>
+                    {[
+                      { key: "clinicName", label: "Clinic Name" },
+                      { key: "location", label: "Clinic Location" },
+                      { key: "opuLocation", label: "Donor OPU Location" },
+                      { key: "opuDate", label: "Donor OPU Date" },
+                      { key: "invoiceDate", label: "Invoice Date" },
+                      { key: "invoiceNo", label: "Invoice Number" },
+                      { key: "tdsGst", label: "TDS / GST Details" },
+                      { key: "creditDate", label: "Credit Date" },
+                    ].map((col) => (
+                      <label
+                        key={col.key}
+                        className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer select-none text-[11px] font-medium"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={(visibleClinicCols as any)[col.key]}
+                          onChange={(e) =>
+                            setVisibleClinicCols((prev) => ({ ...prev, [col.key]: e.target.checked }))
+                          }
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        />
+                        <span>{col.label}</span>
+                      </label>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
             {/* Table */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[72vh]">
               <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[10px] whitespace-nowrap">
-                    <th className="py-3 px-2.5 text-center w-8">#</th>
-                    <th className="py-3 px-2.5">Donor Name</th>
-                    <th className="py-3 px-2.5">Registration No.</th>
-                    <th className="py-3 px-2.5">Clinic Name</th>
-                    <th className="py-3 px-2.5">Location</th>
-                    <th className="py-3 px-2.5">Donor OPU Location</th>
-                    <th className="py-3 px-2.5">Donor OPU Date</th>
-                    <th className="py-3 px-2.5">Invoice Date</th>
-                    <th className="py-3 px-2.5">Invoice No.</th>
-                    <th className="py-3 px-2.5 text-right">Amount</th>
-                    <th className="py-3 px-2.5 text-right">TDS -</th>
-                    <th className="py-3 px-2.5 text-right">GST +</th>
-                    <th className="py-3 px-2.5 text-right">Net Amount</th>
-                    <th className="py-3 px-2.5">Credit Date</th>
-                    <th className="py-3 px-2.5 text-right">Credit Amount</th>
-                    <th className="py-3 px-2.5 text-center">Actions</th>
+                <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-800/95 shadow-2xs">
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[10px] whitespace-nowrap">
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2 text-center w-8" : "py-3 px-2.5 text-center w-8"}`}>#</th>
+                    <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Donor Name</th>
+                    <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Registration No.</th>
+                    {visibleClinicCols.clinicName && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Clinic Name</th>}
+                    {visibleClinicCols.location && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Location</th>}
+                    {visibleClinicCols.opuLocation && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Donor OPU Location</th>}
+                    {visibleClinicCols.opuDate && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Donor OPU Date</th>}
+                    {visibleClinicCols.invoiceDate && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Invoice Date</th>}
+                    {visibleClinicCols.invoiceNo && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Invoice No.</th>}
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>Amount</th>
+                    {visibleClinicCols.tdsGst && (
+                      <>
+                        <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>TDS -</th>
+                        <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>GST +</th>
+                      </>
+                    )}
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>Net Amount</th>
+                    {visibleClinicCols.creditDate && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Credit Date</th>}
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right sticky right-0 bg-slate-100/95 dark:bg-slate-800/95 z-20 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]`}>Credit Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
                   {loading ? (
-                    <tr>
-                      <td colSpan={16} className="py-12 text-center text-slate-400">
-                        <RefreshCw className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-1.5" />
-                        Loading clinic ledger...
-                      </td>
-                    </tr>
+                    <TableSkeletonRows
+                      columns={15}
+                      rows={6}
+                      density={tableDensity}
+                    />
                   ) : clinicEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={16} className="py-12 text-center text-slate-500">
+                      <td colSpan={15} className="py-12 text-center text-slate-500">
                         <Receipt className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                         <div className="font-semibold text-slate-700 dark:text-slate-300">No invoiced records found</div>
                         <div className="text-xs text-slate-400 mt-1">Donors will appear in the Clinic Ledger once their Tax Invoice is generated in Completed Files.</div>
                       </td>
                     </tr>
                   ) : (
-                    clinicEntries.map((entry) => {
+                    paginatedClinicEntries.map((entry) => {
                       const isReceived = entry.paymentStatus === "RECEIVED";
                       const isPartial = entry.paymentStatus === "PARTIALLY_RECEIVED";
                       const grossAmt = entry.amount || entry.dealPrice || 0;
@@ -731,19 +904,20 @@ export function LedgerDirectory() {
                       const netAmt = entry.netAmount || Math.max(0, grossAmt - tdsAmt + gstAmt);
                       const credAmt = entry.creditAmount !== undefined ? entry.creditAmount : entry.receivedAmount || 0;
                       const credDate = entry.creditDate && entry.creditDate !== "-" ? entry.creditDate : (entry.receivedDate || (isReceived ? "Cleared" : "Pending"));
+                      const cellPad = tableDensity === "compact" ? "py-1.5 px-2 text-[11px]" : "py-2.5 px-2.5 text-xs";
 
                       return (
                         <tr
                           key={entry.registrationId}
-                          className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors whitespace-nowrap text-xs"
+                          className="group/row hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors whitespace-nowrap"
                         >
-                          <td className="py-2.5 px-2.5 text-center text-slate-400 font-mono">
+                          <td className={`${cellPad} text-center text-slate-400 font-mono`}>
                             {entry.sNo}
                           </td>
-                          <td className="py-2.5 px-2.5 font-bold text-slate-900 dark:text-slate-100">
+                          <td className={`${cellPad} font-bold text-slate-900 dark:text-slate-100`}>
                             <div>{entry.donorName}</div>
                           </td>
-                          <td className="py-2.5 px-2.5">
+                          <td className={cellPad}>
                             <span className="font-bold text-slate-900 dark:text-slate-100 font-mono">
                               {entry.registrationId}
                             </span>
@@ -751,50 +925,68 @@ export function LedgerDirectory() {
                               {entry.donorType ? entry.donorType.toUpperCase() : "DONOR"}
                             </div>
                           </td>
-                          <td className="py-2.5 px-2.5 font-semibold text-slate-800 dark:text-slate-200">
-                            {entry.clinicName || entry.hospitalName || "N/A"}
-                          </td>
-                          <td className="py-2.5 px-2.5 text-slate-600 dark:text-slate-400">
-                            {entry.location || entry.hospitalLocation || entry.hospitalCity || "-"}
-                          </td>
-                          <td className="py-2.5 px-2.5 font-medium text-slate-700 dark:text-slate-300">
-                            {entry.donorOpuLocation || entry.opuLocation || "-"}
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono text-slate-700 dark:text-slate-300">
-                            {entry.donorOpuDate || entry.opuDate || entry.pickupDate || "-"}
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono text-slate-600 dark:text-slate-400">
-                            {entry.invoiceDate || "-"}
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono font-bold text-slate-900 dark:text-slate-100">
-                            {entry.invoiceNumber
-                              ? entry.invoiceNumber.startsWith("#")
-                                ? entry.invoiceNumber
-                                : `#${entry.invoiceNumber}`
-                              : "N/A"}
-                          </td>
-                          <td className="py-2.5 px-2.5 text-right font-bold text-slate-900 dark:text-slate-100">
+                          {visibleClinicCols.clinicName && (
+                            <td className={`${cellPad} font-semibold text-slate-800 dark:text-slate-200`}>
+                              {entry.clinicName || entry.hospitalName || "N/A"}
+                            </td>
+                          )}
+                          {visibleClinicCols.location && (
+                            <td className={`${cellPad} text-slate-600 dark:text-slate-400`}>
+                              {entry.location || entry.hospitalLocation || entry.hospitalCity || "-"}
+                            </td>
+                          )}
+                          {visibleClinicCols.opuLocation && (
+                            <td className={`${cellPad} font-medium text-slate-700 dark:text-slate-300`}>
+                              {entry.donorOpuLocation || entry.opuLocation || "-"}
+                            </td>
+                          )}
+                          {visibleClinicCols.opuDate && (
+                            <td className={`${cellPad} font-mono text-slate-700 dark:text-slate-300`}>
+                              {entry.donorOpuDate || entry.opuDate || entry.pickupDate || "-"}
+                            </td>
+                          )}
+                          {visibleClinicCols.invoiceDate && (
+                            <td className={`${cellPad} font-mono text-slate-600 dark:text-slate-400`}>
+                              {entry.invoiceDate || "-"}
+                            </td>
+                          )}
+                          {visibleClinicCols.invoiceNo && (
+                            <td className={`${cellPad} font-mono font-bold text-slate-900 dark:text-slate-100`}>
+                              {entry.invoiceNumber
+                                ? entry.invoiceNumber.startsWith("#")
+                                  ? entry.invoiceNumber
+                                  : `#${entry.invoiceNumber}`
+                                : "N/A"}
+                            </td>
+                          )}
+                          <td className={`${cellPad} text-right font-bold text-slate-900 dark:text-slate-100`}>
                             {formatInr(grossAmt)}
                           </td>
-                          <td className="py-2.5 px-2.5 text-right font-semibold text-orange-600 dark:text-orange-400">
-                            <div>{tdsAmt > 0 ? `-${formatInr(tdsAmt)}` : "₹0"}</div>
-                            <div className="text-[10px] text-slate-400 font-normal">
-                              {entry.tdsPercentage ? `(${entry.tdsPercentage}%)` : "0%"}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                            <div>{gstAmt > 0 ? `+${formatInr(gstAmt)}` : "₹0"}</div>
-                            <div className="text-[10px] text-slate-400 font-normal">
-                              {gstAmt > 0 ? "18% on SC" : "Exempt"}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-2.5 text-right font-black text-teal-700 dark:text-teal-300">
+                          {visibleClinicCols.tdsGst && (
+                            <>
+                              <td className={`${cellPad} text-right font-semibold text-orange-600 dark:text-orange-400`}>
+                                <div>{tdsAmt > 0 ? `-${formatInr(tdsAmt)}` : "₹0"}</div>
+                                <div className="text-[10px] text-slate-400 font-normal">
+                                  {entry.tdsPercentage ? `(${entry.tdsPercentage}%)` : "0%"}
+                                </div>
+                              </td>
+                              <td className={`${cellPad} text-right font-semibold text-emerald-600 dark:text-emerald-400`}>
+                                <div>{gstAmt > 0 ? `+${formatInr(gstAmt)}` : "₹0"}</div>
+                                <div className="text-[10px] text-slate-400 font-normal">
+                                  {gstAmt > 0 ? "18% on SC" : "Exempt"}
+                                </div>
+                              </td>
+                            </>
+                          )}
+                          <td className={`${cellPad} text-right font-black text-teal-700 dark:text-teal-300`}>
                             {formatInr(netAmt)}
                           </td>
-                          <td className="py-2.5 px-2.5 text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                            {credDate}
-                          </td>
-                          <td className="py-2.5 px-2.5 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                          {visibleClinicCols.creditDate && (
+                            <td className={`${cellPad} text-slate-600 dark:text-slate-400 font-mono text-[11px]`}>
+                              {credDate}
+                            </td>
+                          )}
+                          <td className={`${cellPad} text-right font-bold text-emerald-600 dark:text-emerald-400 sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-white group-hover/row:bg-slate-50 dark:bg-slate-900 dark:group-hover/row:bg-slate-800`}>
                             <div>{formatInr(credAmt)}</div>
                             <span
                               className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold ${
@@ -808,16 +1000,6 @@ export function LedgerDirectory() {
                               {isReceived ? "PAID" : isPartial ? "PARTIAL" : "PENDING"}
                             </span>
                           </td>
-                          <td className="py-2.5 px-2.5 text-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenClinicEdit(entry)}
-                              className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
-                            >
-                              Update
-                            </Button>
-                          </td>
                         </tr>
                       );
                     })
@@ -828,54 +1010,120 @@ export function LedgerDirectory() {
                 {clinicEntries.length > 0 && (
                   <tfoot>
                     <tr className="bg-slate-200/90 dark:bg-slate-800 border-t-2 border-slate-900 dark:border-slate-700 font-bold text-slate-900 dark:text-slate-100 text-xs whitespace-nowrap">
-                      <td colSpan={9} className="py-3 px-3 uppercase tracking-wider">
+                      <td colSpan={3 + (visibleClinicCols.clinicName ? 1 : 0) + (visibleClinicCols.location ? 1 : 0) + (visibleClinicCols.opuLocation ? 1 : 0) + (visibleClinicCols.opuDate ? 1 : 0) + (visibleClinicCols.invoiceDate ? 1 : 0) + (visibleClinicCols.invoiceNo ? 1 : 0)} className="py-3 px-3 uppercase tracking-wider">
                         GRAND TOTAL ({clinicTotals.totalRecords} TRANSACTIONS)
                       </td>
                       <td className="py-3 px-2.5 text-right font-black">
                         {formatInr(clinicTotals.totalDealPrice)}
                       </td>
-                      <td className="py-3 px-2.5 text-right font-semibold text-orange-600">
-                        -{formatInr((clinicTotals as any).totalTdsAmount || 0)}
-                      </td>
-                      <td className="py-3 px-2.5 text-right font-semibold text-emerald-600">
-                        +{formatInr((clinicTotals as any).totalGstAmount || 0)}
-                      </td>
+                      {visibleClinicCols.tdsGst && (
+                        <>
+                          <td className="py-3 px-2.5 text-right font-semibold text-orange-600">
+                            -{formatInr((clinicTotals as any).totalTdsAmount || 0)}
+                          </td>
+                          <td className="py-3 px-2.5 text-right font-semibold text-emerald-600">
+                            +{formatInr((clinicTotals as any).totalGstAmount || 0)}
+                          </td>
+                        </>
+                      )}
                       <td className="py-3 px-2.5 text-right font-black text-teal-700 dark:text-teal-300">
                         {formatInr((clinicTotals as any).totalNetAmount || (clinicTotals.totalDealPrice - ((clinicTotals as any).totalTdsAmount || 0) + ((clinicTotals as any).totalGstAmount || 0)))}
                       </td>
-                      <td className="py-3 px-2.5 text-center text-[10px] text-muted-foreground font-mono">
-                        {clinicTotals.collectionRate}% CLEARED
-                      </td>
-                      <td className="py-3 px-2.5 text-right text-emerald-600 dark:text-emerald-400 font-black">
+                      {visibleClinicCols.creditDate && (
+                        <td className="py-3 px-2.5 text-center text-[10px] text-muted-foreground font-mono">
+                          {clinicTotals.collectionRate}% CLEARED
+                        </td>
+                      )}
+                      <td className="py-3 px-2.5 text-right text-emerald-600 dark:text-emerald-400 font-black sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-slate-200/90 dark:bg-slate-800">
                         {formatInr(clinicTotals.totalReceived)}
-                      </td>
-                      <td className="py-3 px-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <Button
-                            size="sm"
-                            onClick={() => handleViewPdf("clinic")}
-                            className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] gap-1 font-semibold px-2.5 rounded-lg shadow-xs"
-                            title="View Clinic Ledger PDF statement"
-                          >
-                            <Eye className="h-3 w-3" />
-                            View PDF
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenPdfNewTab("clinic")}
-                            className="h-7 w-7 p-0 rounded-lg border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-                            title="Open in new browser tab"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                          </Button>
-                        </div>
                       </td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </div>
+
+            {/* Pagination Controls for Clinic Ledger */}
+            {clinicEntries.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  <span>
+                    Showing{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {(clinicPage - 1) * clinicPageSize + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {Math.min(clinicPage * clinicPageSize, clinicEntries.length)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {clinicEntries.length}
+                    </span>{" "}
+                    transactions
+                  </span>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <span>Rows per page:</span>
+                    <select
+                      value={clinicPageSize}
+                      onChange={(e) => {
+                        setClinicPageSize(Number(e.target.value));
+                        setClinicPage(1);
+                      }}
+                      className="h-7 px-2 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    >
+                      {[10, 15, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setClinicPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={clinicPage === 1}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>Previous</span>
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {getPageNumbers(clinicPage, totalClinicPages).map((p, index) =>
+                      typeof p === "number" ? (
+                        <button
+                          key={index}
+                          onClick={() => setClinicPage(p)}
+                          className={`w-7 h-7 text-xs font-semibold rounded-lg transition-colors ${
+                            clinicPage === p
+                              ? "bg-teal-600 text-white shadow-sm"
+                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ) : (
+                        <span key={index} className="px-1 text-slate-400 text-xs select-none">
+                          ...
+                        </span>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setClinicPage((prev) => Math.min(prev + 1, totalClinicPages))}
+                    disabled={clinicPage === totalClinicPages}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -885,40 +1133,76 @@ export function LedgerDirectory() {
         <div className="space-y-6">
           {/* Donor Ledger KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                Total Agreed Compensation
-              </p>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+              className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
+                statusFilter === "ALL"
+                  ? "border-slate-800 dark:border-slate-200 bg-white dark:bg-slate-900 shadow-sm ring-2 ring-slate-400/20"
+                  : "border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-900"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Total Agreed Compensation
+                </p>
+                <Users className="w-4 h-4 text-slate-400" />
+              </div>
               <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-2">
                 {formatInr(donorTotals.totalCompensation)}
               </div>
               <p className="text-xs text-slate-500 mt-1">Across {donorTotals.totalDonors} Donors Handled</p>
-            </div>
+            </button>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Total Disbursed to Donors
-              </p>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("PAID")}
+              className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
+                statusFilter === "PAID"
+                  ? "border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 shadow-sm ring-2 ring-emerald-500/20"
+                  : "border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Total Disbursed to Donors
+                </p>
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              </div>
               <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
                 {formatInr(donorTotals.totalPaid)}
               </div>
               <p className="text-xs text-slate-500 mt-1">Bank Payouts Settled</p>
-            </div>
+            </button>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                Pending Donor Payouts
-              </p>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("PENDING")}
+              className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
+                statusFilter === "PENDING"
+                  ? "border-rose-600 bg-rose-50/50 dark:bg-rose-950/30 shadow-sm ring-2 ring-rose-500/20"
+                  : "border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-rose-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                  Pending Donor Payouts
+                </p>
+                <Clock className="w-4 h-4 text-rose-500" />
+              </div>
               <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-2">
                 {formatInr(donorTotals.totalPending)}
               </div>
               <p className="text-xs text-slate-500 mt-1">Outstanding Reimbursements</p>
-            </div>
+            </button>
 
             <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                Disbursement Settlement
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                  Disbursement Settlement
+                </p>
+                <TrendingUp className="w-4 h-4 text-teal-500" />
+              </div>
               <div className="text-2xl font-bold text-teal-600 dark:text-teal-400 mt-2">
                 {donorTotals.settlementRate}%
               </div>
@@ -947,6 +1231,74 @@ export function LedgerDirectory() {
               </form>
 
               <div className="flex flex-wrap items-center gap-2">
+                {/* ART Clinic Filter */}
+                <select
+                  value={selectedHospitalId}
+                  onChange={(e) => {
+                    setSelectedHospitalId(e.target.value);
+                    setSelectedBranch("ALL");
+                  }}
+                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                >
+                  <option value="ALL">All ART Clinics</option>
+                  {hospitalsList.length > 0
+                    ? hospitalsList.map((h: any) => (
+                        <option key={h._id} value={h._id}>
+                          {h.name}
+                        </option>
+                      ))
+                    : clinicAccounts.map((a) => (
+                        <option key={a.hospitalId} value={a.hospitalId}>
+                          {a.hospitalName} ({a.totalCases})
+                        </option>
+                      ))}
+                </select>
+
+                {/* Branch Filter */}
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                >
+                  <option value="ALL">All Branches</option>
+                  {availableBranches.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Date Filter */}
+                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-9">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">From</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                  />
+                  <span className="text-[10px] uppercase font-bold text-slate-400">To</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                  />
+                  {(startDate || endDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                      }}
+                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                      title="Clear Dates"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -970,50 +1322,86 @@ export function LedgerDirectory() {
               </div>
             </div>
 
+            {/* Table Control Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 text-xs">
+              <div className="text-slate-500 font-medium text-[11px] flex items-center gap-1.5">
+                <span>Showing <strong className="text-slate-900 dark:text-slate-100">{paginatedDonorEntries.length}</strong> of {donorEntries.length} donor disbursement records</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Density Switcher */}
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setTableDensity("compact")}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      tableDensity === "compact"
+                        ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                    title="Compact view - fit more rows"
+                  >
+                    Compact
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTableDensity("comfortable")}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      tableDensity === "comfortable"
+                        ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                    title="Comfortable view - default spacing"
+                  >
+                    Comfortable
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Table */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[72vh]">
               <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[11px]">
-                    <th className="py-3 px-3 text-center w-12">#</th>
-                    <th className="py-3 px-3">Registration No.</th>
-                    <th className="py-3 px-3">Donor Name & Details</th>
-                    <th className="py-3 px-3">Assigned Clinic</th>
-                    <th className="py-3 px-3 text-right">Agreed Compensation</th>
-                    <th className="py-3 px-3 text-right">Paid to Donor</th>
-                    <th className="py-3 px-3 text-right">Balance Due</th>
-                    <th className="py-3 px-3 text-center">Status</th>
-                    <th className="py-3 px-3 text-right">Actions</th>
+                <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-800/95 shadow-2xs">
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[11px]">
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-center w-12`}>#</th>
+                    <th className={tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"}>Registration No.</th>
+                    <th className={tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"}>Donor Name & Details</th>
+                    <th className={tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"}>Assigned Clinic</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-right`}>Agreed Compensation</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-right`}>Paid to Donor</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-right`}>Balance Due</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-center sticky right-0 bg-slate-100/95 dark:bg-slate-800/95 z-20 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]`}>Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
                   {loading ? (
-                    <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400">
-                        <RefreshCw className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-1.5" />
-                        Loading donor ledger...
-                      </td>
-                    </tr>
+                    <TableSkeletonRows
+                      columns={8}
+                      rows={6}
+                      density={tableDensity}
+                    />
                   ) : donorEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-500">
+                      <td colSpan={8} className="py-12 text-center text-slate-500">
                         No donor payment records found.
                       </td>
                     </tr>
                   ) : (
-                    donorEntries.map((entry) => {
+                    paginatedDonorEntries.map((entry) => {
                       const isPaid = entry.paymentStatus === "PAID";
                       const isPartial = entry.paymentStatus === "PARTIALLY_PAID";
+                      const cellPad = tableDensity === "compact" ? "py-2 px-2.5 text-[11px]" : "py-3 px-3 text-xs";
 
                       return (
                         <tr
                           key={entry.registrationId}
-                          className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+                          className="group/row hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
                         >
-                          <td className="py-3 px-3 text-center text-slate-400 font-mono">
+                          <td className={`${cellPad} text-center text-slate-400 font-mono`}>
                             {entry.sNo}
                           </td>
-                          <td className="py-3 px-3">
+                          <td className={cellPad}>
                             <span className="font-bold text-slate-900 dark:text-slate-100 font-mono">
                               {entry.registrationId}
                             </span>
@@ -1021,7 +1409,7 @@ export function LedgerDirectory() {
                               <div className="text-[10px] text-slate-400">{entry.date}</div>
                             )}
                           </td>
-                          <td className="py-3 px-3">
+                          <td className={cellPad}>
                             <div className="font-semibold text-slate-900 dark:text-slate-100">
                               {entry.donorName}
                             </div>
@@ -1029,7 +1417,7 @@ export function LedgerDirectory() {
                               {entry.donorType.toUpperCase()}
                             </div>
                           </td>
-                          <td className="py-3 px-3">
+                          <td className={cellPad}>
                             <div className="font-semibold text-slate-800 dark:text-slate-200">
                               {entry.hospitalName}
                             </div>
@@ -1037,16 +1425,16 @@ export function LedgerDirectory() {
                               Method: {entry.paymentMethod.replace("_", " ").toUpperCase()}
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-right font-bold text-slate-900 dark:text-slate-100">
+                          <td className={`${cellPad} text-right font-bold text-slate-900 dark:text-slate-100`}>
                             {formatInr(entry.compensationAmount)}
                           </td>
-                          <td className="py-3 px-3 text-right font-bold text-emerald-600">
+                          <td className={`${cellPad} text-right font-bold text-emerald-600`}>
                             {formatInr(entry.paidAmount)}
                           </td>
-                          <td className="py-3 px-3 text-right font-bold text-rose-600">
+                          <td className={`${cellPad} text-right font-bold text-rose-600`}>
                             {formatInr(entry.balancePending)}
                           </td>
-                          <td className="py-3 px-3 text-center">
+                          <td className={`${cellPad} text-center sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-white group-hover/row:bg-slate-50 dark:bg-slate-900 dark:group-hover/row:bg-slate-800`}>
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                 isPaid
@@ -1058,16 +1446,6 @@ export function LedgerDirectory() {
                             >
                               {isPaid ? "PAID" : isPartial ? "PARTIAL" : "PENDING"}
                             </span>
-                          </td>
-                          <td className="py-3 px-3 text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleOpenDonorEdit(entry)}
-                              className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-xs"
-                            >
-                              Disburse
-                            </Button>
                           </td>
                         </tr>
                       );
@@ -1091,223 +1469,99 @@ export function LedgerDirectory() {
                       <td className="py-4 px-3 text-right text-sm text-rose-600 dark:text-rose-400">
                         {formatInr(donorTotals.totalPending)}
                       </td>
-                      <td className="py-4 px-3 text-center text-xs text-teal-700 dark:text-teal-400">
+                      <td className="py-4 px-3 text-center text-xs text-teal-700 dark:text-teal-400 sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-slate-200/90 dark:bg-slate-800">
                         {donorTotals.settlementRate}% SETTLED
-                      </td>
-                      <td className="py-4 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            onClick={() => handleViewPdf("donor")}
-                            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 font-semibold px-3 rounded-full shadow-xs"
-                            title="View Donor Ledger PDF statement to check details"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View PDF
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenPdfNewTab("donor")}
-                            className="h-8 w-8 p-0 rounded-full border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
-                            title="Open in new browser tab"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
                       </td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </div>
+
+            {/* Pagination Controls for Donor Ledger */}
+            {donorEntries.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                  <span>
+                    Showing{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {(donorPage - 1) * donorPageSize + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {Math.min(donorPage * donorPageSize, donorEntries.length)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                      {donorEntries.length}
+                    </span>{" "}
+                    disbursements
+                  </span>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <span>Rows per page:</span>
+                    <select
+                      value={donorPageSize}
+                      onChange={(e) => {
+                        setDonorPageSize(Number(e.target.value));
+                        setDonorPage(1);
+                      }}
+                      className="h-7 px-2 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      {[10, 15, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setDonorPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={donorPage === 1}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>Previous</span>
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {getPageNumbers(donorPage, totalDonorPages).map((p, index) =>
+                      typeof p === "number" ? (
+                        <button
+                          key={index}
+                          onClick={() => setDonorPage(p)}
+                          className={`w-7 h-7 text-xs font-semibold rounded-lg transition-colors ${
+                            donorPage === p
+                              ? "bg-emerald-600 text-white shadow-sm"
+                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ) : (
+                        <span key={index} className="px-1 text-slate-400 text-xs select-none">
+                          ...
+                        </span>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setDonorPage((prev) => Math.min(prev + 1, totalDonorPages))}
+                    disabled={donorPage === totalDonorPages}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      {/* UPDATE MODAL FOR CLINIC OR DONOR */}
-      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-emerald-600" />
-              {updateTarget === "clinic" ? "Update Clinic Payment" : "Update Donor Payout"}
-            </DialogTitle>
-            <DialogDescription>
-              Record transaction update for Registration #{updateForm.registrationId}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmitUpdate} className="space-y-4 pt-2">
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                Total Deal / Agreed Amount
-              </label>
-              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                {formatInr(updateForm.totalAmount)}
-              </div>
-            </div>
-
-            {updateTarget === "clinic" && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                      Invoice Number
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="e.g. INV-054"
-                      value={updateForm.invoiceNumber}
-                      onChange={(e) => setUpdateForm((prev) => ({ ...prev, invoiceNumber: e.target.value }))}
-                      className="h-9 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                      Invoice Date
-                    </label>
-                    <Input
-                      type="date"
-                      value={updateForm.invoiceDate}
-                      onChange={(e) => setUpdateForm((prev) => ({ ...prev, invoiceDate: e.target.value }))}
-                      className="h-9 text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                    Payment Received Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={updateForm.receivedDate}
-                    onChange={(e) => setUpdateForm((prev) => ({ ...prev, receivedDate: e.target.value }))}
-                    className="h-9 text-xs"
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                Transaction Status
-              </label>
-              <select
-                value={updateForm.status}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setUpdateForm((prev) => ({
-                    ...prev,
-                    status: val,
-                    amount:
-                      val === "RECEIVED" || val === "PAID"
-                        ? prev.totalAmount
-                        : prev.amount,
-                    receivedDate:
-                      val === "RECEIVED" && !prev.receivedDate
-                        ? new Date().toISOString().split("T")[0]
-                        : prev.receivedDate,
-                  }));
-                }}
-                className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-              >
-                <option value="PENDING">PENDING (Unsettled)</option>
-                <option value={updateTarget === "clinic" ? "PARTIALLY_RECEIVED" : "PARTIALLY_PAID"}>
-                  PARTIAL
-                </option>
-                <option value={updateTarget === "clinic" ? "RECEIVED" : "PAID"}>
-                  {updateTarget === "clinic" ? "RECEIVED (Full Settled)" : "PAID (Disbursed in Full)"}
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                Amount {updateTarget === "clinic" ? "Received in Bank" : "Paid"} (INR)
-              </label>
-              <Input
-                type="number"
-                value={updateForm.amount}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setUpdateForm((prev) => ({
-                    ...prev,
-                    amount: val,
-                    status:
-                      val >= prev.totalAmount
-                        ? updateTarget === "clinic"
-                          ? "RECEIVED"
-                          : "PAID"
-                        : val > 0
-                        ? updateTarget === "clinic"
-                          ? "PARTIALLY_RECEIVED"
-                          : "PARTIALLY_PAID"
-                        : "PENDING",
-                  }));
-                }}
-                min={0}
-                max={updateForm.totalAmount}
-                className="h-10"
-              />
-              <p className="text-[11px] text-slate-400 mt-1">
-                Remaining Balance:{" "}
-                {formatInr(Math.max(0, updateForm.totalAmount - updateForm.amount))}
-              </p>
-            </div>
-
-            {updateTarget === "donor" && (
-              <div>
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                  Payment Method
-                </label>
-                <select
-                  value={updateForm.method}
-                  onChange={(e) => setUpdateForm((prev) => ({ ...prev, method: e.target.value }))}
-                  className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
-                >
-                  <option value="bank_transfer">Bank Transfer (NEFT/RTGS)</option>
-                  <option value="upi">UPI / Instant Transfer</option>
-                  <option value="cheque">Bank Cheque</option>
-                  <option value="cash">Cash Voucher</option>
-                </select>
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">
-                Transaction Ref / UTR / Remarks
-              </label>
-              <Input
-                type="text"
-                placeholder="UTR number, cheque number, or bank reference"
-                value={updateForm.reference}
-                onChange={(e) => setUpdateForm((prev) => ({ ...prev, reference: e.target.value }))}
-                className="h-10"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsUpdateModalOpen(false)}
-                disabled={actionLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={actionLoading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {actionLoading ? "Saving..." : "Save Record"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* IN-APP PDF PREVIEW MODAL */}
       {/* REACTPDFVIEWER (EXACT SAME AS REGISTRATION FORM VIEWER, WORKS ON MOBILE AND DESKTOP) */}

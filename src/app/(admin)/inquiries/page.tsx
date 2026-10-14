@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 
 const STATUS_FLOW = [
   "New Inquiry",
@@ -308,9 +309,7 @@ export default function AdminInquiriesPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3 text-xs text-slate-400">
-              <Loader2 className="w-8 h-8 animate-spin" /> Fetching inquiries...
-            </div>
+            <DataTableSkeleton rows={6} hasCheckbox={false} />
           ) : inquiries.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-2 text-xs text-slate-500">
               <AlertCircle className="w-8 h-8 text-slate-300" />

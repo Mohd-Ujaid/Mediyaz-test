@@ -1,6 +1,5 @@
 import PrintViewer from "@/features/pdf-preview/components/PrintViewer";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
 import { notFound } from "next/navigation";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
@@ -51,9 +50,6 @@ export default async function PrintRegistrationPage({
   } catch {}
 
   if (!registration) {
-    registration = await DonorRegistration.findOne(findQuery).populate("assignedHospital");
-  }
-  if (!registration) {
     const { SpermDonorRegistration } = await import("@/models/SpermDonorRegistration");
     registration = await SpermDonorRegistration.findOne(findQuery).populate("assignedHospital");
   }
@@ -76,8 +72,8 @@ export default async function PrintRegistrationPage({
     const isSperm = registration.donorType === "sperm";
     try {
       const targetModel = isSperm
-        ? (await import("@/models/SpermDonorRegistration")).SpermDonorRegistration || DonorRegistration
-        : (await import("@/models/EggDonorRegistration")).EggDonorRegistration || DonorRegistration;
+        ? (await import("@/models/SpermDonorRegistration")).SpermDonorRegistration
+        : (await import("@/models/EggDonorRegistration")).EggDonorRegistration;
 
       const countBefore = await targetModel.countDocuments({
         donorType: isSperm ? "sperm" : "egg",

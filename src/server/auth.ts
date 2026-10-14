@@ -44,7 +44,6 @@ export const auth = betterAuth({
       "http://localhost:3001",
       "http://192.168.1.6:3000",
       "http://192.168.1.6:3001",
-      "http://192.168.*:*",
       process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
     ],
 

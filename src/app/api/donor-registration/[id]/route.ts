@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { Notification } from "@/models/Notification";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
+
+async function findRegistration(id: string) {
+  let doc: any = await EggDonorRegistration.findOne({ registrationId: id });
+  let model: any = EggDonorRegistration;
+  if (!doc) {
+    doc = await SpermDonorRegistration.findOne({ registrationId: id });
+    model = SpermDonorRegistration;
+  }
+  return { doc, model };
+}
 
 async function checkAccess(registration: any, reqHeaders: Headers) {
   const session = await auth.api.getSession({ headers: reqHeaders });
@@ -36,7 +47,7 @@ export async function GET(
   try {
     await connectToDatabase();
     const { id } = await params;
-    const registration = await DonorRegistration.findOne({ registrationId: id });
+    const { doc: registration } = await findRegistration(id);
 
     if (!registration) {
       return NextResponse.json(
@@ -67,7 +78,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    const registration = await DonorRegistration.findOne({ registrationId: id });
+    const { doc: registration, model } = await findRegistration(id);
     if (!registration) {
       return NextResponse.json(
         { success: false, error: "Registration not found." },
@@ -78,17 +89,14 @@ export async function PATCH(
     const access = await checkAccess(registration, await headers());
     if (!access.hasAccess) return access.response;
 
-    // Build update object from body
     const update: any = {};
 
-    // Donor/user-allowed fields (safe for registration owner to update)
     const userAllowedKeys = [
       "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
       "labReports", "documents", "emergencyContact",
-      "consent", "referral", "currentStep",
+      "consent", "referral", "currentStep", "semenAnalysisDetails",
     ];
 
-    // Admin/staff-only fields (must not be settable by the donor themselves)
     const adminOnlyKeys = ["status", "adminNotes", "reviewedBy", "reviewedAt", "assignedHospital", "assignedBy", "assignedAt", "affiliatedBy", "updatedBy", "donorId"];
 
     const session = access.session;
@@ -109,7 +117,6 @@ export async function PATCH(
     for (const key of allowedKeys) {
       if (body[key] !== undefined) {
         if (typeof body[key] === "object" && !Array.isArray(body[key]) && body[key] !== null) {
-          // Merge sub-object fields
           for (const [subKey, subVal] of Object.entries(body[key])) {
             update[`${key}.${subKey}`] = subVal;
           }
@@ -119,23 +126,11 @@ export async function PATCH(
       }
     }
 
-
-    const updatedRegistration = await DonorRegistration.findOneAndUpdate(
+    const updatedRegistration = await model.findOneAndUpdate(
       { registrationId: id },
       { $set: update },
       { new: true }
     );
-
-    if (update.donorId || update.status) {
-      const { EggDonorRegistration } = await import("@/models/EggDonorRegistration");
-      const eggSet: any = {};
-      if (update.donorId) eggSet.donorId = update.donorId;
-      if (update.status) eggSet.status = update.status;
-      await EggDonorRegistration.updateOne(
-        { registrationId: id },
-        { $set: eggSet }
-      ).catch(() => {});
-    }
 
     return NextResponse.json({
       success: true,
@@ -161,7 +156,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const registration = await DonorRegistration.findOne({ registrationId: id });
+    const { doc: registration } = await findRegistration(id);
     if (!registration) {
       return NextResponse.json(
         { success: false, error: "Registration not found." },
@@ -183,10 +178,9 @@ export async function PUT(
       );
     }
 
-    // Update all fields from body
     const allowedKeys = [
       "personalInfo", "contactInfo", "medicalInfo", "donorInfo",
-      "labReports", "documents", "emergencyContact", "consent", "referral"
+      "labReports", "documents", "emergencyContact", "consent", "referral", "semenAnalysisDetails"
     ];
 
     for (const key of allowedKeys) {
@@ -213,7 +207,6 @@ export async function PUT(
       console.error("Failed to push notification via Pusher:", pushErr);
     }
 
-    // Process referral reward if referral details are present
     if (body.referral && body.referral.sourceReferralType) {
       const { 
         sourceReferralType, 
@@ -268,30 +261,6 @@ export async function PUT(
         { upsert: true, new: true }
       );
     }
-    // Trigger workflow notification for completed registration (skip if updated by employee/admin)
-    try {
-      const userRole = (access.session?.user as any)?.role || "";
-      const isEmployee = ["SUPER_ADMIN", "ADMIN", "STAFF", "DOCTOR", "RECEPTIONIST"].includes(userRole);
-      
-      if (!isEmployee) {
-        const { triggerWorkflowNotifications } = await import("@/features/notifications/services/workflow-notification.service");
-        await triggerWorkflowNotifications(
-          "registration_completed",
-          registration.personalInfo?.fullName || "Donor Candidate",
-          registration.contactInfo?.mobileNumber || "",
-          {
-            registrationId: id,
-            email: registration.contactInfo?.emailAddress || "",
-            interest: registration.donorType || "sperm",
-            bloodGroup: registration.personalInfo?.bloodGroup || "N/A"
-          }
-        );
-      } else {
-        console.log(`[BYPASS MAIL] Registration submission email bypassed because editor is employee/admin (${userRole})`);
-      }
-    } catch (notifErr) {
-      console.error("Failed to trigger registration completed notification:", notifErr);
-    }
 
     return NextResponse.json({
       success: true,
@@ -316,7 +285,7 @@ export async function DELETE(
     await connectToDatabase();
     const { id } = await params;
     
-    const registration = await DonorRegistration.findOne({ registrationId: id });
+    const { doc: registration, model } = await findRegistration(id);
     if (!registration) {
       return NextResponse.json(
         { success: false, error: "Registration not found." },
@@ -338,7 +307,7 @@ export async function DELETE(
       );
     }
 
-    const result = await DonorRegistration.deleteOne({ registrationId: id });
+    const result = await model.deleteOne({ registrationId: id });
 
     if (result.deletedCount === 0) {
       return NextResponse.json(

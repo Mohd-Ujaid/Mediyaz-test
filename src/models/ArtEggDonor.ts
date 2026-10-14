@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 import { IArtDonor } from "./ArtDonor";
 
-export interface IArtEggDonor extends IArtDonor {}
+export type IArtEggDonor = IArtDonor;
 
 const ArtEggDonorSchema = new Schema<IArtEggDonor>(
   {

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User, UserRole } from "@/models/User";
-import { Donor } from "@/models/Donor";
 import { Employee } from "@/models/Employee";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
+import mongoose from "mongoose";
 
 export async function GET(req: Request) {
   try {
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
     await connectToDatabase();
     const body = await req.json();
 
-    const { name, email, phone, role, department, permissions } = body;
+    const { name, email, password, phone, role, department, permissions } = body;
 
     if (!name || !email) {
       return NextResponse.json({ success: false, error: "Name and email are required." }, { status: 400 });
@@ -96,23 +96,53 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Email is already registered." }, { status: 400 });
     }
 
+    // Determine initial password (provided or generated)
+    let initialPassword = password;
+    if (!initialPassword || String(initialPassword).trim().length < 6) {
+      const { randomBytes } = await import("crypto");
+      initialPassword = `Med#${randomBytes(4).toString("hex")}!`;
+    }
+
     // Non-SUPER_ADMIN cannot create ADMIN or SUPER_ADMIN users
     let assignedRole = role || UserRole.RECIPIENT;
     if ((assignedRole === "ADMIN" || assignedRole === "SUPER_ADMIN") && userRole !== "SUPER_ADMIN") {
       assignedRole = UserRole.STAFF;
     }
 
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      phone,
-      role: assignedRole,
-      department: department || "General",
-      permissions: userRole === "SUPER_ADMIN" ? (permissions || ["READ_PORTAL"]) : ["READ_PORTAL"],
-      status: "ACTIVE",
+    // Register account via Better-Auth
+    const authResult = await auth.api.signUpEmail({
+      headers: reqHeaders,
+      body: {
+        email: email.toLowerCase(),
+        password: initialPassword,
+        name,
+      },
     });
 
-    return NextResponse.json({ success: true, user });
+    if (!authResult || !authResult.user) {
+      return NextResponse.json({ success: false, error: "Failed to create user authentication login." }, { status: 500 });
+    }
+
+    const perms = assignedRole === "SUPER_ADMIN" ? ["*"] : (permissions || ["READ_PORTAL"]);
+
+    const user = await User.findByIdAndUpdate(
+      authResult.user.id,
+      {
+        role: assignedRole,
+        phone: phone || "",
+        department: department || "General",
+        permissions: perms,
+        status: "ACTIVE",
+        emailVerified: true,
+      },
+      { new: true }
+    );
+
+    return NextResponse.json({
+      success: true,
+      user,
+      initialPassword: password ? undefined : initialPassword,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -132,7 +162,7 @@ export async function PATCH(req: Request) {
 
     await connectToDatabase();
     const body = await req.json();
-    const { userId, ...updateFields } = body;
+    const { userId, password, ...updateFields } = body;
 
     if (!userId) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
@@ -161,10 +191,19 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
     }
 
-    // Synchronize updates to linked Donor/Employee status
+    // Update password if provided
+    if (password && String(password).trim().length >= 6 && userRole === "SUPER_ADMIN") {
+      const { hashPassword } = await import("better-auth/crypto");
+      const passwordHash = await hashPassword(password);
+      await mongoose.connection.collection("accounts").updateOne(
+        { userId: user._id, providerId: "credential" },
+        { $set: { password: passwordHash, updatedAt: new Date() } }
+      );
+    }
+
+    // Synchronize updates to linked Employee status
     if (sanitizedUpdate.status) {
       const statusUpdate = sanitizedUpdate.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
-      await Donor.findOneAndUpdate({ user: userId }, { donationStatus: statusUpdate });
       await Employee.findOneAndUpdate({ user: userId }, { status: statusUpdate });
     }
 
@@ -194,19 +233,38 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
     }
 
-    // 1. Delete associated profile records
-    await Donor.deleteOne({ user: userId });
-    await Employee.deleteOne({ user: userId });
+    // Protect against self-deletion
+    if ((session.user as any).id === userId) {
+      return NextResponse.json({ success: false, error: "Cannot delete your own active administrator account." }, { status: 400 });
+    }
 
-    // 2. Delete user
-    const deletedUser = await User.findByIdAndDelete(userId);
-    if (!deletedUser) {
+    // Target user authorization check: Non-SUPER_ADMIN cannot delete another ADMIN or SUPER_ADMIN
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
       return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
     }
 
+    if (
+      (targetUser.role === "ADMIN" || targetUser.role === "SUPER_ADMIN") &&
+      userRole !== "SUPER_ADMIN"
+    ) {
+      return NextResponse.json({ success: false, error: "Only Super Admins can delete administrative accounts." }, { status: 403 });
+    }
+
+    await User.findByIdAndDelete(userId);
+    await Employee.findOneAndDelete({ user: userId });
+
+    // Clean up better-auth accounts and sessions
+    await mongoose.connection.collection("accounts").deleteMany({
+      $or: [{ userId: targetUser._id }, { accountId: targetUser._id.toString() }],
+    });
+    await mongoose.connection.collection("sessions").deleteMany({
+      userId: targetUser._id,
+    });
+
     return NextResponse.json({
       success: true,
-      message: "User and linked profile records deleted successfully!"
+      message: "User and authentication credentials deleted successfully!"
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

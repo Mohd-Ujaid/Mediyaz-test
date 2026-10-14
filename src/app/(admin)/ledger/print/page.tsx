@@ -9,6 +9,9 @@ interface PageProps {
     status?: string;
     donorType?: string;
     search?: string;
+    branch?: string;
+    startDate?: string;
+    endDate?: string;
   }>;
 }
 
@@ -24,7 +27,7 @@ export default async function LedgerPrintPage({ searchParams }: PageProps) {
     );
   }
 
-  const { type, hospitalId, status, donorType, search } = await searchParams;
+  const { type, hospitalId, status, donorType, search, branch, startDate, endDate } = await searchParams;
   const ledgerType = (type === "donor" ? "donor" : "clinic") as "clinic" | "donor";
 
   return (
@@ -34,6 +37,9 @@ export default async function LedgerPrintPage({ searchParams }: PageProps) {
       status={status}
       donorType={donorType}
       search={search}
+      branch={branch}
+      startDate={startDate}
+      endDate={endDate}
     />
   );
 }

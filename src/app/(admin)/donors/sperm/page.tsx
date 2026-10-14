@@ -50,6 +50,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 import { INDIAN_STATES, getCitiesForState } from "@/config/indiaLocations";
 
 export interface ArtDonorItem {
@@ -860,12 +861,7 @@ export default function AdminSpermDonorsPage() {
             </thead>
             <tbody className="divide-y divide-border/60">
               {loading ? (
-                <tr>
-                  <td colSpan={10} className="py-16 text-center text-muted-foreground">
-                    <RefreshCw className="h-7 w-7 animate-spin mx-auto mb-3 text-[#285b63]" />
-                    <span className="text-sm font-medium">Loading Sperm Donor database...</span>
-                  </td>
-                </tr>
+                <TableSkeletonRows columns={10} rows={6} />
               ) : donors.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-16 text-center text-muted-foreground">

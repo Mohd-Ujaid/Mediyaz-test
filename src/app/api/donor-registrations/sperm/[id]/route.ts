@@ -150,10 +150,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       (body.status === "APPROVED" || ["WAITING_FORM13", "FILE_COMPLETED"].includes(body.status)) &&
       !donorIdToUse
     ) {
-      const { Donor } = await import("@/models/Donor");
-      const count = await Donor.countDocuments();
+      const count = await SpermDonorRegistration.countDocuments({ donorId: { $exists: true, $ne: "" } });
       const currentYear = new Date().getFullYear();
-      const formattedDonorId = `D-${currentYear}-${String(count + 1).padStart(4, "0")}`;
+      const formattedDonorId = `MED-SD-${currentYear}-${String(count + 1001).padStart(4, "0")}`;
 
       await SpermDonorRegistration.collection.updateOne(
         { _id: existing._id },

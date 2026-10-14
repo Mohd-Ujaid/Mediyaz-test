@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useSession } from "@/lib/auth";
+import type { ITreatingDoctor } from "@/models/Hospital";
 import {
   Search,
   Filter,
@@ -44,6 +45,7 @@ import {
   Users,
   UserPlus,
   UserCheck,
+  ShieldCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -52,6 +54,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
@@ -138,6 +141,52 @@ export default function HospitalManagementPage() {
   const [formTab, setFormTab] = useState<"basic" | "branches" | "financial">("basic");
   const [detailTab, setDetailTab] = useState<"info" | "branches" | "financial" | "history">("info");
   
+  // View Switcher: Clinics vs Treating Doctors
+  const [activeMainTab, setActiveMainTab] = useState<"clinics" | "doctors">("clinics");
+  const [doctorSearch, setDoctorSearch] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.get("view") === "doctors") {
+        setActiveMainTab("doctors");
+      }
+    }
+  }, []);
+
+  const [doctorSpecialtyFilter, setDoctorSpecialtyFilter] = useState("ALL");
+  const [doctorRegFilter, setDoctorRegFilter] = useState<"ALL" | "REGISTERED" | "PENDING">("ALL");
+
+  // Dedicated Doctor Modal State
+  const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
+  const [doctorModalHospitalId, setDoctorModalHospitalId] = useState("");
+  const [doctorModalBranchId, setDoctorModalBranchId] = useState("main");
+  const [doctorForm, setDoctorForm] = useState<{
+    name: string;
+    specialization: string;
+    regNumber: string;
+    phone: string;
+    email: string;
+    isPrimary: boolean;
+    status: "ACTIVE" | "INACTIVE";
+  }>({
+    name: "",
+    specialization: "Infertility & IVF Specialist",
+    regNumber: "",
+    phone: "",
+    email: "",
+    isPrimary: false,
+    status: "ACTIVE",
+  });
+  const [editingDoctorData, setEditingDoctorData] = useState<{
+    hospitalId: string;
+    branchId: string;
+    rawName: string;
+    docIndex: number;
+    isHospitalLevel: boolean;
+  } | null>(null);
+  const [isDoctorSubmitting, setIsDoctorSubmitting] = useState(false);
+
   // Temporary input states for adding multiple doctors
   const [newHospitalDoctor, setNewHospitalDoctor] = useState("");
   const [newBranchDoctor, setNewBranchDoctor] = useState("");
@@ -900,18 +949,360 @@ data.hospitals?.forEach((h: any, index: number) => {
     toast.success("Hospitals exported to CSV.");
   };
 
+  // --- DOCTOR MANAGEMENT HANDLERS ---
+  const openAddDoctorModal = (prefillHospitalId?: string, prefillBranchId?: string) => {
+    setEditingDoctorData(null);
+    setDoctorModalHospitalId(prefillHospitalId || (hospitals[0]?._id ?? ""));
+    setDoctorModalBranchId(prefillBranchId || "main");
+    setDoctorForm({
+      name: "",
+      specialization: "Infertility & IVF Specialist",
+      regNumber: "",
+      phone: "",
+      email: "",
+      isPrimary: false,
+      status: "ACTIVE",
+    });
+    setIsDoctorModalOpen(true);
+  };
+
+  const openEditDoctorModal = (doc: any) => {
+    setEditingDoctorData({
+      hospitalId: doc.hospital._id,
+      branchId: doc.branchId || "main",
+      rawName: doc.rawName || doc.name,
+      docIndex: doc.docIndex,
+      isHospitalLevel: doc.isHospitalLevel,
+    });
+    setDoctorModalHospitalId(doc.hospital._id);
+    setDoctorModalBranchId(doc.branchId || "main");
+    setDoctorForm({
+      name: doc.name.replace(/^Dr\.?\s*/i, ""),
+      specialization: doc.specialization === "Treating Doctor" ? "Infertility & IVF Specialist" : doc.specialization,
+      regNumber: doc.regNumber === "—" ? "" : doc.regNumber,
+      phone: doc.phone === "—" ? "" : doc.phone,
+      email: doc.email === "—" ? "" : doc.email,
+      isPrimary: Boolean(doc.isPrimary),
+      status: doc.status || "ACTIVE",
+    });
+    setIsDoctorModalOpen(true);
+  };
+
+  const handleSaveDoctor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!doctorForm.name.trim()) {
+      toast.error("Doctor's full name is required.");
+      return;
+    }
+    if (!doctorModalHospitalId) {
+      toast.error("Please select an ART partner clinic.");
+      return;
+    }
+
+    const targetHosp = hospitals.find((h) => h._id === doctorModalHospitalId);
+    if (!targetHosp) {
+      toast.error("Selected clinic not found.");
+      return;
+    }
+
+    setIsDoctorSubmitting(true);
+    try {
+      const cleanName = `Dr. ${doctorForm.name.trim().replace(/^Dr\.?\s*/i, "")}`;
+      const doctorPayload: ITreatingDoctor = {
+        name: cleanName,
+        specialization: doctorForm.specialization.trim() || "Infertility & IVF Specialist",
+        regNumber: doctorForm.regNumber.trim() || undefined,
+        phone: doctorForm.phone.trim() || undefined,
+        email: doctorForm.email.trim() || undefined,
+        isPrimary: doctorForm.isPrimary,
+        status: doctorForm.status || "ACTIVE",
+      };
+
+      let updatedHospDocs = Array.isArray(targetHosp.doctors)
+        ? [...targetHosp.doctors.map((d: any) => typeof d === "string" ? { name: d } : { ...d })]
+        : [];
+      let updatedBranches = Array.isArray(targetHosp.branches)
+        ? targetHosp.branches.map((b: any) => ({
+            ...b,
+            doctors: Array.isArray(b.doctors)
+              ? [...b.doctors.map((d: any) => typeof d === "string" ? { name: d } : { ...d })]
+              : [],
+          }))
+        : [];
+
+      if (editingDoctorData) {
+        if (editingDoctorData.hospitalId !== doctorModalHospitalId) {
+          const oldHosp = hospitals.find((h) => h._id === editingDoctorData.hospitalId);
+          if (oldHosp) {
+            let oldDocs = Array.isArray(oldHosp.doctors)
+              ? oldHosp.doctors.filter((d: any) => (typeof d === "string" ? d : d.name).toLowerCase() !== editingDoctorData.rawName.toLowerCase())
+              : [];
+            let oldBranches = (oldHosp.branches || []).map((b: any) => ({
+              ...b,
+              doctors: Array.isArray(b.doctors)
+                ? b.doctors.filter((d: any) => (typeof d === "string" ? d : d.name).toLowerCase() !== editingDoctorData.rawName.toLowerCase())
+                : [],
+            }));
+            await fetch(`/api/hospitals/${oldHosp._id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ doctors: oldDocs, branches: oldBranches }),
+            });
+          }
+        } else {
+          if (editingDoctorData.isHospitalLevel) {
+            updatedHospDocs = updatedHospDocs.filter((d: any, idx: number) =>
+              idx !== editingDoctorData.docIndex && (typeof d === "string" ? d : d.name).toLowerCase() !== editingDoctorData.rawName.toLowerCase()
+            );
+          } else {
+            updatedBranches = updatedBranches.map((b: any) => {
+              if (b._id === editingDoctorData.branchId || b.branchName === editingDoctorData.branchId) {
+                return {
+                  ...b,
+                  doctors: (b.doctors || []).filter((d: any, idx: number) =>
+                    idx !== editingDoctorData.docIndex && (typeof d === "string" ? d : d.name).toLowerCase() !== editingDoctorData.rawName.toLowerCase()
+                  ),
+                };
+              }
+              return b;
+            });
+          }
+        }
+      }
+
+      if (doctorModalBranchId === "main") {
+        updatedHospDocs.push(doctorPayload);
+      } else {
+        updatedBranches = updatedBranches.map((b: any) => {
+          if (b._id === doctorModalBranchId || b.branchName === doctorModalBranchId) {
+            return {
+              ...b,
+              doctors: [...(b.doctors || []), doctorPayload],
+            };
+          }
+          return b;
+        });
+      }
+
+      const res = await fetch(`/api/hospitals/${doctorModalHospitalId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctors: updatedHospDocs,
+          branches: updatedBranches,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(editingDoctorData ? "Doctor details updated successfully!" : "Doctor registered successfully!");
+        setIsDoctorModalOpen(false);
+        setEditingDoctorData(null);
+        await loadHospitals();
+      } else {
+        toast.error(data.error || "Failed to save doctor.");
+      }
+    } catch (err) {
+      toast.error("Error saving doctor details.");
+    } finally {
+      setIsDoctorSubmitting(false);
+    }
+  };
+
+  const handleDeleteDoctor = async (doc: any) => {
+    if (!confirm(`Are you sure you want to remove ${doc.name} from ${doc.hospital.name}?`)) return;
+
+    try {
+      const targetHosp = hospitals.find((h) => h._id === doc.hospital._id);
+      if (!targetHosp) return;
+
+      let updatedHospDocs = Array.isArray(targetHosp.doctors)
+        ? [...targetHosp.doctors.map((d: any) => typeof d === "string" ? { name: d } : { ...d })]
+        : [];
+      let updatedBranches = Array.isArray(targetHosp.branches)
+        ? targetHosp.branches.map((b: any) => ({
+            ...b,
+            doctors: Array.isArray(b.doctors)
+              ? [...b.doctors.map((d: any) => typeof d === "string" ? { name: d } : { ...d })]
+              : [],
+          }))
+        : [];
+
+      if (doc.isHospitalLevel) {
+        updatedHospDocs = updatedHospDocs.filter((d: any, idx: number) => {
+          const dName = typeof d === "string" ? d : d.name;
+          return idx !== doc.docIndex && dName?.toLowerCase() !== doc.rawName?.toLowerCase();
+        });
+      } else {
+        updatedBranches = updatedBranches.map((b: any) => {
+          if (b._id === doc.branchId || b.branchName === doc.branchName) {
+            return {
+              ...b,
+              doctors: (b.doctors || []).filter((d: any, idx: number) => {
+                const dName = typeof d === "string" ? d : d.name;
+                return idx !== doc.docIndex && dName?.toLowerCase() !== doc.rawName?.toLowerCase();
+              }),
+            };
+          }
+          return b;
+        });
+      }
+
+      const res = await fetch(`/api/hospitals/${targetHosp._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctors: updatedHospDocs,
+          branches: updatedBranches,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`${doc.name} removed successfully.`);
+        await loadHospitals();
+      } else {
+        toast.error(data.error || "Failed to remove doctor.");
+      }
+    } catch (err) {
+      toast.error("Failed to remove doctor.");
+    }
+  };
+
+  // Compile list of all treating doctors across partner clinics and branches
+  const allDoctors = hospitals.flatMap((hosp) => {
+    const list: any[] = [];
+    if (Array.isArray(hosp.doctors) && hosp.doctors.length > 0) {
+      hosp.doctors.forEach((d: any, docIdx: number) => {
+        const dName = typeof d === "string" ? d : d.name;
+        if (dName) {
+          list.push({
+            _id: d._id || `doc-hosp-${hosp._id}-${docIdx}`,
+            name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
+            rawName: dName,
+            specialization: (typeof d === "object" && d.specialization) || "Infertility & IVF Specialist",
+            phone: (typeof d === "object" && d.phone) || hosp.mobileNumber || "—",
+            email: (typeof d === "object" && d.email) || hosp.email || "—",
+            regNumber: (typeof d === "object" && d.regNumber) || "—",
+            hospital: hosp,
+            branchId: "main",
+            branchName: "Main Center",
+            isHospitalLevel: true,
+            docIndex: docIdx,
+            isPrimary: typeof d === "object" ? Boolean(d.isPrimary) : false,
+            status: typeof d === "object" ? (d.status || "ACTIVE") : "ACTIVE",
+          });
+        }
+      });
+    } else if (hosp.doctorName) {
+      const docNames = hosp.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean);
+      docNames.forEach((dName: string, docIdx: number) => {
+        list.push({
+          _id: `doc-hosp-${hosp._id}-${docIdx}`,
+          name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
+          rawName: dName,
+          specialization: "Infertility & IVF Specialist",
+          phone: hosp.mobileNumber || "—",
+          email: hosp.email || "—",
+          regNumber: "—",
+          hospital: hosp,
+          branchId: "main",
+          branchName: "Main Center",
+          isHospitalLevel: true,
+          docIndex: docIdx,
+          isPrimary: false,
+          status: "ACTIVE",
+        });
+      });
+    }
+
+    if (Array.isArray(hosp.branches)) {
+      hosp.branches.forEach((b: any) => {
+        if (Array.isArray(b.doctors) && b.doctors.length > 0) {
+          b.doctors.forEach((d: any, docIdx: number) => {
+            const dName = typeof d === "string" ? d : d.name;
+            if (dName) {
+              list.push({
+                _id: d._id || `doc-branch-${b._id || b.branchName}-${docIdx}`,
+                name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
+                rawName: dName,
+                specialization: (typeof d === "object" && d.specialization) || "Infertility & IVF Specialist",
+                phone: (typeof d === "object" && d.phone) || b.mobileNumber || "—",
+                email: (typeof d === "object" && d.email) || b.email || "—",
+                regNumber: (typeof d === "object" && d.regNumber) || "—",
+                hospital: hosp,
+                branchId: b._id || b.branchName,
+                branchName: b.branchName,
+                isHospitalLevel: false,
+                docIndex: docIdx,
+                isPrimary: typeof d === "object" ? Boolean(d.isPrimary) : false,
+                status: typeof d === "object" ? (d.status || "ACTIVE") : "ACTIVE",
+              });
+            }
+          });
+        } else if (b.doctorName) {
+          const docNames = b.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean);
+          docNames.forEach((dName: string, docIdx: number) => {
+            list.push({
+              _id: `doc-branch-${b._id || b.branchName}-${docIdx}`,
+              name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
+              rawName: dName,
+              specialization: "Infertility & IVF Specialist",
+              phone: b.mobileNumber || "—",
+              email: b.email || "—",
+              regNumber: "—",
+              hospital: hosp,
+              branchId: b._id || b.branchName,
+              branchName: b.branchName,
+              isHospitalLevel: false,
+              docIndex: docIdx,
+              isPrimary: false,
+              status: "ACTIVE",
+            });
+          });
+        }
+      });
+    }
+
+    return list;
+  });
+
+  const filteredDoctors = allDoctors.filter((d) => {
+    if (doctorSearch) {
+      const q = doctorSearch.toLowerCase();
+      const match =
+        d.name.toLowerCase().includes(q) ||
+        d.hospital.name.toLowerCase().includes(q) ||
+        (d.branchName && d.branchName.toLowerCase().includes(q)) ||
+        d.specialization.toLowerCase().includes(q) ||
+        (d.regNumber && d.regNumber.toLowerCase().includes(q)) ||
+        (d.phone && d.phone.includes(q));
+      if (!match) return false;
+    }
+
+    if (doctorSpecialtyFilter !== "ALL") {
+      const spec = d.specialization.toLowerCase();
+      if (doctorSpecialtyFilter === "IVF" && !spec.includes("ivf") && !spec.includes("infertil")) return false;
+      if (doctorSpecialtyFilter === "EMBRYOLOGY" && !spec.includes("embryo")) return false;
+      if (doctorSpecialtyFilter === "GYNECOLOGY" && !spec.includes("gynec") && !spec.includes("obste")) return false;
+      if (doctorSpecialtyFilter === "ANDROLOGY" && !spec.includes("andro")) return false;
+    }
+
+    if (doctorRegFilter === "REGISTERED" && (!d.regNumber || d.regNumber === "—")) return false;
+    if (doctorRegFilter === "PENDING" && d.regNumber && d.regNumber !== "—") return false;
+
+    return true;
+  });
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-teal-600" /> ART Clinics Management
+            <Building2 className="w-6 h-6 text-teal-600" /> ART Clinics & Doctor Registration
           </h1>
-       
         </div>
         {isAdmin && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               onClick={exportCsv}
               variant="outline"
@@ -919,17 +1310,57 @@ data.hospitals?.forEach((h: any, index: number) => {
             >
               <Download className="w-3.5 h-3.5" /> Export CSV
             </Button>
-            <Button
-              onClick={() => { resetForm(); setSelectedHospital(null); setIsFormOpen(true); }}
-              className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1"
-            >
-              <Plus className="w-4 h-4" /> Add Partner Hospital
-            </Button>
+            {activeMainTab === "doctors" ? (
+              <Button
+                onClick={() => openAddDoctorModal()}
+                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1.5 cursor-pointer shadow-sm hover:shadow"
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Add Treating Doctor
+              </Button>
+            ) : (
+              <Button
+                onClick={() => { resetForm(); setSelectedHospital(null); setIsFormOpen(true); }}
+                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer shadow-sm hover:shadow"
+              >
+                <Plus className="w-4 h-4" /> Add Partner Hospital
+              </Button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Interactive Hospital Metrics */}
+      {/* Main Tab Switcher: Clinics vs Treating Doctors */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("clinics")}
+          className={`pb-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeMainTab === "clinics"
+              ? "border-teal-600 text-teal-700 dark:text-teal-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          Registered ART Clinics ({stats.total || hospitals.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("doctors")}
+          className={`pb-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeMainTab === "doctors"
+              ? "border-teal-600 text-teal-700 dark:text-teal-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          <Stethoscope className="w-4 h-4" />
+          Treating Doctors Directory ({allDoctors.length})
+        </button>
+      </div>
+
+      {/* View Switcher: Clinics Content vs Treating Doctors Content */}
+      {activeMainTab === "clinics" ? (
+        <>
+          {/* Interactive Hospital Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           {
@@ -1133,10 +1564,7 @@ data.hospitals?.forEach((h: any, index: number) => {
       {/* Main Table */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="text-center py-20 text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
-            Loading clinics...
-          </div>
+          <DataTableSkeleton rows={6} hasCheckbox={false} />
         ) : hospitals.length === 0 ? (
           <div className="text-center py-20 text-slate-400 text-xs">No partner clinics registered in this scope.</div>
         ) : (
@@ -1325,7 +1753,247 @@ data.hospitals?.forEach((h: any, index: number) => {
             />
           </div>
         )}
-      </Card>
+        </Card>
+        </>
+      ) : (
+        /* TREATING DOCTORS DIRECTORY VIEW */
+        <div className="space-y-4">
+          {/* Doctors Metric Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                Total Doctors
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-white mt-1.5">
+                {allDoctors.length}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">Across all partner clinics</div>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> NMC Registered
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 mt-1.5">
+                {allDoctors.filter((d) => d.regNumber && d.regNumber !== "—").length}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">Statutory verified records</div>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                IVF Specialists
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-purple-600 dark:text-purple-400 mt-1.5">
+                {allDoctors.filter((d) => d.specialization.toLowerCase().includes("ivf") || d.specialization.toLowerCase().includes("infertil")).length}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">Clinical fertility consultants</div>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                Embryologists
+              </div>
+              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-blue-600 dark:text-blue-400 mt-1.5">
+                {allDoctors.filter((d) => d.specialization.toLowerCase().includes("embryo")).length}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">Lab & IVF embryologists</div>
+            </div>
+          </div>
+
+          {/* Search & Filters */}
+          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="relative sm:col-span-2">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search doctor by name, clinic, branch, NMC reg, or phone..."
+                  value={doctorSearch}
+                  onChange={(e) => setDoctorSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={doctorSpecialtyFilter}
+                  onChange={(e) => setDoctorSpecialtyFilter(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
+                >
+                  <option value="ALL">All Specialties</option>
+                  <option value="IVF">IVF & Infertility Specialists</option>
+                  <option value="EMBRYOLOGY">Embryologists</option>
+                  <option value="GYNECOLOGY">Gynecologists & Obstetricians</option>
+                  <option value="ANDROLOGY">Andrologists</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={doctorRegFilter}
+                  onChange={(e) => setDoctorRegFilter(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
+                >
+                  <option value="ALL">All NMC Statuses</option>
+                  <option value="REGISTERED">Verified NMC Registered</option>
+                  <option value="PENDING">Pending NMC Registration</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground font-medium pt-3 mt-3 border-t border-slate-100 dark:border-slate-900">
+              <span>Showing {filteredDoctors.length} of {allDoctors.length} treating doctors</span>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  onClick={() => openAddDoctorModal()}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs h-7 px-2.5 gap-1 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> + Add Treating Doctor
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {filteredDoctors.length === 0 ? (
+            <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <Stethoscope className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-1" />
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No treating doctors found</p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                No doctors matched your current search filters. Register treating doctors or adjust your filters above.
+              </p>
+              {isAdmin && (
+                <Button
+                  onClick={() => openAddDoctorModal()}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer mt-2"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Register Doctor Now
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredDoctors.map((doc, idx) => (
+                <Card
+                  key={`${doc.name}-${doc.hospital._id}-${doc.branchId || idx}`}
+                  className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between gap-3"
+                >
+                  <div className="space-y-3">
+                    {/* Header info */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
+                          <Stethoscope className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{doc.name}</h4>
+                            {doc.isPrimary && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 rounded-md">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">
+                            {doc.specialization}
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                        doc.status === "ACTIVE"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-200/50"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                      }`}>
+                        {doc.status || "ACTIVE"}
+                      </span>
+                    </div>
+
+                    {/* NMC/MCI Reg Box */}
+                    <div>
+                      {doc.regNumber && doc.regNumber !== "—" ? (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>NMC Reg: {doc.regNumber}</span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-mono font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60">
+                          <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span>NMC Reg: Pending Record</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Affiliation details */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate font-semibold text-slate-800 dark:text-slate-200">
+                          {doc.hospital.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <GitBranch className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">Branch: {doc.branchName || "Main Center"}</span>
+                      </div>
+                      {doc.phone && doc.phone !== "—" && (
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <a href={`tel:${doc.phone}`} className="hover:text-teal-600 hover:underline">
+                            {doc.phone}
+                          </a>
+                        </div>
+                      )}
+                      {doc.email && doc.email !== "—" && (
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <a href={`mailto:${doc.email}`} className="hover:text-teal-600 hover:underline truncate">
+                            {doc.email}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openClinicDashboard(doc.hospital, "info")}
+                      className="text-xs h-7 px-2.5 rounded-lg text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800 hover:bg-teal-50 dark:hover:bg-teal-950/40 gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3 h-3" /> Clinic Profile
+                    </Button>
+
+                    {isAdmin && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openEditDoctorModal(doc)}
+                          className="h-7 px-2 text-xs rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 cursor-pointer"
+                          title="Edit Doctor Details"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteDoctor(doc)}
+                          className="h-7 px-2 text-xs rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer"
+                          title="Remove Doctor"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* DIALOG 1: ADD / EDIT PARTNER CLINIC WITH MULTI-STEP WIZARD */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
@@ -1657,7 +2325,21 @@ data.hospitals?.forEach((h: any, index: number) => {
                     <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-xl">
                       <div><span className="text-slate-400">Registration ID:</span> <span className="font-semibold text-slate-800 dark:text-slate-200">{selectedHospital.registrationNumber}</span></div>
                       <div>
-                        <span className="text-slate-400">Treating Doctors:</span>{" "}
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-slate-400">Treating Doctors:</span>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDetailOpen(false);
+                                openAddDoctorModal(selectedHospital._id, "main");
+                              }}
+                              className="text-[10px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" /> Add Doctor
+                            </button>
+                          )}
+                        </div>
                         <span className="font-semibold text-slate-800 dark:text-slate-200">
                           {selectedHospital.doctors && selectedHospital.doctors.length > 0
                             ? selectedHospital.doctors.map((d: any) => typeof d === "string" ? d : d.name).join(", ")
@@ -1794,7 +2476,7 @@ data.hospitals?.forEach((h: any, index: number) => {
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-[11px] text-slate-600 dark:text-slate-400">
-                              {((b.doctors && b.doctors.length > 0) || b.doctorName) && (
+                              {((b.doctors && b.doctors.length > 0) || b.doctorName) ? (
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <Stethoscope className="w-3 h-3 text-teal-600 shrink-0" />
                                   <span>
@@ -1802,8 +2484,35 @@ data.hospitals?.forEach((h: any, index: number) => {
                                       ? b.doctors.map((d: any) => typeof d === "string" ? d : d.name).join(", ")
                                       : `Dr. ${b.doctorName}`}
                                   </span>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsDetailOpen(false);
+                                        openAddDoctorModal(selectedHospital._id, b._id || b.branchName);
+                                      }}
+                                      className="text-[10px] text-teal-600 hover:text-teal-700 font-bold ml-1 cursor-pointer"
+                                    >
+                                      + Add Doctor
+                                    </button>
+                                  )}
                                 </div>
-                              )}
+                              ) : isAdmin ? (
+                                <div className="flex items-center gap-1.5 text-slate-400">
+                                  <Stethoscope className="w-3 h-3 text-slate-300 shrink-0" />
+                                  <span>No treating doctor assigned</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsDetailOpen(false);
+                                      openAddDoctorModal(selectedHospital._id, b._id || b.branchName);
+                                    }}
+                                    className="text-[10px] text-teal-600 hover:text-teal-700 font-bold ml-1 cursor-pointer"
+                                  >
+                                    + Assign Doctor
+                                  </button>
+                                </div>
+                              ) : null}
                               {(b.contactPerson || b.mobileNumber) && (
                                 <div className="flex items-center gap-1.5">
                                   <Phone className="w-3 h-3 text-slate-400 shrink-0" />
@@ -2383,6 +3092,218 @@ data.hospitals?.forEach((h: any, index: number) => {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG 4: REGISTER / EDIT TREATING DOCTOR */}
+      <Dialog open={isDoctorModalOpen} onOpenChange={setIsDoctorModalOpen}>
+        <DialogContent className="max-w-xl rounded-3xl max-h-[90vh] overflow-y-auto p-0 border border-slate-200 dark:border-slate-800 shadow-2xl">
+          <div className="bg-gradient-to-r from-teal-50/70 via-slate-50/50 to-emerald-50/40 dark:from-slate-900 dark:to-teal-950/30 p-6 pb-4 border-b border-slate-100 dark:border-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-teal-600/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 ring-1 ring-teal-500/20">
+                <Stethoscope className="w-6 h-6" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  {editingDoctorData ? "Edit Treating Doctor Profile" : "Register Treating Doctor"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Associate treating clinicians with partner ART centers. NMC/MCI registration numbers are tracked for statutory compliance.
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveDoctor} className="p-6 space-y-4 text-xs">
+            {/* Doctor Name & NMC/MCI Reg */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1 sm:col-span-2">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Doctor Full Name <span className="text-red-500">*</span></span>
+                  <span className="text-[10px] text-teal-600 font-medium">Auto-prefixed with "Dr."</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">Dr.</span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Anita Sharma"
+                    value={doctorForm.name}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  NMC / MCI Registration Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. MCI-48201-MH"
+                  value={doctorForm.regNumber}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, regNumber: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs font-mono font-semibold"
+                />
+                <span className="text-[10px] text-slate-400">Required under ART Act 2021 statutory reporting</span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Clinical Specialization / Role
+                </label>
+                <select
+                  value={doctorForm.specialization}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, specialization: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs font-medium"
+                >
+                  <option value="Infertility & IVF Specialist">Infertility & IVF Specialist</option>
+                  <option value="Senior IVF Consultant">Senior IVF Consultant</option>
+                  <option value="Clinical Embryologist">Clinical Embryologist</option>
+                  <option value="Consultant Gynecologist & Obstetrician">Consultant Gynecologist & Obstetrician</option>
+                  <option value="Andrologist & Micro-Surgeon">Andrologist & Micro-Surgeon</option>
+                  <option value="Reproductive Endocrinologist">Reproductive Endocrinologist</option>
+                  <option value="Treating ART Physician">Treating ART Physician</option>
+                </select>
+              </div>
+            </div>
+
+            {/* ART Center & Branch Association */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5" /> Affiliated ART Clinic & Branch
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Partner ART Clinic <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={doctorModalHospitalId}
+                    onChange={(e) => {
+                      setDoctorModalHospitalId(e.target.value);
+                      setDoctorModalBranchId("main");
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs font-medium"
+                  >
+                    <option value="">Select ART Clinic...</option>
+                    {hospitals.map((h) => (
+                      <option key={h._id} value={h._id}>
+                        {h.name} {h.city ? `(${h.city})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Clinic Center / Branch
+                  </label>
+                  <select
+                    value={doctorModalBranchId}
+                    onChange={(e) => setDoctorModalBranchId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs font-medium"
+                  >
+                    <option value="main">Main Center (Default)</option>
+                    {(() => {
+                      const curHosp = hospitals.find((h) => h._id === doctorModalHospitalId);
+                      if (!curHosp || !Array.isArray(curHosp.branches)) return null;
+                      return curHosp.branches.map((b: any, bIdx: number) => (
+                        <option key={b._id || bIdx} value={b._id || b.branchName}>
+                          Branch: {b.branchName} {b.city ? `(${b.city})` : ""}
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Contact Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <Phone className="w-3 h-3 text-slate-400" /> Mobile / Direct Phone
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={doctorForm.phone}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  <Mail className="w-3 h-3 text-slate-400" /> Direct Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="doctor@artclinic.com"
+                  value={doctorForm.email}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, email: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:border-teal-500 text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Status & Primary Checkbox */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-800">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={doctorForm.isPrimary}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, isPrimary: e.target.checked })}
+                  className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
+                />
+                <span>Designate as Primary Treating Doctor for this Center</span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Status:</span>
+                <select
+                  value={doctorForm.status}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, status: e.target.value as any })}
+                  className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDoctorModalOpen(false)}
+                className="rounded-xl text-xs h-9 px-4 border-slate-200 dark:border-slate-800"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={isDoctorSubmitting || !doctorForm.name.trim() || !doctorModalHospitalId}
+                className="rounded-xl text-xs h-9 px-5 gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {isDoctorSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{editingDoctorData ? "Save Changes" : "Register Doctor"}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

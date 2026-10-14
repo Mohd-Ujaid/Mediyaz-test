@@ -1,6 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { NextRequest, NextResponse } from "next/server";
 
+// Short-lived in-memory session cache (5 seconds) to eliminate duplicate internal HTTP roundtrips
+const sessionCache = new Map<string, { session: any; expiresAt: number }>();
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   // Pass pathname to Server Components/layouts
@@ -8,9 +11,12 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-pathname", path);
 
   // Print pages should bypass auth/layout processing for embedded iframe printing
-  const isPrintPage = /^\/(admin\/)?(manage-registrations\/[^/]+|ledger|laser)\/print\/?$/.test(
-    path,
-  );
+  const isPrintPage =
+    path.endsWith("/print") ||
+    path.includes("/print/") ||
+    /^\/(admin\/)?(manage-registrations|manage-sperm-registrations|completed-files|ledger|laser|invoices)\/.*print\/?$/.test(
+      path
+    );
 
   if (isPrintPage) {
     return NextResponse.next({
@@ -21,20 +27,42 @@ export async function proxy(request: NextRequest) {
   }
 
   let session: any = null;
+  const cookieHeader = request.headers.get("cookie") || "";
 
-  try {
-    const { data } = await betterFetch<any>("/api/auth/get-session", {
-      baseURL: request.nextUrl.origin,
-      headers: {
-        cookie: request.headers.get("cookie") || "",
-      },
-    });
-    session = data;
-  } catch (e) {
-    session = null;
+  // Performance optimization: only fetch session if auth cookies are present
+  const hasSessionCookie =
+    cookieHeader.includes("session_token") ||
+    cookieHeader.includes("mediyaz-admin") ||
+    cookieHeader.includes("better-auth");
+
+  if (hasSessionCookie) {
+    const cached = sessionCache.get(cookieHeader);
+    if (cached && Date.now() < cached.expiresAt) {
+      session = cached.session;
+    } else {
+      try {
+        const { data } = await betterFetch<any>("/api/auth/get-session", {
+          baseURL: request.nextUrl.origin,
+          headers: {
+            cookie: cookieHeader,
+          },
+        });
+        session = data;
+        if (session) {
+          sessionCache.set(cookieHeader, { session, expiresAt: Date.now() + 5000 });
+          if (sessionCache.size > 200) sessionCache.clear();
+        }
+      } catch {
+        session = null;
+      }
+    }
   }
 
-  const isAuthPage = path === "/login" || path === "/admin";
+  const isAuthPage =
+    path === "/login" ||
+    path === "/admin" ||
+    path.startsWith("/forgot-password") ||
+    path.startsWith("/reset-password");
   const isPublicApi = path.startsWith("/api/auth");
 
   if (isPublicApi) {
@@ -63,13 +91,8 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  // Redirect authenticated users away from login/auth pages to dashboard
-  if (isAuthPage) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
   // 2. Authenticated Admin Authorization & Global Delete Restrictions
-  const role = (session.user as any)?.role;
+  const role = (session?.user as any)?.role;
   const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(role);
 
   // Global Permissions: Prevent non-admins from executing DELETE requests anywhere
@@ -80,18 +103,35 @@ export async function proxy(request: NextRequest) {
           success: false,
           error: "Forbidden: Only Administrators can delete records.",
         },
-        { status: 403 },
+        { status: 403 }
       );
     }
   }
 
   // 3. Non-admin access restriction:
-  // If an employee or customer logs into the Admin panel, they cannot access admin management
+  // If an employee or customer without admin role logs in, prevent administrative access
   if (!isAdmin) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Forbidden: Administrative privileges required.",
+        },
+        { status: 403 }
+      );
+    }
+    // If they are on an auth page, allow them to view it without looping back to /dashboard
+    if (isAuthPage) {
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    }
     return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
   }
 
-  // 4. Authenticated Admin on login page redirected to dashboard
+  // 4. Authenticated Admin on auth pages or root redirected to dashboard
   if (isAuthPage || path === "/") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -105,6 +145,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|icon.png|images|.*\\.).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|icon.png|images|sound|fonts|.*\\.).*)",
   ],
 };
+
+export default proxy;
+export { proxy as middleware };
+

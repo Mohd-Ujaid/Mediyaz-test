@@ -38,6 +38,9 @@ export async function GET(req: Request) {
     const hospitalId = searchParams.get("hospitalId") || "";
     const donorType = searchParams.get("donorType") || "all";
     const statusParam = searchParams.get("status") || "ALL";
+    const branchParam = searchParams.get("branch") || "ALL";
+    const startDateParam = searchParams.get("startDate") || "";
+    const endDateParam = searchParams.get("endDate") || "";
     const search = (searchParams.get("search") || "").trim();
     const preview = searchParams.get("preview") === "true";
 
@@ -266,6 +269,42 @@ export async function GET(req: Request) {
       } else if (statusParam === "PARTIAL") {
         clinicEntries = clinicEntries.filter((e) => e.paymentStatus === "PARTIALLY_RECEIVED");
       }
+
+      if (branchParam && branchParam !== "ALL") {
+        const bLower = branchParam.toLowerCase().trim();
+        clinicEntries = clinicEntries.filter((e) =>
+          (e.donorOpuLocation && e.donorOpuLocation.toLowerCase().includes(bLower)) ||
+          (e.opuLocation && e.opuLocation.toLowerCase().includes(bLower)) ||
+          (e.location && e.location.toLowerCase().includes(bLower)) ||
+          (e.hospitalLocation && e.hospitalLocation.toLowerCase().includes(bLower)) ||
+          (e.hospitalCity && e.hospitalCity.toLowerCase().includes(bLower))
+        );
+      }
+
+      if (startDateParam || endDateParam) {
+        const parseEntryTime = (dStr?: string) => {
+          if (!dStr || dStr === "-") return null;
+          if (dStr.includes(".")) {
+            const parts = dStr.split(".");
+            if (parts.length === 3) {
+              return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+            }
+          }
+          const t = new Date(dStr).getTime();
+          return isNaN(t) ? null : t;
+        };
+        const startMs = startDateParam ? new Date(startDateParam).setHours(0, 0, 0, 0) : null;
+        const endMs = endDateParam ? new Date(endDateParam).setHours(23, 59, 59, 999) : null;
+
+        clinicEntries = clinicEntries.filter((e) => {
+          const t = parseEntryTime(e.pickupDate) || parseEntryTime(e.opuDate) || parseEntryTime(e.invoiceDate) || parseEntryTime(e.date);
+          if (!t) return true;
+          if (startMs && t < startMs) return false;
+          if (endMs && t > endMs) return false;
+          return true;
+        });
+      }
+
       clinicEntries = clinicEntries.map((e, idx) => ({ ...e, sNo: idx + 1 }));
 
       const totalDealPrice = clinicEntries.reduce((sum, e) => sum + (e.amount || e.dealPrice || 0), 0);
@@ -397,6 +436,31 @@ export async function GET(req: Request) {
     } else if (statusParam === "PARTIAL") {
       donorEntries = donorEntries.filter((e) => e.paymentStatus === "PARTIALLY_PAID");
     }
+
+    if (startDateParam || endDateParam) {
+      const parseEntryTime = (dStr?: string) => {
+        if (!dStr || dStr === "-") return null;
+        if (dStr.includes(".")) {
+          const parts = dStr.split(".");
+          if (parts.length === 3) {
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+          }
+        }
+        const t = new Date(dStr).getTime();
+        return isNaN(t) ? null : t;
+      };
+      const startMs = startDateParam ? new Date(startDateParam).setHours(0, 0, 0, 0) : null;
+      const endMs = endDateParam ? new Date(endDateParam).setHours(23, 59, 59, 999) : null;
+
+      donorEntries = donorEntries.filter((e) => {
+        const t = parseEntryTime(e.date);
+        if (!t) return true;
+        if (startMs && t < startMs) return false;
+        if (endMs && t > endMs) return false;
+        return true;
+      });
+    }
+
     donorEntries = donorEntries.map((e, idx) => ({ ...e, sNo: idx + 1 }));
 
     const totalCompensation = donorEntries.reduce((sum, e) => sum + e.compensationAmount, 0);

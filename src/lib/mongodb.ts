@@ -24,8 +24,8 @@ export async function connectToDatabase() {
     const opts = {
       bufferCommands: false, // Serverless Fast-Fail
       serverSelectionTimeoutMS: 5000,
-      maxPoolSize: 10, // Serverless concurrency control (Vercel spins up many lambdas)
-      minPoolSize: 1, // Keep 1 socket open to prevent cold start delays
+      maxPoolSize: 20, // Concurrency control (prevents connection starvation under concurrent queries)
+      minPoolSize: 2, // Keep warm sockets open to eliminate cold start latency
       socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
     };
 

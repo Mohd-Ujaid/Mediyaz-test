@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { EggDonorRegistration } from "@/models/EggDonorRegistration";
 import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
-import { DonorRegistration } from "@/models/DonorRegistration";
 import { Hospital } from "@/models/Hospital";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
@@ -21,6 +20,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    const role = (session.user as any)?.role;
+    if (!["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+      return NextResponse.json({ success: false, error: "Forbidden: Admin or staff access required." }, { status: 403 });
+    }
+
     await connectToDatabase();
     const _forceHosp = Hospital.modelName;
 
@@ -32,16 +36,21 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "15"));
 
-    // Eligible statuses for deals / invoices
-    const baseQuery: any = {
-      status: { $in: ["FILE_COMPLETED", "COMPLETED", "APPROVED"] },
-    };
+    // Only records with an explicitly generated invoice should appear in the Invoice Tracker
+    const invoiceOrConditions = [
+      { isInvoiceGenerated: true },
+      { "clinicDeal.isInvoiceGenerated": true },
+      { invoiceNumber: { $exists: true, $nin: ["", null] } },
+      { "clinicDeal.invoiceNumber": { $exists: true, $nin: ["", null] } },
+    ];
+
+    const andConditions: any[] = [{ $or: invoiceOrConditions }];
 
     if (hospitalId && hospitalId !== "ALL") {
       if (mongoose.Types.ObjectId.isValid(hospitalId)) {
-        baseQuery.assignedHospital = new mongoose.Types.ObjectId(hospitalId);
+        andConditions.push({ assignedHospital: new mongoose.Types.ObjectId(hospitalId) });
       } else {
-        baseQuery.assignedHospital = hospitalId;
+        andConditions.push({ assignedHospital: hospitalId });
       }
     }
 
@@ -59,6 +68,7 @@ export async function GET(req: Request) {
         { registrationId: searchRegex },
         { donorId: searchRegex },
         { invoiceNumber: searchRegex },
+        { "clinicDeal.invoiceNumber": searchRegex },
         { "personalInfo.fullName": searchRegex },
         { "personalInfo.husbandName": searchRegex },
         { "contactInfo.mobileNumber": searchRegex },
@@ -67,26 +77,28 @@ export async function GET(req: Request) {
       if (matchedHospIds.length > 0) {
         orClauses.push({ assignedHospital: { $in: matchedHospIds } });
       }
+      andConditions.push({ $or: orClauses });
     }
 
-    // Query both Egg and Sperm models
-    const queryEgg = { ...baseQuery };
-    const querySperm = { ...baseQuery };
-
-    if (orClauses.length > 0) {
-      queryEgg.$or = orClauses;
-      querySperm.$or = orClauses;
-    }
+    const queryFilter = andConditions.length > 1 ? { $and: andConditions } : andConditions[0];
 
     // Helper to fetch and normalize records
     const fetchAndNormalize = async (model: any, defaultType: "egg" | "sperm") => {
       const records = await model
-        .find(defaultType === "egg" ? queryEgg : querySperm)
-        .populate("assignedHospital")
+        .find(queryFilter)
+        .select(
+          "registrationId donorId donorType personalInfo.fullName personalInfo.husbandName contactInfo.mobileNumber assignedHospital clinicDeal donorDeal isInvoiceGenerated invoiceNumber invoiceDate pickupDate isDonorPaid paidAt createdAt updatedAt"
+        )
+        .populate("assignedHospital", "name shortName code city state gstNumber addressLine1 eggDonorDealPrice eggProfileDonorDealPrice profiledonorDealPrice donorDealPrice spermDonorDealPrice spermProfileDonorDealPrice")
         .sort({ updatedAt: -1, createdAt: -1 })
         .lean();
 
-      return records.map((r: any) => {
+      return records
+        .filter((r: any) => {
+          const invNum = (r.clinicDeal?.invoiceNumber || r.invoiceNumber || "").trim();
+          return Boolean(invNum || r.clinicDeal?.isInvoiceGenerated || r.isInvoiceGenerated);
+        })
+        .map((r: any) => {
         const hosp = typeof r.assignedHospital === "object" ? r.assignedHospital : null;
         const clinicDeal = r.clinicDeal || {};
         const donorCategory = clinicDeal.donorCategory || r.donorDeal?.donorCategory || "normal";
@@ -128,9 +140,8 @@ export async function GET(req: Request) {
           ? "PARTIALLY_RECEIVED"
           : "PENDING";
 
-        // Invoice Number Heuristic
-        const numOnly = r.registrationId?.replace(/\D/g, "");
-        const invoiceNumber = clinicDeal.invoiceNumber || r.invoiceNumber || (numOnly ? numOnly.slice(-3) : "54");
+        // Use actual generated invoice number
+        const invoiceNumber = (clinicDeal.invoiceNumber || r.invoiceNumber || "").trim();
         const invoiceDate = clinicDeal.invoiceDate
           ? formatDotDate(clinicDeal.invoiceDate)
           : r.pickupDate
@@ -213,6 +224,7 @@ export async function GET(req: Request) {
       const spermItems = await fetchAndNormalize(SpermDonorRegistration, "sperm");
       allItems = allItems.concat(spermItems);
     }
+
 
     // Sort descending by date
     allItems.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -359,6 +371,11 @@ export async function PATCH(req: Request) {
 
     if (!session) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const role = (session.user as any)?.role;
+    if (!["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+      return NextResponse.json({ success: false, error: "Forbidden: Admin or staff access required." }, { status: 403 });
     }
 
     const userName = session.user?.name || session.user?.email || "Admin";

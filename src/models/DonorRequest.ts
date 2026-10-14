@@ -18,7 +18,7 @@ export interface IDonorRequest extends Document {
 const DonorRequestSchema = new Schema<IDonorRequest>(
   {
     recipient: { type: Schema.Types.ObjectId, ref: "User", required: false },
-    donor: { type: Schema.Types.ObjectId, ref: "Donor", required: true },
+    donor: { type: Schema.Types.ObjectId, required: true },
     fullName: { type: String, required: true },
     email: { type: String, required: true },
     age: { type: Number, required: true },

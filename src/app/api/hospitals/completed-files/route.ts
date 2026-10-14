@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { EggDonorRegistration } from "@/models/EggDonorRegistration";
 import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
-import { DonorRegistration } from "@/models/DonorRegistration";
 import { Hospital } from "@/models/Hospital";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
@@ -143,8 +142,6 @@ export async function GET(req: Request) {
     let targetModel: any = EggDonorRegistration;
     if (donorType === "sperm") {
       targetModel = SpermDonorRegistration;
-    } else if (donorType === "all") {
-      targetModel = DonorRegistration;
     }
 
     const total = await targetModel.countDocuments(query);
@@ -225,12 +222,9 @@ export async function GET(req: Request) {
     });
 
     // Calculate aggregated overall KPIs for completed files
-    const statsQuery: any = { status: { $in: ["FILE_COMPLETED", "COMPLETED"] } };
-    if (targetModel === DonorRegistration) {
-      if (donorType === "sperm") statsQuery.donorType = "sperm";
-      else if (donorType === "egg") statsQuery.donorType = "egg";
-    }
 
+
+    const statsQuery: any = { status: { $in: ["FILE_COMPLETED", "COMPLETED"] } };
     const allCompletedRecords = await targetModel.find(statsQuery).populate("assignedHospital").lean();
 
     let totalHospitalDeals = 0;
@@ -373,9 +367,8 @@ export async function PATCH(req: Request) {
     // Find existing registration across collections
     const existingEgg = await EggDonorRegistration.findOne({ registrationId });
     const existingSperm = !existingEgg ? await SpermDonorRegistration.findOne({ registrationId }) : null;
-    const existingDonor = !existingEgg && !existingSperm ? await DonorRegistration.findOne({ registrationId }) : null;
 
-    const existing = existingEgg || existingSperm || existingDonor;
+    const existing = existingEgg || existingSperm;
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Registration record not found" },
@@ -549,10 +542,7 @@ export async function PATCH(req: Request) {
         { $set: updatePayload },
         { new: true }
       ).populate("assignedHospital");
-    }
-
-    // Update SpermDonorRegistration if applicable
-    if (existingSperm) {
+    } else if (existingSperm) {
       updatedDoc = await SpermDonorRegistration.findOneAndUpdate(
         { registrationId },
         { $set: updatePayload },

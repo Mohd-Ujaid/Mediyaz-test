@@ -20,6 +20,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
+    const role = (session.user as any)?.role;
+    if (!["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+      return NextResponse.json({ success: false, error: "Forbidden: Admin or staff access required." }, { status: 403 });
+    }
+
     await connectToDatabase();
     const _forceHosp = Hospital.modelName;
 
@@ -28,6 +33,9 @@ export async function GET(req: Request) {
     const hospitalId = searchParams.get("hospitalId") || "";
     const donorType = searchParams.get("donorType") || "all"; // egg | sperm | all
     const statusParam = searchParams.get("status") || "ALL"; // ALL | RECEIVED/PAID | PENDING | PARTIAL
+    const branchParam = searchParams.get("branch") || "ALL";
+    const startDateParam = searchParams.get("startDate") || "";
+    const endDateParam = searchParams.get("endDate") || "";
 
     const baseQuery: any = {
       status: { $in: ["FILE_COMPLETED", "COMPLETED", "APPROVED"] },
@@ -70,18 +78,25 @@ export async function GET(req: Request) {
       querySperm.$or = orClauses;
     }
 
+    const ledgerFields =
+      "registrationId donorId donorType status personalInfo.fullName contactInfo.mobileNumber assignedHospital clinicDeal donorDeal isInvoiceGenerated invoiceNumber invoiceDate pickupDate isDonorPaid paidAt createdAt updatedAt";
+    const hospitalFields =
+      "name shortName code city state eggDonorDealPrice eggProfileDonorDealPrice profiledonorDealPrice donorDealPrice spermDonorDealPrice spermProfileDonorDealPrice";
+
     // Fetch records
     let rawRecords: any[] = [];
     if (donorType === "egg" || donorType === "all") {
       const eggs = await EggDonorRegistration.find(queryEgg)
-        .populate("assignedHospital")
+        .select(ledgerFields)
+        .populate("assignedHospital", hospitalFields)
         .sort({ updatedAt: -1, createdAt: -1 })
         .lean();
       rawRecords = rawRecords.concat(eggs.map((e) => ({ ...e, donorType: "egg" })));
     }
     if (donorType === "sperm" || donorType === "all") {
       const sperms = await SpermDonorRegistration.find(querySperm)
-        .populate("assignedHospital")
+        .select(ledgerFields)
+        .populate("assignedHospital", hospitalFields)
         .sort({ updatedAt: -1, createdAt: -1 })
         .lean();
       rawRecords = rawRecords.concat(sperms.map((s) => ({ ...s, donorType: "sperm" })));
@@ -318,6 +333,44 @@ export async function GET(req: Request) {
       filteredClinicEntries = clinicEntries.filter((e) => e.paymentStatus === "PARTIALLY_RECEIVED");
     }
 
+    // Filter by branch if selected
+    if (branchParam && branchParam !== "ALL") {
+      const bLower = branchParam.toLowerCase().trim();
+      filteredClinicEntries = filteredClinicEntries.filter((e) =>
+        (e.donorOpuLocation && e.donorOpuLocation.toLowerCase().includes(bLower)) ||
+        (e.opuLocation && e.opuLocation.toLowerCase().includes(bLower)) ||
+        (e.location && e.location.toLowerCase().includes(bLower)) ||
+        (e.hospitalLocation && e.hospitalLocation.toLowerCase().includes(bLower)) ||
+        (e.hospitalCity && e.hospitalCity.toLowerCase().includes(bLower))
+      );
+    }
+
+    // Filter by date range if provided
+    if (startDateParam || endDateParam) {
+      const parseEntryTime = (dStr?: string) => {
+        if (!dStr || dStr === "-") return null;
+        if (dStr.includes(".")) {
+          const parts = dStr.split(".");
+          if (parts.length === 3) {
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+          }
+        }
+        const t = new Date(dStr).getTime();
+        return isNaN(t) ? null : t;
+      };
+
+      const startMs = startDateParam ? new Date(startDateParam).setHours(0, 0, 0, 0) : null;
+      const endMs = endDateParam ? new Date(endDateParam).setHours(23, 59, 59, 999) : null;
+
+      filteredClinicEntries = filteredClinicEntries.filter((e) => {
+        const t = parseEntryTime(e.pickupDate) || parseEntryTime(e.opuDate) || parseEntryTime(e.invoiceDate) || parseEntryTime(e.date);
+        if (!t) return true;
+        if (startMs && t < startMs) return false;
+        if (endMs && t > endMs) return false;
+        return true;
+      });
+    }
+
     // Re-index S.No
     filteredClinicEntries = filteredClinicEntries.map((e, idx) => ({ ...e, sNo: idx + 1 }));
 
@@ -328,6 +381,31 @@ export async function GET(req: Request) {
       filteredDonorEntries = donorEntries.filter((e) => e.paymentStatus === "PENDING");
     } else if (statusParam === "PARTIAL") {
       filteredDonorEntries = donorEntries.filter((e) => e.paymentStatus === "PARTIALLY_PAID");
+    }
+
+    // Filter donor by date if provided
+    if (startDateParam || endDateParam) {
+      const parseEntryTime = (dStr?: string) => {
+        if (!dStr || dStr === "-") return null;
+        if (dStr.includes(".")) {
+          const parts = dStr.split(".");
+          if (parts.length === 3) {
+            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+          }
+        }
+        const t = new Date(dStr).getTime();
+        return isNaN(t) ? null : t;
+      };
+      const startMs = startDateParam ? new Date(startDateParam).setHours(0, 0, 0, 0) : null;
+      const endMs = endDateParam ? new Date(endDateParam).setHours(23, 59, 59, 999) : null;
+
+      filteredDonorEntries = filteredDonorEntries.filter((e) => {
+        const t = parseEntryTime(e.date);
+        if (!t) return true;
+        if (startMs && t < startMs) return false;
+        if (endMs && t > endMs) return false;
+        return true;
+      });
     }
     filteredDonorEntries = filteredDonorEntries.map((e, idx) => ({ ...e, sNo: idx + 1 }));
 
@@ -418,8 +496,12 @@ export async function GET(req: Request) {
     }));
     clinicAccounts.sort((a, b) => b.totalDealPrice - a.totalDealPrice);
 
+    // Fetch all hospitals with their branches for branch filtering
+    const allHospitals = await Hospital.find({}).select("name shortName branches code").lean();
+
     return NextResponse.json({
       success: true,
+      hospitals: allHospitals,
       clinicLedger: {
         entries: filteredClinicEntries,
         totals: clinicTotals,
@@ -450,6 +532,11 @@ export async function PATCH(req: Request) {
 
     if (!session) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const role = (session.user as any)?.role;
+    if (!["ADMIN", "SUPER_ADMIN", "STAFF"].includes(role)) {
+      return NextResponse.json({ success: false, error: "Forbidden: Admin or staff access required." }, { status: 403 });
     }
 
     const userName = session.user?.name || session.user?.email || "Admin";

@@ -334,7 +334,8 @@
 
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { PDFDocument } from "pdf-lib";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
@@ -440,9 +441,11 @@ export async function GET(
 
     const { id } = await params;
 
-    const registration = await DonorRegistration.findOne({
-      registrationId: id,
-    });
+    const [egg, sperm] = await Promise.all([
+      EggDonorRegistration.findOne({ registrationId: id }).lean(),
+      SpermDonorRegistration.findOne({ registrationId: id }).lean(),
+    ]);
+    const registration: any = egg || sperm;
 
     if (!registration) {
       return NextResponse.json(

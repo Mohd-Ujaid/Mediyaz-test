@@ -6,7 +6,32 @@ import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "application/pdf"];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
+
+function detectMimeFromBuffer(buffer: Buffer): string | null {
+  if (buffer.length < 4) return null;
+  // PDF: %PDF-
+  if (buffer.length >= 5 && buffer.slice(0, 5).toString("ascii") === "%PDF-") {
+    return "application/pdf";
+  }
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return "image/png";
+  }
+  // WEBP: RIFF....WEBP
+  if (
+    buffer.length >= 12 &&
+    buffer.slice(0, 4).toString("ascii") === "RIFF" &&
+    buffer.slice(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
 
 // POST: Upload file directly to ImageKit (no local file fallback)
 export async function POST(req: Request) {
@@ -57,19 +82,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "File size exceeds 10MB limit." }, { status: 400 });
     }
 
-    // Security Validation: Mime Type Check
-    if (!ALLOWED_MIME_TYPES.includes(fileMetadata.type)) {
-      return NextResponse.json({ success: false, error: "Forbidden file type. Only PDF and JPG/PNG images are allowed." }, { status: 400 });
+    // Validate detected MIME vs declared MIME using magic numbers
+    const detectedMime = detectMimeFromBuffer(fileMetadata.buffer);
+    if (detectedMime) {
+      fileMetadata.type = detectedMime;
     }
 
-    // Sanitize the filename to prevent path traversal/directory traversal attacks
-    const sanitizedName = fileMetadata.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    // Security Validation: Mime Type Check
+    if (!ALLOWED_MIME_TYPES.includes(fileMetadata.type)) {
+      return NextResponse.json({ success: false, error: "Forbidden file type. Only PDF, JPG, PNG, and WEBP files are allowed." }, { status: 400 });
+    }
+
+    // Sanitize the filename and folder to prevent path traversal/directory traversal attacks
+    const sanitizedName = (fileMetadata.name || "document").replace(/[^a-zA-Z0-9.-]/g, "_");
+    const sanitizedFolder = (fileMetadata.folder || "documents").replace(/[^a-zA-Z0-9_\-\/]/g, "").replace(/\.\./g, "");
     const uniqueFilename = `${Date.now()}-${sanitizedName}`;
 
     // Upload directly to ImageKit Cloud
     let uploadResponse;
     try {
-      uploadResponse = await uploadToImageKit(fileMetadata.buffer, fileMetadata.folder, uniqueFilename);
+      uploadResponse = await uploadToImageKit(fileMetadata.buffer, sanitizedFolder, uniqueFilename);
     } catch (err: any) {
       console.error("ImageKit upload error:", err);
       return NextResponse.json({ success: false, error: `ImageKit upload failed: ${err.message}` }, { status: 500 });

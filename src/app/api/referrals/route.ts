@@ -37,12 +37,15 @@ export async function GET(req: Request) {
     if (type) query.sourceReferralType = type;
     if (status) query.rewardStatus = status;
 
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    const safeSearch = escapeRegex(search);
+
     if (search) {
       query.$or = [
-        { referrerName: { $regex: search, $options: "i" } },
-        { referredDonorName: { $regex: search, $options: "i" } },
-        { patientOrDonorId: { $regex: search, $options: "i" } },
-        { mobileNumber: { $regex: search, $options: "i" } },
+        { referrerName: { $regex: safeSearch, $options: "i" } },
+        { referredDonorName: { $regex: safeSearch, $options: "i" } },
+        { patientOrDonorId: { $regex: safeSearch, $options: "i" } },
+        { mobileNumber: { $regex: safeSearch, $options: "i" } },
       ];
     }
 

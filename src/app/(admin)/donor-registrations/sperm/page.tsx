@@ -81,6 +81,7 @@ import { FileUploadField } from "@/features/file-upload/components/FileUploadFie
 import { CustomPagination } from "@/components/ui/custom-pagination";
 import { InAppDocumentViewer } from "@/components/ui/in-app-document-viewer";
 import { SpermDonorPrintModal } from "@/features/donor-registration/components/SpermDonorPrintModal";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 
 const DOCUMENTS_CONFIG = [
   { key: "passportPhoto", label: "Photo", accept: ".png,.jpg,.jpeg,.webp", folder: "profile-images" },
@@ -1480,10 +1481,7 @@ export default function AdminSpermDonorRegistrationsPage() {
       {/* Main Table */}
       <Card className="rounded-2xl border bg-card overflow-hidden shadow-xs">
         {loading ? (
-          <div className="text-center py-20 text-muted-foreground text-xs flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-8 h-8 text-[#285b63] animate-spin" />
-            Loading sperm donor registrations...
-          </div>
+          <DataTableSkeleton rows={8} />
         ) : registrations.length === 0 ? (
           <div className="text-center py-20 text-muted-foreground text-xs">
             No matching sperm donor registrations found in database.

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User, UserRole } from "@/models/User";
-import { Donor } from "@/models/Donor";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import { sendWelcomeEmail } from "@/features/email/services/email.service";
@@ -75,46 +74,7 @@ export async function POST(req: Request) {
       { new: true }
     );
 
-    // 5. Create Donor Profile if selected role is DONOR
-    if (userRole === UserRole.DONOR) {
-      const donorCount = await Donor.countDocuments();
-      const donorId = `DON-${new Date().getFullYear()}-${String(donorCount + 1001).padStart(4, "0")}`;
-      await Donor.create({
-        user: authResult.user.id,
-        donorId,
-        personalInformation: {
-          dateOfBirth: new Date("1998-01-01"),
-          gender: "Male",
-          bloodGroup: "O+",
-          nationality: "American",
-          address: "Please update profile address",
-          maritalStatus: "Single",
-        },
-        physicalAttributes: {
-          height: 175,
-          weight: 70,
-          eyeColor: "Brown",
-          hairColor: "Black",
-          skinTone: "Medium",
-        },
-        medicalInformation: {
-          eligibility: true,
-          hemoglobin: 14.5,
-          bloodPressure: "120/80",
-          allergies: "None",
-          diseases: "None",
-          medications: "None",
-          medicalNotes: "Self-declared healthy donor.",
-        },
-        donationInformation: {
-          totalDonations: 0,
-          certificates: [],
-        },
-        donationStatus: "PENDING",
-        approvalStatus: "PENDING",
-        createdBy: "Self Registration",
-      });
-    }
+
 
     // 6. Trigger welcome email notification (in try-catch so it doesn't crash signup if SMTP fails)
     try {

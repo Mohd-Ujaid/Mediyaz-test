@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import mongoose from "mongoose";
 import { Agent } from "@/models/Agent";
-import { DonorRegistration } from "@/models/DonorRegistration";
 import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { EggDonorRegistration } from "@/models/EggDonorRegistration";
 import { auth } from "@/server/auth";
@@ -82,14 +81,13 @@ export async function GET(req: Request) {
 
       const selectFields = "registrationId donorType status personalInfo contactInfo createdAt updatedAt agentPayout";
 
-      const [mainDonors, spermDonors, eggDonors] = await Promise.all([
-        DonorRegistration.find(agentFilter).sort({ createdAt: -1 }).select(selectFields).lean(),
+      const [spermDonors, eggDonors] = await Promise.all([
         SpermDonorRegistration.find(agentFilter).sort({ createdAt: -1 }).select(selectFields).lean(),
         EggDonorRegistration.find(agentFilter).sort({ createdAt: -1 }).select(selectFields).lean(),
       ]);
 
       const donorMap = new Map();
-      [...mainDonors, ...spermDonors, ...eggDonors].forEach((d: any) => {
+      [...spermDonors, ...eggDonors].forEach((d: any) => {
         const key = d.registrationId || String(d._id);
         if (!donorMap.has(key)) {
           donorMap.set(key, d);
@@ -190,14 +188,13 @@ export async function GET(req: Request) {
           ]
         };
 
-        const [mainDonors, spermDonors, eggDonors] = await Promise.all([
-          DonorRegistration.find(agentFilter).select("registrationId donorType status agentPayout").lean(),
+        const [spermDonors, eggDonors] = await Promise.all([
           SpermDonorRegistration.find(agentFilter).select("registrationId donorType status agentPayout").lean(),
           EggDonorRegistration.find(agentFilter).select("registrationId donorType status agentPayout").lean(),
         ]);
 
         const donorMap = new Map();
-        [...mainDonors, ...spermDonors, ...eggDonors].forEach((d: any) => {
+        [...spermDonors, ...eggDonors].forEach((d: any) => {
           const key = d.registrationId || String(d._id);
           if (!donorMap.has(key)) {
             donorMap.set(key, d);
@@ -445,8 +442,7 @@ export async function PATCH(req: Request) {
       };
 
       // 1. Locate donor in any of the 3 collections to resolve registrationId
-      let donor = await DonorRegistration.findOne(donorQuery).lean() ||
-                  await SpermDonorRegistration.findOne(donorQuery).lean() ||
+      let donor = await SpermDonorRegistration.findOne(donorQuery).lean() ||
                   await EggDonorRegistration.findOne(donorQuery).lean();
 
       if (!donor) {
@@ -458,9 +454,7 @@ export async function PATCH(req: Request) {
         ? { $or: [{ registrationId: actualRegId }, { _id: donor._id }] }
         : donorQuery;
 
-      // Update across all three collections simultaneously with updateMany so duplicates remain 100% in sync
       await Promise.all([
-        DonorRegistration.updateMany(syncCondition, { $set: { agentPayout: payoutData } }),
         SpermDonorRegistration.updateMany(syncCondition, { $set: { agentPayout: payoutData } }),
         EggDonorRegistration.updateMany(syncCondition, { $set: { agentPayout: payoutData } }),
       ]);
@@ -494,14 +488,13 @@ export async function PATCH(req: Request) {
           ]
         };
 
-        const [mainDonors, spermDonors, eggDonors] = await Promise.all([
-          DonorRegistration.find(agentFilter).select("registrationId donorType status agentPayout").lean(),
+        const [spermDonors, eggDonors] = await Promise.all([
           SpermDonorRegistration.find(agentFilter).select("registrationId donorType status agentPayout").lean(),
           EggDonorRegistration.find(agentFilter).select("registrationId donorType status agentPayout").lean(),
         ]);
 
         const donorMap = new Map();
-        [...mainDonors, ...spermDonors, ...eggDonors].forEach((d: any) => {
+        [...spermDonors, ...eggDonors].forEach((d: any) => {
           const key = d.registrationId || String(d._id);
           if (!donorMap.has(key)) {
             donorMap.set(key, d);

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Recipient } from "@/models/Recipient";
-import { Donor } from "@/models/Donor";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { Employee } from "@/models/Employee";
 import { User } from "@/models/User";
 import { auth } from "@/server/auth";
@@ -59,34 +60,29 @@ export async function GET(req: Request) {
           label: `${r.user.name} (Mobile: ${r.user.phone || "N/A"})`,
         }));
     } else if (type === "donor") {
-      // Find Donor populated with User
-      const donors = await Donor.find({
-        $or: [
-          { donorId: { $regex: safeRegex, $options: "i" } },
-        ],
-      })
-        .populate({
-          path: "user",
-          select: "name email phone",
-        });
+      const [eggDonors, spermDonors] = await Promise.all([
+        EggDonorRegistration.find({
+          $or: [
+            { registrationId: { $regex: safeRegex, $options: "i" } },
+            { "personalInfo.fullName": { $regex: safeRegex, $options: "i" } },
+            { "contactInfo.mobileNumber": { $regex: safeRegex, $options: "i" } },
+          ],
+        }).limit(10).lean(),
+        SpermDonorRegistration.find({
+          $or: [
+            { registrationId: { $regex: safeRegex, $options: "i" } },
+            { "personalInfo.fullName": { $regex: safeRegex, $options: "i" } },
+            { "contactInfo.mobileNumber": { $regex: safeRegex, $options: "i" } },
+          ],
+        }).limit(10).lean(),
+      ]);
 
-      let mappedDonors = donors.map((d: any) => ({
-        id: d.donorId,
-        name: d.user?.name || "Unknown Donor",
-        mobile: d.user?.phone || "",
-        label: `${d.user?.name || "Unknown"} (Donor ID: ${d.donorId})`,
+      results = [...eggDonors, ...spermDonors].map((d: any) => ({
+        id: d.registrationId,
+        name: d.personalInfo?.fullName || "Altruistic Donor",
+        mobile: d.contactInfo?.mobileNumber || "",
+        label: `${d.personalInfo?.fullName || "Donor"} (ID: ${d.registrationId})`,
       }));
-
-      // Search by user fields if mapped didn't yield enough or search in memory
-      if (query) {
-        mappedDonors = mappedDonors.filter((d) => 
-          d.name.toLowerCase().includes(query.toLowerCase()) ||
-          d.id.toLowerCase().includes(query.toLowerCase()) ||
-          d.mobile.includes(query)
-        );
-      }
-
-      results = mappedDonors;
     } else if (type === "doctor") {
       // Find Doctor from Employee
       const doctors = await Employee.find({

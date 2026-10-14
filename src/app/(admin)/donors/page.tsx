@@ -38,6 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 
 export interface ArtDonorItem {
   _id: string;
@@ -809,12 +810,7 @@ export default function AdminDonorsPage() {
             </thead>
             <tbody className="divide-y divide-border/60">
               {loading ? (
-                <tr>
-                  <td colSpan={10} className="py-16 text-center text-muted-foreground">
-                    <RefreshCw className="h-7 w-7 animate-spin mx-auto mb-3 text-[#285b63]" />
-                    <span className="text-sm font-medium">Loading ART donor database from MongoDB...</span>
-                  </td>
-                </tr>
+                <TableSkeletonRows columns={10} rows={6} />
               ) : donors.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="py-16 text-center text-muted-foreground">

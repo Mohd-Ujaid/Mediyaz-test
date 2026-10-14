@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { Hospital } from "@/models/Hospital";
 import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
@@ -16,9 +17,11 @@ export async function GET(
     await connectToDatabase();
     const { id } = await params;
 
-    const registration = await DonorRegistration.findOne({
-      registrationId: id,
-    });
+    const [egg, sperm] = await Promise.all([
+      EggDonorRegistration.findOne({ registrationId: id }).lean(),
+      SpermDonorRegistration.findOne({ registrationId: id }).lean(),
+    ]);
+    const registration: any = egg || sperm;
     if (!registration) {
       return NextResponse.json(
         { success: false, error: "Registration not found." },

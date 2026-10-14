@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
-import { User } from "@/models/User";
 import { Hospital } from "@/models/Hospital";
-import { createAuditLog } from "@/features/audit-logs/services/audit-log.service";
 
 export async function GET(req: Request) {
   try {
     const reqHeaders = await headers();
     const session = await auth.api.getSession({ headers: reqHeaders });
     
-    // Authorization check
     if (!session) {
       return NextResponse.json({ success: false, error: "Unauthorized: Access Denied." }, { status: 401 });
     }
@@ -25,8 +23,6 @@ export async function GET(req: Request) {
     }
 
     await connectToDatabase();
-    
-    // Ensure Hospital model is registered to avoid populate MissingSchemaError
     const _forceRegisterHospital = Hospital.modelName;
 
     const { searchParams } = new URL(req.url);
@@ -41,7 +37,6 @@ export async function GET(req: Request) {
     const skip = (page - 1) * limit;
     
     const query: any = {};
-    if (donorType) query.donorType = donorType;
     if (status) query.status = status;
     if (bloodGroup) query["personalInfo.bloodGroup"] = bloodGroup;
     if (hospital) query.assignedHospital = hospital;
@@ -55,12 +50,42 @@ export async function GET(req: Request) {
       ];
     }
 
-    const total = await DonorRegistration.countDocuments(query);
-    const registrations = await DonorRegistration.find(query)
-      .populate("assignedHospital")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    let registrations: any[] = [];
+    let total = 0;
+
+    if (donorType === "egg") {
+      total = await EggDonorRegistration.countDocuments(query);
+      registrations = await EggDonorRegistration.find(query)
+        .populate("assignedHospital")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    } else if (donorType === "sperm") {
+      total = await SpermDonorRegistration.countDocuments(query);
+      registrations = await SpermDonorRegistration.find(query)
+        .populate("assignedHospital")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    } else {
+      const [eggTotal, spermTotal] = await Promise.all([
+        EggDonorRegistration.countDocuments(query),
+        SpermDonorRegistration.countDocuments(query),
+      ]);
+      total = eggTotal + spermTotal;
+
+      const [eggDocs, spermDocs] = await Promise.all([
+        EggDonorRegistration.find(query).populate("assignedHospital").sort({ createdAt: -1 }).limit(skip + limit).lean(),
+        SpermDonorRegistration.find(query).populate("assignedHospital").sort({ createdAt: -1 }).limit(skip + limit).lean(),
+      ]);
+
+      const combined = [...eggDocs, ...spermDocs].sort(
+        (a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      );
+      registrations = combined.slice(skip, skip + limit);
+    }
 
     return NextResponse.json({ 
       success: true, 

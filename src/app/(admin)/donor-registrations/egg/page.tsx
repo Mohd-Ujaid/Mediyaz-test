@@ -75,6 +75,7 @@ import { FileUploadField } from "@/features/file-upload/components/FileUploadFie
 import { CustomPagination } from "@/components/ui/custom-pagination";
 import { InAppDocumentViewer } from "@/components/ui/in-app-document-viewer";
 import { DonorPrintModal } from "@/features/donor-registration/components/DonorPrintModal";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 
 const SOURCE_BADGE: Record<string, { label: string; className: string }> = {
   online_inquiry: { label: "🌐 Online", className: "bg-rose-50 text-rose-600 border border-rose-100" },
@@ -1328,10 +1329,7 @@ export default function AdminEggDonorRegistrationsPage() {
       {/* Main Table */}
       <Card className="rounded-2xl border bg-card overflow-hidden shadow-xs">
         {loading ? (
-          <div className="text-center py-20 text-muted-foreground text-xs flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-8 h-8 text-rose-600 animate-spin" />
-            Loading egg donor registrations...
-          </div>
+          <DataTableSkeleton rows={8} />
         ) : registrations.length === 0 ? (
           <div className="text-center py-20 text-muted-foreground text-xs">
             No matching egg donor registrations found in database.

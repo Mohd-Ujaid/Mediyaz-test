@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
-import { DonorRegistration } from "@/models/DonorRegistration";
+import { EggDonorRegistration } from "@/models/EggDonorRegistration";
+import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { VerificationOtp } from "@/models/VerificationOtp";
 import { sendTwilioWhatsApp } from "@/features/twilio/services/twilio.service";
+import { randomInt } from "crypto";
 
 // --- Rate Limit Configuration (Handled directly by Next.js) ---
 const MAX_SEND_ATTEMPTS = 3;      // Max OTP sends per 10 minutes
@@ -60,7 +62,11 @@ export async function POST(req: Request) {
         duplicateQuery.registrationId = { $ne: registrationId };
       }
 
-      const duplicate = await DonorRegistration.findOne(duplicateQuery);
+      const [existingEgg, existingSperm] = await Promise.all([
+        EggDonorRegistration.findOne(duplicateQuery).lean(),
+        SpermDonorRegistration.findOne(duplicateQuery).lean(),
+      ]);
+      const duplicate: any = existingEgg || existingSperm;
       if (duplicate) {
         let matchedField = "credentials";
         if (duplicate.personalInfo?.aadhaarNumber === cleanAadhaar) matchedField = "Aadhaar number";
@@ -72,8 +78,8 @@ export async function POST(req: Request) {
         }, { status: 400 });
       }
 
-      // --- NEXT.JS OTP GENERATION: 6-digit numeric OTP ---
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      // --- NEXT.JS OTP GENERATION: Cryptographically secure 6-digit numeric OTP ---
+      const otpCode = randomInt(100000, 1000000).toString();
 
       // Store/update OTP in database with Next.js tracking
       if (existingOtp) {

@@ -39,6 +39,7 @@ interface CompletedFileInvoiceModalProps {
   registration: any;
   donorType?: "egg" | "sperm";
   onInvoiceSaved?: () => void;
+  readOnly?: boolean;
 }
 
 export function CompletedFileInvoiceModal({
@@ -47,6 +48,7 @@ export function CompletedFileInvoiceModal({
   registration,
   donorType = "egg",
   onInvoiceSaved,
+  readOnly = false,
 }: CompletedFileInvoiceModalProps) {
   const isEgg = donorType === "egg";
   const hosp =
@@ -218,10 +220,11 @@ export function CompletedFileInvoiceModal({
       setTotalDealPrice(resolvedDealPrice);
       setServiceCharge(sc);
       setDonorReimbursement(reimb);
+      if (readOnly) {
+        setActiveTab("preview");
+      }
     }
-  }, [registration, donorType]);
-
-  if (!registration) return null;
+  }, [registration, donorType, readOnly]);
 
   // Financial calculations
   const isInterState = saleType === "INTER-STATE";
@@ -240,8 +243,8 @@ export function CompletedFileInvoiceModal({
   const totalAmountAfterTax = serviceChargeTotal + donorReimbursement;
   const wordsText = numberToWordsIndian(totalAmountAfterTax);
 
-  const donorName = registration.personalInfo?.fullName || "Donor";
-  const huidNo = registration.donorId || registration.registrationId || "N/A";
+  const donorName = registration?.personalInfo?.fullName || "Donor";
+  const huidNo = registration?.donorId || registration?.registrationId || "N/A";
 
   const reimbursementDesc = isEgg
     ? "Rembursment Of Oocyte Donor Exp"
@@ -266,6 +269,7 @@ export function CompletedFileInvoiceModal({
 
   // Save invoice details to database and activate donor in ledger
   const saveInvoiceToDb = async (silent = false): Promise<boolean> => {
+    if (!registration) return false;
     setIsSaving(true);
     try {
       const gstVal = isInterState ? igstAmount : cgstAmount + sgstAmount;
@@ -305,7 +309,7 @@ export function CompletedFileInvoiceModal({
       const data = await res.json();
       if (data.success) {
         if (!silent) {
-          toast.success(`Invoice #${invoiceNumber} saved! Donor is now listed in the Clinic Ledger.`);
+          toast.success(`Invoice #${invoiceNumber} saved! Record is entered in Invoice Tracker & Ledger.`);
         }
         onInvoiceSaved?.();
         return true;
@@ -321,6 +325,21 @@ export function CompletedFileInvoiceModal({
       setIsSaving(false);
     }
   };
+
+  // Automatically record & persist generated invoice when opened in generation mode
+  useEffect(() => {
+    if (isOpen && !readOnly) {
+      const isAlreadyGenerated = Boolean(
+        registration?.clinicDeal?.isInvoiceGenerated ||
+        registration?.isInvoiceGenerated ||
+        (registration?.clinicDeal?.invoiceNumber && String(registration.clinicDeal.invoiceNumber).trim() !== "") ||
+        (registration?.invoiceNumber && String(registration.invoiceNumber).trim() !== "")
+      );
+      if (!isAlreadyGenerated) {
+        saveInvoiceToDb(true);
+      }
+    }
+  }, [isOpen, readOnly, registration?.registrationId]);
 
   // Pre-generate PDF Blob in background for instant download and printing
   useEffect(() => {
@@ -409,7 +428,7 @@ export function CompletedFileInvoiceModal({
   const buildPdfParams = (preview: boolean) => {
     const params = new URLSearchParams();
     params.set("donorType", isEgg ? "egg" : "sperm");
-    params.set("id", registration._id || registration.registrationId);
+    params.set("id", registration?._id || registration?.registrationId || "");
     params.set("invoiceNumber", invoiceNumber);
     params.set("invoiceDate", invoiceDate);
     params.set("pickupDate", pickupDate);
@@ -478,6 +497,8 @@ export function CompletedFileInvoiceModal({
     window.open(url, "_blank");
   };
 
+  if (!registration) return null;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl w-[95vw] h-[92vh] max-h-[92vh] p-0 flex flex-col rounded-2xl bg-background border shadow-2xl overflow-hidden focus:outline-none">
@@ -521,30 +542,36 @@ export function CompletedFileInvoiceModal({
 
             {/* Badges & Tab Toggle */}
             <div className="flex items-center gap-2">
-              <div className="flex rounded-xl bg-muted p-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("preview")}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
-                    activeTab === "preview"
-                      ? "bg-background text-foreground shadow-sm font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Eye className="w-3.5 h-3.5" /> Live Preview
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("settings")}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
-                    activeTab === "settings"
-                      ? "bg-background text-foreground shadow-sm font-semibold"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Edit3 className="w-3.5 h-3.5" /> Edit Breakdown
-                </button>
-              </div>
+              {readOnly ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                  <Eye className="w-3.5 h-3.5 text-sky-600" /> Official Invoice View
+                </div>
+              ) : (
+                <div className="flex rounded-xl bg-muted p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("preview")}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                      activeTab === "preview"
+                        ? "bg-background text-foreground shadow-sm font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Live Preview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("settings")}
+                    className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                      activeTab === "settings"
+                        ? "bg-background text-foreground shadow-sm font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" /> Edit Breakdown
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -1210,19 +1237,21 @@ export function CompletedFileInvoiceModal({
         {/* Fixed Footer Toolbar */}
         <div className="shrink-0 px-6 py-3 border-t bg-card/95 backdrop-blur flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => saveInvoiceToDb(false)}
-              disabled={isSaving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs h-9 px-4 gap-1.5 shadow-sm font-bold cursor-pointer"
-            >
-              {isSaving ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Receipt className="w-3.5 h-3.5" />
-              )}
-              Save & Record to Ledger
-            </Button>
+            {!readOnly && (
+              <Button
+                type="button"
+                onClick={() => saveInvoiceToDb(false)}
+                disabled={isSaving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs h-9 px-4 gap-1.5 shadow-sm font-bold cursor-pointer"
+              >
+                {isSaving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Receipt className="w-3.5 h-3.5" />
+                )}
+                Save Invoice to Tracker & Ledger
+              </Button>
+            )}
 
             <Button
               type="button"

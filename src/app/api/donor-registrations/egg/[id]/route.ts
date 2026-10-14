@@ -197,9 +197,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       (body.status === "APPROVED" || ["WAITING_FORM13", "FILE_COMPLETED"].includes(body.status)) &&
       !donorIdToUse
     ) {
-      const { Donor } = await import("@/models/Donor");
-      const count = await Donor.countDocuments();
-      donorIdToUse = `DON-${new Date().getFullYear()}-${String(count + 1001).padStart(4, "0")}`;
+      const count = await EggDonorRegistration.countDocuments({ donorId: { $exists: true, $ne: "" } });
+      donorIdToUse = `MED-ED-${new Date().getFullYear()}-${String(count + 1001).padStart(4, "0")}`;
     }
     if (donorIdToUse) {
       body.donorId = donorIdToUse;

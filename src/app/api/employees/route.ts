@@ -35,13 +35,16 @@ export async function GET(req: Request) {
 
     const query: any = {};
 
+    const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+    const safeSearch = escapeRegex(search);
+
     // 1. Text Search Filter
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { employeeId: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
+        { name: { $regex: safeSearch, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
+        { employeeId: { $regex: safeSearch, $options: "i" } },
+        { phone: { $regex: safeSearch, $options: "i" } },
       ];
     }
 

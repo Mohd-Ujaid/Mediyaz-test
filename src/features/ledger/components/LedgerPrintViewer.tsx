@@ -25,6 +25,9 @@ interface LedgerPrintViewerProps {
   status?: string;
   donorType?: string;
   search?: string;
+  branch?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export default function LedgerPrintViewer({
@@ -33,6 +36,9 @@ export default function LedgerPrintViewer({
   status,
   donorType,
   search,
+  branch,
+  startDate,
+  endDate,
 }: LedgerPrintViewerProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
@@ -60,6 +66,9 @@ export default function LedgerPrintViewer({
         if (status && status !== "ALL") params.append("status", status);
         if (donorType) params.append("donorType", donorType);
         if (search) params.append("search", search);
+        if (branch && branch !== "ALL") params.append("branch", branch);
+        if (startDate) params.append("startDate", startDate);
+        if (endDate) params.append("endDate", endDate);
 
         const url = `/api/ledger/pdf?${params.toString()}`;
         const res = await fetch(url);

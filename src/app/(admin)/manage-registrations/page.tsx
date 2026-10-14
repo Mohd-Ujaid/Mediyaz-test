@@ -74,6 +74,9 @@ import { SPERM_SECTIONS } from "@/features/pdf-generator/components/PrintableDon
 import { computeEggDonorManagementStatus, checkViralMarkersEntered } from "@/features/donor-registration/utils/egg-donor-status";
 import { InAppDocumentViewer } from "@/components/ui/in-app-document-viewer";
 import { DonorPrintModal } from "@/features/donor-registration/components/DonorPrintModal";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { FloatingBulkBar } from "@/components/ui/floating-bulk-bar";
 
 const EGG_SECTIONS = [
   { key: "registration", label: "Registration Form" },
@@ -86,6 +89,7 @@ const EGG_SECTIONS = [
 
 const COMMON_ANNEXURES = [
   { id: "form13", label: "Form 13 (Consent & Fitness PDF)" },
+  { id: "form14", label: "Form 14 (Certificate & Screening PDF)" },
   { id: "terms", label: "Terms & Conditions" },
   { id: "notes", label: "Additional Clinical Notes" },
 ];
@@ -96,6 +100,7 @@ const DOCUMENTS_CONFIG = [
   { key: "aadhaarBack", label: "Aadhaar Card (Back)", accept: ".png,.jpg,.jpeg,.webp", folder: "documents" },
   { key: "signature", label: "Signature", accept: ".png,.jpg,.jpeg,.webp", folder: "documents" },
   { key: "form13", label: "Form 13 (Consent & Fitness PDF)", accept: ".pdf", folder: "form13" },
+  { key: "form14", label: "Form 14 (Certificate & Screening PDF)", accept: ".pdf", folder: "form14" },
   { key: "affidavit", label: "Affidavit (Form 13 Signed / Notarized)", accept: ".pdf,.png,.jpg,.jpeg,.webp", folder: "affidavit" },
   { key: "otherDocument", label: "Other Document", accept: ".png,.jpg,.jpeg,.webp", folder: "documents" },
 ];
@@ -105,6 +110,16 @@ const getForm13Info = (reg: any) => {
   const doc = reg.documents?.form13 || reg.form13 || null;
   const url = (typeof doc === "object" ? doc?.url : doc) || null;
   const name = (typeof doc === "object" ? doc?.name : null) || "Form-13.pdf";
+  const uploadedAt = typeof doc === "object" ? doc?.uploadedAt : null;
+  const isUploaded = Boolean(url && typeof url === "string" && url.trim().length > 0);
+  return { isUploaded, url, name, uploadedAt };
+};
+
+const getForm14Info = (reg: any) => {
+  if (!reg) return { isUploaded: false, url: null, name: "", uploadedAt: null };
+  const doc = reg.documents?.form14 || reg.form14 || null;
+  const url = (typeof doc === "object" ? doc?.url : doc) || null;
+  const name = (typeof doc === "object" ? doc?.name : null) || "Form-14.pdf";
   const uploadedAt = typeof doc === "object" ? doc?.uploadedAt : null;
   const isUploaded = Boolean(url && typeof url === "string" && url.trim().length > 0);
   return { isUploaded, url, name, uploadedAt };
@@ -190,6 +205,18 @@ export default function ManageRegistrationsPage() {
     suspended: 0,
     rejected: 0,
     other: 0,
+  });
+
+  const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable");
+  const [visibleColumns, setVisibleColumns] = useState({
+    hospital: true,
+    doctor: true,
+    approvedBy: true,
+    deal: true,
+    payout: true,
+    form13: true,
+    pickup: true,
+    status: true,
   });
 
   const handleTabChange = (tab: EggManagementTab) => {
@@ -540,6 +567,11 @@ export default function ManageRegistrationsPage() {
   const [form13Reg, setForm13Reg] = useState<any | null>(null);
   const [uploadingForm13, setUploadingForm13] = useState(false);
 
+  // Form 14 Statutory Document Modal State
+  const [isForm14ModalOpen, setIsForm14ModalOpen] = useState(false);
+  const [form14Reg, setForm14Reg] = useState<any | null>(null);
+  const [uploadingForm14, setUploadingForm14] = useState(false);
+
   const checkCanUploadForm13 = (reg: any) => {
     if (!reg) return { canUpload: false, missing: [] };
     const hasViralMarker = !!(reg.labReports?.viralMarkersReport?.url || (Array.isArray(reg.labReports?.viralMarkers) ? reg.labReports?.viralMarkers[0]?.url : reg.labReports?.viralMarkers?.url));
@@ -767,6 +799,186 @@ export default function ManageRegistrationsPage() {
       toast.error("Failed to remove Form 13.");
     } finally {
       setUploadingForm13(false);
+    }
+  };
+
+  const handleOpenForm14Modal = (reg: any) => {
+    const info = getForm14Info(reg);
+    if (!info.isUploaded) {
+      const { canUpload, missing } = checkCanUploadForm13(reg);
+      if (!canUpload) {
+        toast.error(`Form 14 upload is locked. Upload/set first: ${missing.join(", ")}`);
+        return;
+      }
+    }
+    setForm14Reg(reg);
+    setIsForm14ModalOpen(true);
+  };
+
+  const handlePrintForm14 = (reg: any) => {
+    const info = getForm14Info(reg);
+    if (!info.url) {
+      toast.error("Form 14 has not been uploaded for this donor yet.");
+      return;
+    }
+    openInAppViewer(
+      `Form 14 Statutory Certificate & Screening PDF - ${reg.personalInfo?.fullName || reg.registrationId}`,
+      info.url,
+      info.name || "Form-14.pdf",
+      reg
+    );
+
+    fetch("/api/audit-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "Form 14 Printed",
+        entityType: "DonorRegistration",
+        entityId: reg._id,
+        details: `Form 14 PDF opened in viewer for ${reg.personalInfo?.fullName || reg.registrationId}`,
+      }),
+    }).catch(() => {});
+  };
+
+  const handleUploadForm14 = async (file: File) => {
+    if (!form14Reg) return;
+    const isAlreadyUploaded = !!getForm14Info(form14Reg).isUploaded;
+    if (!isAlreadyUploaded) {
+      const { canUpload, missing } = checkCanUploadForm13(form14Reg);
+      if (!canUpload) {
+        toast.error(`Cannot upload Form 14. Please upload/set: ${missing.join(", ")}`);
+        return;
+      }
+    }
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+      toast.error("Only PDF files are accepted for Form 14.");
+      return;
+    }
+
+    setUploadingForm14(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "form14");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      const fileUrl = data.url || data.media?.url;
+
+      if (data.success && fileUrl) {
+        const form14Data = {
+          name: file.name,
+          url: fileUrl,
+          fileId: data.fileId || data.media?.fileId || "",
+          uploadedAt: new Date().toISOString(),
+        };
+
+        const patchRes = await patchAdminRegistrationFieldsAction(form14Reg.registrationId, {
+          "documents.form14": form14Data,
+          form14: form14Data,
+        });
+
+        if (patchRes.success) {
+          setRegistrations((prev) =>
+            prev.map((r) =>
+              r.registrationId === form14Reg.registrationId
+                ? {
+                    ...r,
+                    documents: { ...(r.documents || {}), form14: form14Data },
+                    form14: form14Data,
+                  }
+                : r
+            )
+          );
+          setForm14Reg((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  documents: { ...(prev.documents || {}), form14: form14Data },
+                  form14: form14Data,
+                }
+              : null
+          );
+          if (selectedReg && selectedReg.registrationId === form14Reg.registrationId) {
+            setSelectedReg((prev: any) =>
+              prev
+                ? {
+                    ...prev,
+                    documents: { ...(prev.documents || {}), form14: form14Data },
+                    form14: form14Data,
+                  }
+                : null
+            );
+          }
+
+          toast.success("Form 14 uploaded successfully! Ready to print.");
+        } else {
+          toast.error(patchRes.error || "Failed to update record with Form 14.");
+        }
+      } else {
+        toast.error(data.error || "Upload failed.");
+      }
+    } catch (e: any) {
+      toast.error("Failed to upload Form 14: " + (e.message || "Upload error"));
+    } finally {
+      setUploadingForm14(false);
+    }
+  };
+
+  const handleRemoveForm14 = async () => {
+    if (!form14Reg) return;
+    if (!confirm("Are you sure you want to remove Form 14?")) return;
+
+    setUploadingForm14(true);
+    try {
+      const patchRes = await patchAdminRegistrationFieldsAction(form14Reg.registrationId, {
+        "documents.form14": null,
+        form14: null,
+      });
+
+      if (patchRes.success) {
+        setRegistrations((prev) =>
+          prev.map((r) =>
+            r.registrationId === form14Reg.registrationId
+              ? {
+                  ...r,
+                  documents: { ...(r.documents || {}), form14: null },
+                  form14: null,
+                }
+              : r
+          )
+        );
+        setForm14Reg((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                documents: { ...(prev.documents || {}), form14: null },
+                form14: null,
+              }
+            : null
+        );
+        if (selectedReg && selectedReg.registrationId === form14Reg.registrationId) {
+          setSelectedReg((prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  documents: { ...(prev.documents || {}), form14: null },
+                  form14: null,
+                }
+              : null
+          );
+        }
+        toast.info("Form 14 removed.");
+      } else {
+        toast.error("Failed to remove Form 14.");
+      }
+    } catch {
+      toast.error("Failed to remove Form 14.");
+    } finally {
+      setUploadingForm14(false);
     }
   };
 
@@ -1995,21 +2207,99 @@ export default function ManageRegistrationsPage() {
         </div>
       )}
 
+      {/* Table UX & Density Control Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+        <div className="text-slate-500 font-medium text-[11px] flex items-center gap-1.5">
+          <span>Showing <strong className="text-slate-900 dark:text-slate-100">{paginatedRegs.length}</strong> donor registries</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Density Switcher */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setTableDensity("compact")}
+              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                tableDensity === "compact"
+                  ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+              title="Compact view - fit more rows"
+            >
+              Compact
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableDensity("comfortable")}
+              className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                tableDensity === "comfortable"
+                  ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+              title="Comfortable view - default spacing"
+            >
+              Comfortable
+            </button>
+          </div>
+
+          {/* Column Visibility Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-[11px] rounded-lg gap-1.5 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3 h-3 text-slate-400" />
+                  <span>Columns</span>
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl text-xs space-y-1">
+              <div className="font-bold text-[10px] text-slate-400 uppercase px-2 py-1">Visible Columns</div>
+              {[
+                { key: "hospital", label: "Assigned Hospital" },
+                { key: "doctor", label: "Treating Doctor" },
+                { key: "approvedBy", label: "Approved By" },
+                { key: "deal", label: "Donor Deal" },
+                { key: "payout", label: "Payout Status" },
+                { key: "form13", label: "Form 13 & 14 Status" },
+                { key: "pickup", label: "Pickup Date" },
+                { key: "status", label: "File Status" },
+              ].map((col) => (
+                <label
+                  key={col.key}
+                  className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer select-none text-[11px] font-medium"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(visibleColumns as any)[col.key]}
+                    onChange={(e) =>
+                      setVisibleColumns((prev) => ({ ...prev, [col.key]: e.target.checked }))
+                    }
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span>{col.label}</span>
+                </label>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
       {/* Main Table */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="text-center py-20 text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
-            Loading records...
-          </div>
+          <DataTableSkeleton rows={8} density={tableDensity} />
         ) : paginatedRegs.length === 0 ? (
           <div className="text-center py-20 text-slate-400 text-xs">No approved donor records found.</div>
         ) : (
-          <div className="overflow-x-auto w-full">
+          <div className="overflow-x-auto w-full max-h-[75vh]">
             <table className="w-full min-w-[1280px] text-left text-xs border-collapse">
-              <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 font-semibold border-b border-slate-100 dark:border-slate-800">
+              <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                 <tr>
-                  <th className="p-3.5 w-10 whitespace-nowrap">
+                  <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} w-10 whitespace-nowrap`}>
                     <input
                       type="checkbox"
                       checked={selectedIds.length === paginatedRegs.length}
@@ -2017,25 +2307,26 @@ export default function ManageRegistrationsPage() {
                       className="w-4 h-4 rounded border-slate-300"
                     />
                   </th>
-                  <th className="p-3.5 whitespace-nowrap">Donor ID</th>
-                  <th className="p-3.5 whitespace-nowrap">Donor Name</th>
-                  <th className="p-3.5 whitespace-nowrap">Assigned Hospital</th>
-                  <th className="p-3.5 whitespace-nowrap">Treating Doctor</th>
-                  <th className="p-3.5 whitespace-nowrap">Approved By</th>
-                  <th className="p-3.5 whitespace-nowrap">Donor Deal</th>
-                  <th className="p-3.5 whitespace-nowrap">Payout Status</th>
-                  <th className="p-3.5 whitespace-nowrap">Form 13 Status</th>
-                  <th className="p-3.5 whitespace-nowrap">Pickup Date</th>
-                  <th className="p-3.5 whitespace-nowrap">Status</th>
-                  <th className="p-3.5 text-right whitespace-nowrap sticky right-0 bg-slate-50 dark:bg-slate-900 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">Actions</th>
+                  <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Donor ID</th>
+                  <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Donor Name</th>
+                  {visibleColumns.hospital && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Assigned Hospital</th>}
+                  {visibleColumns.doctor && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Treating Doctor</th>}
+                  {visibleColumns.approvedBy && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Approved By</th>}
+                  {visibleColumns.deal && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Donor Deal</th>}
+                  {visibleColumns.payout && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Payout Status</th>}
+                  {visibleColumns.form13 && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Form 13 &amp; 14 Status</th>}
+                  {visibleColumns.pickup && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Pickup Date</th>}
+                  {visibleColumns.status && <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} whitespace-nowrap`}>Status</th>}
+                  <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} text-right whitespace-nowrap sticky right-0 bg-slate-50/95 dark:bg-slate-900/95 z-20 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-900">
                 {paginatedRegs.map((reg) => {
                   const dealInfo = getDonorDealInfo(reg);
+                  const cellPad = tableDensity === "compact" ? "py-2 px-2.5 text-[11px]" : "p-3.5 text-xs";
                   return (
                     <tr key={reg._id} className={`group/row hover:bg-slate-50/50 dark:hover:bg-slate-900/50 ${selectedIds.includes(reg.registrationId) ? "bg-teal-50/20" : ""}`}>
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className={`${cellPad} whitespace-nowrap`}>
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(reg.registrationId)}
@@ -2043,7 +2334,7 @@ export default function ManageRegistrationsPage() {
                           className="w-4 h-4 rounded border-slate-300"
                         />
                       </td>
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className={`${cellPad} whitespace-nowrap`}>
                         {reg.donorId ? (
                           <div className="inline-flex items-center gap-1.5 font-bold font-mono text-teal-800 dark:text-teal-300 bg-teal-50 dark:bg-teal-950/40 px-2.5 py-1 rounded-md text-[11px] border border-teal-200 dark:border-teal-800 whitespace-nowrap">
                             <span>{reg.donorId}</span>
@@ -2064,7 +2355,7 @@ export default function ManageRegistrationsPage() {
                           <span className="text-slate-400 font-mono text-[11px]">—</span>
                         )}
                       </td>
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className={`${cellPad} whitespace-nowrap`}>
                         <div className="font-semibold text-slate-800 dark:text-slate-200">
                           {reg.personalInfo?.fullName || "—"}
                         </div>
@@ -2072,317 +2363,333 @@ export default function ManageRegistrationsPage() {
                           {reg.personalInfo?.age ? `${reg.personalInfo.age} Yrs` : ""} {reg.personalInfo?.gender ? `• ${reg.personalInfo.gender}` : ""} {reg.personalInfo?.bloodGroup ? `• ${reg.personalInfo.bloodGroup}` : ""}
                         </div>
                       </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        {reg.assignedHospital ? (
-                          <div className="space-y-1">
-                            <button
-                              type="button"
-                              onClick={() => openAssignHospitalModal(reg)}
-                              className="font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-950/60 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-teal-200 dark:border-teal-800 whitespace-nowrap cursor-pointer transition-colors"
-                              title="Click to view or change hospital/branch"
-                            >
-                              <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                              <span className="truncate max-w-[150px]" title={reg.assignedHospital.name}>
-                                {reg.assignedHospital.name}
-                              </span>
-                            </button>
 
-                            {/* Branch Indicator */}
-                            {reg.assignedBranch && (
-                              <div className="flex items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400 pl-1">
-                                <GitBranch className="w-3 h-3 text-teal-600 shrink-0" />
-                                <span className="truncate max-w-[150px]" title={reg.assignedBranch}>
-                                  {reg.assignedBranch}
+                      {/* Hospital */}
+                      {visibleColumns.hospital && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          {reg.assignedHospital ? (
+                            <div className="space-y-1">
+                              <div className="font-semibold text-teal-800 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-teal-200 dark:border-teal-800 whitespace-nowrap">
+                                <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                                <span className="truncate max-w-[150px]" title={reg.assignedHospital.name}>
+                                  {reg.assignedHospital.name}
                                 </span>
                               </div>
-                            )}
+
+                              {/* Branch Indicator */}
+                              {reg.assignedBranch && (
+                                <div className="flex items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400 pl-1">
+                                  <GitBranch className="w-3 h-3 text-teal-600 shrink-0" />
+                                  <span className="truncate max-w-[150px]" title={reg.assignedBranch}>
+                                    {reg.assignedBranch}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground font-medium pl-1">Unassigned</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Treating Doctor */}
+                      {visibleColumns.doctor && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          {reg.assignedDoctor ? (
+                            <button
+                              type="button"
+                              onClick={() => openAssignDoctorModal(reg)}
+                              className="font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-950/60 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-purple-200 dark:border-purple-800 whitespace-nowrap cursor-pointer transition-colors"
+                              title="Click to change treating doctor"
+                            >
+                              <Stethoscope className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <span className="truncate max-w-[150px]" title={reg.assignedDoctor}>
+                                Dr. {reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}
+                              </span>
+                            </button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openAssignDoctorModal(reg)}
+                              className="h-6 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
+                            >
+                              + Assign Doctor
+                            </Button>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Approved By */}
+                      {visibleColumns.approvedBy && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          <div className="font-medium text-slate-800 dark:text-slate-200">
+                            {reg.reviewedBy ? reg.reviewedBy.split("@")[0] : (reg.status === "APPROVED" ? "Admin" : "—")}
                           </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openAssignHospitalModal(reg)}
-                            className="h-6 text-[10px] text-teal-600 border-teal-200 hover:bg-teal-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
-                          >
-                            + Assign Hospital
-                          </Button>
-                        )}
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        {reg.assignedDoctor ? (
-                          <button
-                            type="button"
-                            onClick={() => openAssignDoctorModal(reg)}
-                            className="font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-950/60 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-purple-200 dark:border-purple-800 whitespace-nowrap cursor-pointer transition-colors"
-                            title="Click to change treating doctor"
-                          >
-                            <Stethoscope className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                            <span className="truncate max-w-[150px]" title={reg.assignedDoctor}>
-                              Dr. {reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}
+                          <div className="text-[10px] text-slate-400 whitespace-nowrap">
+                            {reg.reviewedAt ? new Date(reg.reviewedAt).toLocaleDateString() : (reg.updatedAt ? new Date(reg.updatedAt).toLocaleDateString() : "—")}
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Donor Deal */}
+                      {visibleColumns.deal && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded text-[11px] inline-block font-mono border border-emerald-200 dark:border-emerald-800">
+                              ₹{dealInfo.amount.toLocaleString()}
                             </span>
-                          </button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openAssignDoctorModal(reg)}
-                            className="h-6 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
-                          >
-                            + Assign Doctor
-                          </Button>
-                        )}
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        <div className="font-medium text-slate-800 dark:text-slate-200">
-                          {reg.reviewedBy ? reg.reviewedBy.split("@")[0] : (reg.status === "APPROVED" ? "Admin" : "—")}
-                        </div>
-                        <div className="text-[10px] text-slate-400 whitespace-nowrap">
-                          {reg.reviewedAt ? new Date(reg.reviewedAt).toLocaleDateString() : (reg.updatedAt ? new Date(reg.updatedAt).toLocaleDateString() : "—")}
-                        </div>
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded text-[11px] inline-block font-mono border border-emerald-200 dark:border-emerald-800">
-                            ₹{dealInfo.amount.toLocaleString()}
-                          </span>
-                          <div className="text-[10px] text-slate-500 capitalize whitespace-nowrap">
-                            {dealInfo.category} Deal • {dealInfo.terms}
+                            <div className="text-[10px] text-slate-500 capitalize whitespace-nowrap">
+                              {dealInfo.category} Deal • {dealInfo.terms}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        <div className="space-y-1">
-                          {dealInfo.isPaid ? (
-                            <div>
+                        </td>
+                      )}
+
+                      {/* Payout Status */}
+                      {visibleColumns.payout && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          <div className="space-y-1">
+                            {dealInfo.isPaid ? (
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPaymentModal(reg)}
+                                  className="inline-flex items-center gap-1 font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 px-2.5 py-1 rounded-full text-[10px] border border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
+                                  title="Click to change payout status"
+                                >
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> PAID
+                                </button>
+                                <div className="mt-1 space-y-0.5 text-[10px] whitespace-nowrap">
+                                  <div className="text-slate-600 dark:text-slate-400">
+                                    Paid: <span className="font-semibold text-slate-800 dark:text-slate-200">{formatDisplayDate(dealInfo.paidAt) || "Recorded"}</span>
+                                  </div>
+                                  {dealInfo.paidBy && (
+                                    <div className="text-slate-500 truncate max-w-[130px]" title={dealInfo.paidBy}>
+                                      By: <span className="font-bold text-slate-700 dark:text-slate-300">{dealInfo.paidBy}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => handleOpenPaymentModal(reg)}
-                                className="inline-flex items-center gap-1 font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 px-2.5 py-1 rounded-full text-[10px] border border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
+                                className="inline-flex items-center gap-1 font-bold text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 px-2.5 py-1 rounded-full text-[10px] border border-amber-200 dark:border-amber-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
                                 title="Click to change payout status"
                               >
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> PAID
+                                <Clock className="w-3 h-3 text-amber-600" /> NOT PAID
                               </button>
-                              <div className="mt-1 space-y-0.5 text-[10px] whitespace-nowrap">
-                                <div className="text-slate-600 dark:text-slate-400">
-                                  Paid: <span className="font-semibold text-slate-800 dark:text-slate-200">{formatDisplayDate(dealInfo.paidAt) || "Recorded"}</span>
-                                </div>
-                                {dealInfo.paidBy && (
-                                  <div className="text-slate-500 truncate max-w-[130px]" title={dealInfo.paidBy}>
-                                    By: <span className="font-bold text-slate-700 dark:text-slate-300">{dealInfo.paidBy}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPaymentModal(reg)}
-                              className="inline-flex items-center gap-1 font-bold text-amber-800 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 px-2.5 py-1 rounded-full text-[10px] border border-amber-200 dark:border-amber-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
-                              title="Click to change payout status"
-                            >
-                              <Clock className="w-3 h-3 text-amber-600" /> NOT PAID
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        {(() => {
-                          const form13 = getForm13Info(reg);
-                          return form13.isUploaded ? (
-                            <div className="space-y-1">
-                              <button
-                                type="button"
-                                onClick={() => openInAppViewer(`Form 13 Statutory PDF - ${reg.personalInfo?.fullName || reg.registrationId}`, form13.url, form13.name, reg)}
-                                className="inline-flex items-center gap-1 font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 px-2.5 py-1 rounded-full text-[10px] border border-emerald-200 dark:border-emerald-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
-                                title="Click to view Form 13 directly inside website"
-                              >
-                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> UPLOADED
-                              </button>
-                              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePrintForm13(reg);
-                                  }}
-                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-700 dark:text-teal-400 hover:text-teal-900 hover:underline cursor-pointer bg-teal-50/80 dark:bg-teal-950/40 px-2 py-0.5 rounded border border-teal-200 dark:border-teal-800 transition-colors whitespace-nowrap"
-                                  title="View & Print Form 13 PDF directly in website"
-                                >
-                                  <Printer className="w-2.5 h-2.5 text-teal-600" /> Ready to Print
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenForm13Modal(reg);
-                                  }}
-                                  className="text-[9px] text-muted-foreground hover:text-foreground underline cursor-pointer"
-                                  title="Replace or remove Form 13"
-                                >
-                                  Manage
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-0.5">
-                              {(() => {
-                                const hasViralMarker = !!(reg.labReports?.viralMarkersReport?.url || (Array.isArray(reg.labReports?.viralMarkers) ? reg.labReports?.viralMarkers[0]?.url : reg.labReports?.viralMarkers?.url));
-                                const hasBloodReport = !!(reg.labReports?.bloodReport?.url);
-                                const hasInsurance = !!(reg.labReports?.insurance?.url || reg.documents?.insurance?.url || reg.labReports?.lifeInsurance?.url);
-                                const hasHealthInsurance = !!(reg.labReports?.healthInsurance?.url);
-                                const hasPickup = !!(reg.pickupDate);
-                                const canUploadForm13 = hasViralMarker && hasBloodReport && hasInsurance && hasHealthInsurance && hasPickup;
+                            )}
+                          </div>
+                        </td>
+                      )}
 
-                                if (!canUploadForm13) {
-                                  const missing = [
-                                    !hasViralMarker && "Viral Markers",
-                                    !hasBloodReport && "Blood Report",
-                                    !hasInsurance && "Life Insurance",
-                                    !hasHealthInsurance && "Health Insurance",
-                                    !hasPickup && "Pickup Date",
-                                  ].filter(Boolean).join(", ");
-                                  return (
-                                    <div
-                                      title={`Form 13 locked — Upload first: ${missing}`}
-                                      className="inline-flex items-center gap-1 font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full text-[10px] border border-slate-200 dark:border-slate-700 cursor-not-allowed whitespace-nowrap select-none"
-                                    >
-                                      <Lock className="w-3 h-3 text-amber-500" /> LOCKED
+                      {/* Form 13 & 14 Status */}
+                      {visibleColumns.form13 && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          {(() => {
+                            const form13 = getForm13Info(reg);
+                            const form14 = getForm14Info(reg);
+                            const { canUpload } = checkCanUploadForm13(reg);
+
+                            return (
+                              <div className="space-y-1.5">
+                                {/* Form 13 Row */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-slate-500 w-13">Form 13:</span>
+                                  {form13.isUploaded ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => openInAppViewer(`Form 13 Statutory Consent PDF - ${reg.personalInfo?.fullName || reg.registrationId}`, form13.url, form13.name, reg)}
+                                        className="inline-flex items-center gap-1 font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full text-[10px] border border-emerald-200 dark:border-emerald-800 cursor-pointer shadow-2xs"
+                                        title="Click to view Form 13 directly inside website"
+                                      >
+                                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Uploaded
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenForm13Modal(reg)}
+                                        className="text-[9px] text-teal-600 hover:text-teal-800 hover:underline cursor-pointer font-medium"
+                                        title="Manage Form 13"
+                                      >
+                                        Manage
+                                      </button>
                                     </div>
-                                  );
-                                }
+                                  ) : canUpload ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenForm13Modal(reg)}
+                                      className="inline-flex items-center gap-1 font-bold text-rose-800 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 px-2 py-0.5 rounded-full text-[10px] border border-rose-200 dark:border-rose-800 cursor-pointer shadow-2xs"
+                                      title="Click to upload Form 13 PDF"
+                                    >
+                                      <Upload className="w-2.5 h-2.5 text-rose-600" /> + Upload
+                                    </button>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px] border border-slate-200 dark:border-slate-700 select-none">
+                                      <Lock className="w-2.5 h-2.5 text-amber-500" /> Locked
+                                    </span>
+                                  )}
+                                </div>
 
-                                return (
+                                {/* Form 14 Row */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-slate-500 w-13">Form 14:</span>
+                                  {form14.isUploaded ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => openInAppViewer(`Form 14 Certificate & Screening PDF - ${reg.personalInfo?.fullName || reg.registrationId}`, form14.url, form14.name, reg)}
+                                        className="inline-flex items-center gap-1 font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full text-[10px] border border-emerald-200 dark:border-emerald-800 cursor-pointer shadow-2xs"
+                                        title="Click to view Form 14 directly inside website"
+                                      >
+                                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" /> Uploaded
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenForm14Modal(reg)}
+                                        className="text-[9px] text-teal-600 hover:text-teal-800 hover:underline cursor-pointer font-medium"
+                                        title="Manage Form 14"
+                                      >
+                                        Manage
+                                      </button>
+                                    </div>
+                                  ) : canUpload ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenForm14Modal(reg)}
+                                      className="inline-flex items-center gap-1 font-bold text-rose-800 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 px-2 py-0.5 rounded-full text-[10px] border border-rose-200 dark:border-rose-800 cursor-pointer shadow-2xs"
+                                      title="Click to upload Form 14 PDF"
+                                    >
+                                      <Upload className="w-2.5 h-2.5 text-rose-600" /> + Upload
+                                    </button>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px] border border-slate-200 dark:border-slate-700 select-none">
+                                      <Lock className="w-2.5 h-2.5 text-amber-500" /> Locked
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      )}
+
+                      {/* Pickup Date */}
+                      {visibleColumns.pickup && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          <div className="space-y-1.5 text-xs">
+                            {formatDisplayDate(reg.pickupDate) ? (
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1 font-bold font-mono text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-800 whitespace-nowrap">
+                                  <Calendar className="w-3 h-3 text-rose-600" />
+                                  {formatDisplayDate(reg.pickupDate)}
+                                </span>
+                                <div>
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenForm13Modal(reg)}
-                                    className="inline-flex items-center gap-1 font-bold text-rose-800 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 px-2.5 py-1 rounded-full text-[10px] border border-rose-200 dark:border-rose-800 cursor-pointer transition-colors shadow-xs whitespace-nowrap"
-                                    title="Form 13 Not Uploaded - Click to upload Form 13 PDF (Required for completion)"
+                                    onClick={() => handleOpenPickupModal(reg)}
+                                    className="text-[10px] text-teal-600 hover:text-teal-800 hover:underline font-semibold cursor-pointer"
                                   >
-                                    <AlertCircle className="w-3 h-3 text-rose-600" /> NOT UPLOADED
+                                    Change Date
                                   </button>
-                                );
-                              })()}
-                              <div className="text-[9px] text-rose-600 dark:text-rose-400 font-medium whitespace-nowrap">
-                                {(reg.labReports?.viralMarkersReport?.url || reg.labReports?.bloodReport?.url || reg.labReports?.insurance?.url || reg.labReports?.healthInsurance?.url) || reg.pickupDate
-                                  ? "Incomplete • Upload pending"
-                                  : "Upload docs first"}
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        <div className="space-y-1.5 text-xs">
-                          {formatDisplayDate(reg.pickupDate) ? (
-                            <div className="space-y-1">
-                              <span className="inline-flex items-center gap-1 font-bold font-mono text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-2.5 py-1 rounded-md border border-rose-200 dark:border-rose-800 whitespace-nowrap">
-                                <Calendar className="w-3 h-3 text-rose-600" />
-                                {formatDisplayDate(reg.pickupDate)}
-                              </span>
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenPickupModal(reg)}
-                                  className="text-[10px] text-teal-600 hover:text-teal-800 hover:underline font-semibold cursor-pointer"
-                                >
-                                  Change Date
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 whitespace-nowrap">
-                                <Clock className="w-2.5 h-2.5 text-amber-500" /> Not Set
-                              </span>
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenPickupModal(reg)}
-                                  className="text-[10px] text-rose-600 hover:text-rose-800 hover:underline font-bold cursor-pointer flex items-center gap-0.5"
-                                >
-                                  + Set Pickup Date
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        {(() => {
-                          const auto = computeEggDonorManagementStatus(reg);
-                          return (
-                            <div className="flex flex-col gap-1">
-                              <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                                <span
-                                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full border uppercase inline-flex items-center gap-1.5 shadow-xs whitespace-nowrap ${
-                                    auto.status === "FILE_COMPLETED" || auto.status === "COMPLETED"
-                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
-                                      : auto.status === "WAITING_FORM13"
-                                      ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
-                                      : auto.status === "APPROVED"
-                                      ? "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
-                                      : auto.status === "CANCELLED" || reg.status === "CANCELLED"
-                                      ? "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800"
-                                      : auto.status === "SUSPENDED"
-                                      ? "bg-amber-100 text-amber-700 border-amber-200"
-                                      : auto.status === "REJECTED"
-                                      ? "bg-rose-100 text-rose-700 border-rose-200"
-                                      : "bg-slate-100 text-slate-700 border-slate-200"
-                                  }`}
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                                  {auto.status === "APPROVED" ? "In Management" : (auto.status || reg.status || "").replace(/_/g, " ")}
+                            ) : (
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 whitespace-nowrap">
+                                  <Clock className="w-2.5 h-2.5 text-amber-500" /> Not Set
                                 </span>
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenPickupModal(reg)}
+                                    className="text-[10px] text-rose-600 hover:text-rose-800 hover:underline font-bold cursor-pointer flex items-center gap-0.5"
+                                  >
+                                    + Set Pickup Date
+                                  </button>
+                                </div>
                               </div>
+                            )}
+                          </div>
+                        </td>
+                      )}
 
-                              {/* Progression milestone subtext */}
-                              <div className="text-[9px] text-muted-foreground font-medium flex items-center gap-1 whitespace-nowrap">
-                                {auto.status === "CANCELLED" || reg.status === "CANCELLED" ? (
-                                  <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-0.5">
-                                    <XCircle className="w-2.5 h-2.5" /> Registration Cancelled
-                                  </span>
-                                ) : auto.status === "FILE_COMPLETED" ? (
-                                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
-                                    <Check className="w-2.5 h-2.5" /> File Completed
-                                  </span>
-                                ) : auto.status === "WAITING_FORM13" ? (
-                                  <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-0.5">
-                                    <Clock className="w-2.5 h-2.5" /> Awaiting Form 13 PDF
-                                  </span>
-                                ) : (
-                                  <span title={`Missing: ${auto.missingRequirements.join(", ")}`} className="truncate max-w-[150px]">
-                                    Docs: {auto.docsCount}/4 • {auto.isDealPaid ? "Paid" : "Unpaid"}
-                                  </span>
+                      {/* Status */}
+                      {visibleColumns.status && (
+                        <td className={`${cellPad} whitespace-nowrap`}>
+                          {(() => {
+                            const auto = computeEggDonorManagementStatus(reg);
+                            return (
+                              <div className="flex flex-col gap-1">
+                                <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                  <StatusBadge
+                                    status={auto.status || reg.status}
+                                    label={auto.status === "APPROVED" ? "In Management" : undefined}
+                                  />
+                                </div>
+
+                                {/* Progression milestone subtext */}
+                                <div className="text-[9px] text-muted-foreground font-medium flex items-center gap-1 whitespace-nowrap">
+                                  {auto.status === "CANCELLED" || reg.status === "CANCELLED" ? (
+                                    <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-0.5">
+                                      <XCircle className="w-2.5 h-2.5" /> Registration Cancelled
+                                    </span>
+                                  ) : auto.status === "FILE_COMPLETED" ? (
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5">
+                                      <Check className="w-2.5 h-2.5" /> File Completed
+                                    </span>
+                                  ) : auto.status === "WAITING_FORM13" ? (
+                                    <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-0.5">
+                                      <Clock className="w-2.5 h-2.5" /> Awaiting Form 13 PDF
+                                    </span>
+                                  ) : (
+                                    <span title={`Missing: ${auto.missingRequirements.join(", ")}`} className="truncate max-w-[150px]">
+                                      Docs: {auto.docsCount}/4 • {auto.isDealPaid ? "Paid" : "Unpaid"}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {reg.updatedBy && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setHistoryTargetName(reg.personalInfo?.fullName || reg.registrationId);
+                                      loadAudits(reg._id);
+                                      setIsHistoryOpen(true);
+                                    }}
+                                    className="text-[9px] text-slate-500 hover:text-teal-600 block text-left font-semibold cursor-pointer mt-0.5 truncate max-w-[130px] whitespace-nowrap"
+                                    title="Click to view history chain"
+                                  >
+                                    By: <span className="font-bold">{reg.updatedBy}</span>
+                                  </button>
                                 )}
                               </div>
+                            );
+                          })()}
+                        </td>
+                      )}
 
-                              {reg.updatedBy && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setHistoryTargetName(reg.personalInfo?.fullName || reg.registrationId);
-                                    loadAudits(reg._id);
-                                    setIsHistoryOpen(true);
-                                  }}
-                                  className="text-[9px] text-slate-500 hover:text-teal-600 block text-left font-semibold cursor-pointer mt-0.5 truncate max-w-[130px] whitespace-nowrap"
-                                  title="Click to view history chain"
-                                >
-                                  By: <span className="font-bold">{reg.updatedBy}</span>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className={`p-3.5 text-right whitespace-nowrap sticky right-0 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] ${selectedIds.includes(reg.registrationId) ? "bg-[#f5fbfb] dark:bg-slate-900" : "bg-white group-hover/row:bg-slate-50 dark:bg-slate-950 dark:group-hover/row:bg-slate-900"}`}>
-                        <div className="flex items-center justify-end">
+                      {/* Sticky Actions */}
+                      <td className={`${cellPad} text-right whitespace-nowrap sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] ${selectedIds.includes(reg.registrationId) ? "bg-[#f5fbfb] dark:bg-slate-900" : "bg-white group-hover/row:bg-slate-50 dark:bg-slate-950 dark:group-hover/row:bg-slate-900"}`}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setSelectedReg(reg); setDetailTab("info"); setIsDetailOpen(true); }}
+                            className="h-7 w-7 p-0 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 cursor-pointer"
+                            title="Quick View Details"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger
                               render={
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-8 w-8 p-0 rounded-lg text-slate-500 hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                                  className="h-7 w-7 p-0 rounded-lg text-slate-500 hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                                   title="Actions"
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
@@ -3201,6 +3508,193 @@ export default function ManageRegistrationsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* DIALOG 1.9: FORM 14 UPLOAD & PRINT MANAGEMENT */}
+      <Dialog open={isForm14ModalOpen} onOpenChange={setIsForm14ModalOpen}>
+        <DialogContent className="max-w-lg rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <FileCheck2 className="w-5 h-5 text-indigo-600" /> Upload Form 14
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Donor: <span className="font-semibold text-slate-700 dark:text-slate-300">{form14Reg?.personalInfo?.fullName}</span>
+              {form14Reg?.donorId ? ` • Donor ID: ${form14Reg.donorId}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Status indicator notice */}
+            {form14Reg && getForm14Info(form14Reg).isUploaded ? (
+              <div className="p-4 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Form 14 Uploaded &amp; Verified</span>
+                    <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-semibold px-2 py-0.5 rounded-full">
+                      Ready to Print
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => handlePrintForm14(form14Reg)}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs gap-1.5 h-8 font-semibold px-3.5 shadow-sm"
+                    >
+                      <Printer className="w-3.5 h-3.5" /> Print Form 14 PDF
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => openInAppViewer("Form 14 Statutory Certificate & Screening PDF", getForm14Info(form14Reg).url!, getForm14Info(form14Reg).name, form14Reg)}
+                      className="border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/50 rounded-xl text-xs h-8 px-3"
+                      title="View PDF inside website"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> View
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-600 dark:text-slate-400 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200/50 dark:border-emerald-800/50 pt-2">
+                  <div className="font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                    <span className="truncate max-w-[260px]">{getForm14Info(form14Reg).name}</span>
+                  </div>
+                  {getForm14Info(form14Reg).uploadedAt && (
+                    <div className="text-[10px] text-slate-400">
+                      Uploaded on: {new Date(getForm14Info(form14Reg).uploadedAt!).toLocaleString("en-IN")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Form 14 Not Uploaded (Screening Certificate)</span>
+                </div>
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                  Form 14 is the statutory Certificate &amp; Screening document under the ART Regulations. Upload the completed and signed Form 14 PDF below.
+                </p>
+              </div>
+            )}
+
+            {/* Upload / Replace Area */}
+            {(() => {
+              const isUploaded = !!(form14Reg && getForm14Info(form14Reg).isUploaded);
+              const { canUpload, hasViralMarker, hasBloodReport, hasInsurance, hasHealthInsurance, hasPickup } = checkCanUploadForm13(form14Reg);
+
+              if (!isUploaded && !canUpload) {
+                return (
+                  <div className="p-4 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                        Upload Locked — Medical Documents &amp; Pickup Date Required
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      Before Form 14 can be uploaded, the following 4 clinical/insurance files and pickup date must be completed:
+                    </p>
+                    <div className="space-y-1.5 text-xs font-medium">
+                      <div className={`flex items-center gap-2 ${hasViralMarker ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasViralMarker ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 1 — Viral Markers Report (HIV, HBsAg, HCV, VDRL)
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasBloodReport ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasBloodReport ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 2 — Blood Test Report
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasInsurance ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasInsurance ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 3 — Life / Medical Insurance Policy (Rule 13)
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasHealthInsurance ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasHealthInsurance ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 4 — Health Insurance Policy
+                      </div>
+                      <div className={`flex items-center gap-2 ${hasPickup ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300"}`}>
+                        {hasPickup ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-500" />}
+                        Step 5 — Oocyte Retrieval Pickup Date
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2 border-t pt-3 border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {isUploaded ? "Replace Form 14 PDF:" : "Upload Form 14 PDF:"}
+                    </label>
+                    <span className="text-[10px] text-slate-400">Supported: PDF files up to 10MB</span>
+                  </div>
+
+                  <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-5 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/50">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {uploadingForm14 ? "Uploading and processing Form 14 PDF..." : "Select the completed, signed Form 14 PDF"}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Once uploaded, the PDF will be immediately visible here and ready to print.
+                      </p>
+                    </div>
+
+                    <label className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm ${uploadingForm14 ? "opacity-60 pointer-events-none" : ""}`}>
+                      {uploadingForm14 ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Uploading PDF...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>{isUploaded ? "Choose Replacement PDF" : "Choose Form 14 PDF"}</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        disabled={uploadingForm14}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadForm14(file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Footer buttons */}
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
+              {form14Reg && getForm14Info(form14Reg).isUploaded ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveForm14}
+                  disabled={uploadingForm14}
+                  className="text-xs text-rose-500 hover:text-rose-700 font-medium hover:underline cursor-pointer"
+                >
+                  Remove Form 14
+                </button>
+              ) : <div />}
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsForm14ModalOpen(false)}
+                className="rounded-xl text-xs h-9 px-4"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* DIALOG 2: VIEW REGISTRATION DETAILS (Egg Donor Management Hub) */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-4xl rounded-3xl overflow-y-auto max-h-[88vh] border shadow-2xl p-6 sm:p-8">
@@ -3223,6 +3717,7 @@ export default function ManageRegistrationsPage() {
           {selectedReg && (() => {
             const autoInfo = computeEggDonorManagementStatus(selectedReg);
             const form13Info = getForm13Info(selectedReg);
+            const form14Info = getForm14Info(selectedReg);
             const dealInfo = getDonorDealInfo(selectedReg);
             const isRegistry = selectedReg.hospitalDealType === "registry" || selectedReg.clinicDeal?.donorCategory === "registry" || dealInfo.category === "registry";
 
@@ -4014,6 +4509,115 @@ export default function ManageRegistrationsPage() {
                                 className="h-8 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 shadow-xs"
                               >
                                 <Upload className="w-3.5 h-3.5" /> Upload Form 13 PDF
+                              </Button>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 6. Statutory Form 14 Clearance (Certificate & Screening) */}
+                    <div className={`p-4 rounded-2xl border space-y-3 shadow-xs ${
+                      form14Info.isUploaded
+                        ? "bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
+                        : "bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800"
+                    }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2">
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                            <FileCheck2 className="w-4 h-4 text-indigo-600" />
+                            Statutory Form 14 Certificate (Screening &amp; Clearance)
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Form 14 is the statutory Certificate &amp; Screening document under the ART Regulations.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {form14Info.isUploaded ? (
+                            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Form 14 Uploaded ✓
+                            </span>
+                          ) : (
+                            <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Form 14 Pending
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs pt-1">
+                        <div>
+                          {form14Info.isUploaded ? (
+                            <div className="text-emerald-800 dark:text-emerald-300 font-semibold flex items-center gap-2">
+                              <span>File Name: <strong>{form14Info.name}</strong></span>
+                              {form14Info.uploadedAt && (
+                                <span className="text-[10px] text-muted-foreground">({new Date(form14Info.uploadedAt).toLocaleDateString()})</span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-slate-600 dark:text-slate-400">
+                              Upload the signed Form 14 screening certificate from the clinic.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {form14Info.isUploaded ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openInAppViewer("Form 14 Statutory PDF", form14Info.url!, form14Info.name, selectedReg)}
+                                className="h-8 rounded-xl text-xs font-semibold text-indigo-800 hover:bg-indigo-50 border-indigo-200 gap-1.5 shadow-xs"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> View Form 14
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handlePrintForm14(selectedReg)}
+                                className="h-8 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-xs"
+                              >
+                                <Printer className="w-3.5 h-3.5" /> Print Form 14 PDF
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenForm14Modal(selectedReg)}
+                                className="h-8 rounded-xl text-xs text-slate-700 hover:bg-slate-50"
+                              >
+                                Replace PDF
+                              </Button>
+                            </>
+                          ) : (() => {
+                            const hasViralMarker = !!(selectedReg.labReports?.viralMarkersReport?.url || (Array.isArray(selectedReg.labReports?.viralMarkers) ? selectedReg.labReports?.viralMarkers[0]?.url : selectedReg.labReports?.viralMarkers?.url));
+                            const hasBloodReport = !!(selectedReg.labReports?.bloodReport?.url);
+                            const hasInsurance = !!(selectedReg.labReports?.insurance?.url || selectedReg.documents?.insurance?.url || selectedReg.labReports?.lifeInsurance?.url);
+                            const hasHealthInsurance = !!(selectedReg.labReports?.healthInsurance?.url);
+                            const hasPickup = !!(selectedReg.pickupDate);
+                            const canUploadForm14 = hasViralMarker && hasBloodReport && hasInsurance && hasHealthInsurance && hasPickup;
+
+                            if (!canUploadForm14) {
+                              return (
+                                <div className="space-y-3 w-full">
+                                  <div className="p-3 rounded-xl border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <p className="text-xs font-bold text-amber-900 dark:text-amber-200">Form 14 Upload Locked</p>
+                                    </div>
+                                    <p className="text-[11px] text-amber-700 dark:text-amber-400">Complete all 4 required files &amp; pickup date before uploading Form 14:</p>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <Button
+                                size="sm"
+                                onClick={() => handleOpenForm14Modal(selectedReg)}
+                                className="h-8 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-xs"
+                              >
+                                <Upload className="w-3.5 h-3.5" /> Upload Form 14 PDF
                               </Button>
                             );
                           })()}
@@ -5277,6 +5881,97 @@ export default function ManageRegistrationsPage() {
         donorName={viewerDoc.donorName}
         donorId={viewerDoc.donorId}
       />
+
+      {/* Sticky / Floating Bottom Bulk Action Bar */}
+      <FloatingBulkBar
+        selectedCount={selectedIds.length}
+        onClear={() => setSelectedIds([])}
+        itemLabel="egg donors"
+      >
+        <Button
+          size="sm"
+          onClick={() => setIsBulkAssignOpen(true)}
+          disabled={actionLoading}
+          className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1.5 h-8 font-medium shadow-xs cursor-pointer"
+        >
+          <Building2 className="w-3.5 h-3.5" /> Assign Hospital
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            setBulkDoctorName("");
+            setBulkCustomDoctorInput("");
+            setIsBulkAssignDoctorOpen(true);
+          }}
+          disabled={actionLoading}
+          className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1.5 h-8 font-medium shadow-xs cursor-pointer"
+        >
+          <Stethoscope className="w-3.5 h-3.5" /> Assign Doctor
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleBulkPrint}
+          disabled={actionLoading}
+          className="border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-xl text-xs gap-1.5 h-8 font-medium cursor-pointer"
+        >
+          <Printer className="w-3.5 h-3.5" /> Print PDFs
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={exportSelectedCsv}
+          disabled={actionLoading}
+          className="border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-xl text-xs gap-1.5 h-8 font-medium cursor-pointer"
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Export CSV
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatusChange("FILE_COMPLETED")}
+          disabled={actionLoading}
+          className="border-blue-700/80 bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs gap-1 h-8 font-medium cursor-pointer"
+        >
+          <FileCheck className="w-3.5 h-3.5" /> File Completed
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatusChange("COMPLETED")}
+          disabled={actionLoading}
+          className="border-purple-700/80 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 rounded-xl text-xs gap-1 h-8 font-medium cursor-pointer"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" /> Completed
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatusChange("APPROVED")}
+          disabled={actionLoading}
+          className="border-emerald-700/80 bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 rounded-xl text-xs gap-1 h-8 font-medium cursor-pointer"
+        >
+          <Check className="w-3.5 h-3.5" /> Approve
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatusChange("SUSPENDED")}
+          disabled={actionLoading}
+          className="border-amber-700/80 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 rounded-xl text-xs gap-1 h-8 font-medium cursor-pointer"
+        >
+          <AlertCircle className="w-3.5 h-3.5" /> Suspend
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleBulkStatusChange("CANCELLED")}
+          disabled={actionLoading}
+          className="border-rose-700/80 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded-xl text-xs gap-1 h-8 font-medium cursor-pointer"
+        >
+          <XCircle className="w-3.5 h-3.5" /> Cancel
+        </Button>
+      </FloatingBulkBar>
     </div>
   );
 }
