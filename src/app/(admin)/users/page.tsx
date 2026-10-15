@@ -25,8 +25,7 @@ import {
   MoreHorizontal,
   KeyRound,
   EyeOff,
-  Copy,
-  Sparkles
+  Copy
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -759,7 +758,7 @@ export default function AdminUsersPage() {
                   onClick={() => setEditForm({ ...editForm, password: generateRandomPassword() })}
                   className="text-[11px] text-teal-700 hover:underline flex items-center gap-1"
                 >
-                  <Sparkles className="w-3 h-3" /> Generate
+                  <KeyRound className="w-3 h-3" /> Generate
                 </button>
               </div>
               <div className="relative">
@@ -843,7 +842,7 @@ export default function AdminUsersPage() {
                   onClick={() => setCreateForm({ ...createForm, password: generateRandomPassword() })}
                   className="text-[11px] text-teal-700 hover:underline flex items-center gap-1 font-medium"
                 >
-                  <Sparkles className="w-3 h-3" /> Auto-Generate
+                  <KeyRound className="w-3 h-3" /> Auto-Generate
                 </button>
               </div>
               <div className="relative">

@@ -29,7 +29,6 @@ import {
   Phone,
   PhoneCall,
   Copy,
-  Sparkles,
   User,
   Heart,
   Activity,

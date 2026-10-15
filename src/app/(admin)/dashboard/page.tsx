@@ -25,7 +25,6 @@ import {
   ShieldCheck,
   ArrowUpRight,
   ClipboardList,
-  Sparkles,
   Receipt,
   FileCheck2,
   Calendar,

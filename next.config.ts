@@ -36,10 +36,11 @@ const nextConfig: NextConfig = {
     const cspHeader = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "worker-src 'self' blob: data:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' blob: data: https://images.unsplash.com https://ik.imagekit.io https://*.imagekit.io",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "connect-src 'self' https://ik.imagekit.io https://*.imagekit.io",
+      "font-src 'self' https://fonts.gstatic.com data: blob:",
+      "connect-src 'self' blob: data: https://ik.imagekit.io https://*.imagekit.io https://fonts.googleapis.com https://fonts.gstatic.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",

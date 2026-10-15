@@ -29,7 +29,6 @@ import {
   Phone,
   PhoneCall,
   Copy,
-  Sparkles,
   User,
   Heart,
   Activity,
@@ -2866,7 +2865,7 @@ export default function AdminSpermDonorRegistrationsPage() {
                           <div className="p-4 rounded-xl border bg-gradient-to-r from-teal-50 via-sky-50 to-white dark:from-teal-950/30 dark:to-slate-900 border-teal-200 dark:border-teal-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="space-y-1">
                               <div className="text-xs font-bold text-teal-800 dark:text-teal-300 uppercase tracking-wider flex items-center gap-1.5">
-                                <Sparkles className="w-4 h-4 text-teal-600" />
+                                <CheckCircle2 className="w-4 h-4 text-teal-600" />
                                 Ready for Sperm Donor Management
                               </div>
                               <p className="text-xs text-muted-foreground">
@@ -2883,7 +2882,7 @@ export default function AdminSpermDonorRegistrationsPage() {
                               {actionLoading ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Sparkles className="w-4 h-4" />
+                                <CheckCircle2 className="w-4 h-4" />
                               )}
                               Approve &amp; Move to Sperm Donor Management ➔
                             </Button>

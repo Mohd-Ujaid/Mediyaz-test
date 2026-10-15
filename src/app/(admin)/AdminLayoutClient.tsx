@@ -135,6 +135,12 @@ const sidebarNavigation: SidebarGroupSection[] = [
     ]
   },
   {
+    title: "Content & CMS",
+    items: [
+      { href: "/blog", label: "Blog & Editorial CMS", icon: FileText, requiredPermission: "VIEW_DASHBOARD" },
+    ]
+  },
+  {
     title: "System & Security",
     items: [
       { href: "/users", label: "User & Role Management", icon: ShieldCheck, requiredPermission: "VIEW_USERS" },

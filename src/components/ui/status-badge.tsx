@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Check,
   Ban,
-  Sparkles,
+  FilePlus,
 } from "lucide-react";
 
 export type StatusVariant =
@@ -61,7 +61,7 @@ const statusMap: Record<string, StatusConfig> = {
     label: "New",
     className: "bg-sky-50 text-sky-700 border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800",
     dotColor: "bg-sky-500",
-    icon: Sparkles,
+    icon: FilePlus,
   },
   SUBMITTED: {
     label: "Submitted",

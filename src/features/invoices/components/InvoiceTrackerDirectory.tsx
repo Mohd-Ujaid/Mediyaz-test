@@ -25,7 +25,6 @@ import {
   TrendingUp,
   Percent,
   Wallet,
-  Sparkles,
   Heart,
   Dna,
   SlidersHorizontal,

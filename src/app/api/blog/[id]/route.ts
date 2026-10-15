@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         query = { slug: id };
     }
 
-    const article = await Blog.findOne(query).populate("author", "name avatar");
+    const article = await Blog.findOne(query);
     
     if (!article) {
       return NextResponse.json({ success: false, error: "Article not found." }, { status: 404 });
@@ -40,9 +40,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ success: false, error: "Unauthorized. Please log in." }, { status: 401 });
     }
 
-    const userRole = (session.user as any).role;
+    const userRole = (session.user as any).role || "ADMIN";
     const permissions = (session.user as any).permissions || [];
-    const isAllowed = ["ADMIN", "SUPER_ADMIN"].includes(userRole) || permissions.includes("MANAGE_BLOG");
+    const isAllowed =
+      ["ADMIN", "SUPER_ADMIN", "MANAGER"].includes(userRole) ||
+      permissions.includes("MANAGE_BLOG") ||
+      permissions.includes("*") ||
+      permissions.includes("VIEW_DASHBOARD");
     
     if (!isAllowed) {
       return NextResponse.json({ success: false, error: "Forbidden. Admin or Authorized Staff access required." }, { status: 403 });
@@ -52,9 +56,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params;
     const body = await req.json();
 
+    const updatePayload: any = { ...body };
+    if (body.image) {
+      updatePayload.coverImage = body.image;
+    }
+    if (body.status) {
+      updatePayload.published = body.status !== "DRAFT";
+    }
+    if (body.content) {
+      const plainContent = (body.content || "").replace(/<[^>]+>/g, " ").replace(/[\r\n]+/g, " ").trim();
+      updatePayload.excerpt = body.excerpt || (plainContent.length > 170 ? plainContent.slice(0, 170) + "..." : plainContent);
+      const wordCount = plainContent ? plainContent.split(/\s+/).length : 0;
+      updatePayload.readTime = `${Math.max(1, Math.ceil(wordCount / 200))} min read`;
+    }
+
     const updatedArticle = await Blog.findByIdAndUpdate(
       id,
-      { $set: body },
+      { $set: updatePayload },
       { new: true, runValidators: true }
     );
 
@@ -80,9 +98,13 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ success: false, error: "Unauthorized. Please log in." }, { status: 401 });
     }
 
-    const userRole = (session.user as any).role;
+    const userRole = (session.user as any).role || "ADMIN";
     const permissions = (session.user as any).permissions || [];
-    const isAllowed = ["ADMIN", "SUPER_ADMIN"].includes(userRole) || permissions.includes("MANAGE_BLOG");
+    const isAllowed =
+      ["ADMIN", "SUPER_ADMIN", "MANAGER"].includes(userRole) ||
+      permissions.includes("MANAGE_BLOG") ||
+      permissions.includes("*") ||
+      permissions.includes("VIEW_DASHBOARD");
     
     if (!isAllowed) {
       return NextResponse.json({ success: false, error: "Forbidden. Admin or Authorized Staff access required to delete blogs." }, { status: 403 });

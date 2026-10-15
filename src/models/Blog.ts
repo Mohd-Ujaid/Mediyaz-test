@@ -6,14 +6,19 @@ export interface IBlog extends Document {
   content: string;
   category: string;
   image?: string;
+  coverImage?: string;
+  excerpt?: string;
+  readTime?: string;
   status: "DRAFT" | "PUBLISHED";
+  published: boolean;
+  publishedAt?: Date;
   tags: string[];
   seoMetadata?: {
     title: string;
     description: string;
     keywords: string[];
   };
-  author: mongoose.Types.ObjectId;
+  author: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,14 +30,19 @@ const BlogSchema = new Schema<IBlog>(
     content: { type: String, required: true },
     category: { type: String, required: true },
     image: { type: String },
+    coverImage: { type: String },
+    excerpt: { type: String },
+    readTime: { type: String, default: "5 min read" },
     status: { type: String, enum: ["DRAFT", "PUBLISHED"], default: "PUBLISHED" },
+    published: { type: Boolean, default: true },
+    publishedAt: { type: Date, default: Date.now },
     tags: [{ type: String }],
     seoMetadata: {
       title: { type: String },
       description: { type: String },
       keywords: [{ type: String }],
     },
-    author: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    author: { type: Schema.Types.Mixed, default: "Mediyaz Clinical Board" },
   },
   { timestamps: true }
 );

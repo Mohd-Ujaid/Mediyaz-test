@@ -12,7 +12,6 @@ import {
   Stethoscope,
   ChevronRight,
   ArrowRight,
-  Sparkles,
   Command,
   Loader2,
   BookOpen,

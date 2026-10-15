@@ -1756,7 +1756,8 @@ export default function ManageRegistrationsPage() {
       })
     });
 
-    window.open(`/admin/manage-registrations/${selectedReg.registrationId}/print?withHeader=${printWithHeader}${attachmentsQuery}${sectionsQuery}${extraDocQuery}${overridesQuery}`, "_blank");
+    const targetId = selectedReg.registrationId || selectedReg.donorId || selectedReg._id;
+    window.open(`/admin/manage-registrations/${targetId}/print?withHeader=${printWithHeader}${attachmentsQuery}${sectionsQuery}${extraDocQuery}${overridesQuery}`, "_blank");
     setIsPrintOpen(false);
   };
 

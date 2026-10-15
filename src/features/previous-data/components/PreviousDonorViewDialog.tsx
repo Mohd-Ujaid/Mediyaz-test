@@ -21,7 +21,6 @@ import {
   MapPin,
   CreditCard,
   CheckCircle2,
-  Sparkles,
   Activity,
   Printer,
   FileText,
@@ -366,7 +365,7 @@ export function PreviousDonorViewDialog({
             {/* Donor Specific Records */}
             <div>
               <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-1.5 border-b pb-1">
-                <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                <Dna className="w-3.5 h-3.5 text-teal-600" />
                 {isEgg ? "Egg Donation Cycle Info" : "Semen Analysis Details"}
               </h4>
               {isEgg ? (
