@@ -9,7 +9,9 @@ export interface CustomPaginationProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   totalCount?: number;
+  totalItems?: number;
   pageSize?: number;
+  itemsPerPage?: number;
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: number[];
   itemName?: string;
@@ -21,14 +23,18 @@ export function CustomPagination({
   currentPage,
   totalPages,
   onPageChange,
-  totalCount,
-  pageSize = 25,
+  totalCount: totalCountProp,
+  totalItems,
+  pageSize: pageSizeProp,
+  itemsPerPage,
   onPageSizeChange,
   pageSizeOptions = [10, 25, 50, 100],
   itemName = "records",
   loading = false,
   className = "",
 }: CustomPaginationProps) {
+  const totalCount = totalCountProp ?? totalItems;
+  const pageSize = pageSizeProp ?? itemsPerPage ?? 25;
   // If there are no items and no pages, do not render
   if (totalPages <= 0 && (!totalCount || totalCount === 0)) {
     return null;

@@ -310,7 +310,7 @@ export function InvoiceTrackerDirectory() {
         const item = listToDownload[i];
         setDownloadProgress({ current: i + 1, total: listToDownload.length });
         const pdfData = convertInvoiceToPdfData(item);
-        const blob = await pdf(<CompletedFileInvoicePdfDocument data={pdfData} />).toBlob();
+        const blob = await pdf(<CompletedFileInvoicePdfDocument invoice={pdfData} />).toBlob();
         const safeName = `${item.invoiceNumber || item.registrationId}_${item.donorName}`.replace(/[^a-zA-Z0-9_-]/g, "_");
         zip.file(`Invoice_${safeName}.pdf`, blob);
       }
@@ -1018,8 +1018,9 @@ export function InvoiceTrackerDirectory() {
                 <CustomPagination
                   currentPage={currentPage}
                   totalPages={totalPages}
-                  totalItems={totalCount}
-                  itemsPerPage={itemsPerPage}
+                  totalCount={totalCount}
+                  pageSize={itemsPerPage}
+                  onPageSizeChange={setItemsPerPage}
                   onPageChange={setCurrentPage}
                 />
               </div>

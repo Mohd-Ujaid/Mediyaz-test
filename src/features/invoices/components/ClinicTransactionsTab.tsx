@@ -97,35 +97,36 @@ export function ClinicTransactionsTab({
   };
 
   // Void Transaction
-  const handleVoidTx = (tx: any) => {
-    confirmAction({
+  const handleVoidTx = async (tx: any) => {
+    const confirmed = await confirmAction({
       title: `Void Transaction ${tx.paymentNo}?`,
-      description: `This will reverse ₹${tx.amount.toLocaleString("en-IN")} and remove all allocations from ${tx.allocations?.length || 0} donor bills. This action will be audited.`,
-      confirmLabel: "Yes, Void Transaction",
-      cancelLabel: "Cancel",
+      message: `This will reverse ₹${tx.amount.toLocaleString("en-IN")} and remove all allocations from ${tx.allocations?.length || 0} donor bills. This action will be audited.`,
+      confirmText: "Yes, Void Transaction",
+      cancelText: "Cancel",
       variant: "destructive",
-      onConfirm: async () => {
-        try {
-          const res = await fetch("/api/clinic-payments", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              paymentId: tx._id,
-              reason: "Cancelled by Admin",
-            }),
-          });
-          const data = await res.json();
-          if (data.success) {
-            toast.success(data.message || "Transaction voided and balances reversed.");
-            loadTransactions();
-          } else {
-            toast.error(data.error || "Failed to void transaction");
-          }
-        } catch {
-          toast.error("Error voiding transaction");
-        }
-      },
     });
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch("/api/clinic-payments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId: tx._id,
+          reason: "Cancelled by Admin",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || "Transaction voided and balances reversed.");
+        loadTransactions();
+      } else {
+        toast.error(data.error || "Failed to void transaction");
+      }
+    } catch {
+      toast.error("Error voiding transaction");
+    }
   };
 
   return (
@@ -369,8 +370,8 @@ export function ClinicTransactionsTab({
             <CustomPagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={totalCount}
-              itemsPerPage={25}
+              totalCount={totalCount}
+              pageSize={25}
               onPageChange={setCurrentPage}
             />
           </div>
