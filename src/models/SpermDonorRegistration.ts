@@ -261,6 +261,38 @@ export interface ISpermDonorRegistration extends Document {
     tdsAmount?: number;
     serviceCharge?: number;
     totalAmount?: number;
+    billingMode?: "AWAITING" | "INVOICED" | "NO_INVOICE";
+    billingDecidedBy?: string;
+    billingDecidedAt?: Date | null;
+    billRef?: string;
+    payments?: Array<{
+      paymentId?: string;
+      paymentNo?: string;
+      grossAmount?: number;
+      tdsAmount?: number;
+      netAmount?: number;
+      amount?: number;
+      date?: Date | string;
+      paymentMode?: string;
+      reference?: string;
+      notes?: string;
+      recordedBy?: string;
+    }>;
+    gst?: {
+      taxableValue?: number;
+      cgstRate?: number;
+      cgstAmount?: number;
+      sgstRate?: number;
+      sgstAmount?: number;
+      igstRate?: number;
+      igstAmount?: number;
+      totalGst?: number;
+      placeOfSupply?: string;
+      supplyType?: "INTRA" | "INTER";
+      clinicGstin?: string;
+      gstDate?: Date | string;
+    };
+    tdsTotal?: number;
   };
 
   donorDeal?: {
@@ -581,6 +613,17 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
       tdsAmount: { type: Number, default: 0 },
       serviceCharge: { type: Number, default: 0 },
       totalAmount: { type: Number, default: 0 },
+      billingMode: {
+        type: String,
+        enum: ["AWAITING", "INVOICED", "NO_INVOICE"],
+        default: null,
+      },
+      billingDecidedBy: { type: String, default: null },
+      billingDecidedAt: { type: Date, default: null },
+      billRef: { type: String, default: "" },
+      payments: { type: [Schema.Types.Mixed], default: [] },
+      gst: { type: Schema.Types.Mixed, default: null },
+      tdsTotal: { type: Number, default: 0 },
     },
 
     donorDeal: {

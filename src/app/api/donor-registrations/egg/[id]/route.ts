@@ -101,6 +101,50 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
     const userName = (session.user as any)?.name || (session.user as any)?.email || "Admin";
 
+    // Validate recruitmentDate bounds (cannot be in future, cannot be earlier than last recruitment date)
+    if (body.recruitmentDate && body.recruitmentDate !== existing.recruitmentDate) {
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+
+      const cleanRecruit = String(body.recruitmentDate).slice(0, 10);
+      const formatDateStr = (s: string) => {
+        try {
+          const [y, m, d] = s.split("-").map(Number);
+          return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+        } catch {
+          return s;
+        }
+      };
+
+      if (cleanRecruit > today) {
+        return NextResponse.json(
+          { success: false, error: `Recruitment date cannot be in the future (not tomorrow or later). Must be on or before Today (${formatDateStr(today)}).` },
+          { status: 400 }
+        );
+      }
+
+      const latestEgg = await EggDonorRegistration.findOne({
+        _id: { $ne: existing._id },
+        registrationId: { $ne: existing.registrationId },
+        recruitmentDate: { $exists: true, $ne: "", $lte: today, $regex: /^\d{4}-\d{2}-\d{2}/ },
+      })
+        .sort({ recruitmentDate: -1 })
+        .select("recruitmentDate")
+        .lean();
+
+      const lastDate = latestEgg?.recruitmentDate ? String(latestEgg.recruitmentDate).slice(0, 10) : null;
+      if (lastDate && cleanRecruit < lastDate) {
+        return NextResponse.json(
+          { success: false, error: `Recruitment date cannot be earlier than the last recruitment date (${formatDateStr(lastDate)}).` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Strict validation when marking as APPROVED
     if (body.status === "APPROVED") {
       const effectiveHospital = body.assignedHospital || existing.assignedHospital;

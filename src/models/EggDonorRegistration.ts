@@ -238,6 +238,35 @@ export interface IEggDonorRegistration extends Document {
   updatedAt: Date;
 }
 
+export interface IClinicPaymentItem {
+  paymentId?: string;
+  paymentNo?: string;
+  grossAmount?: number;
+  tdsAmount?: number;
+  netAmount?: number;
+  amount?: number;
+  date?: Date | string;
+  paymentMode?: string;
+  reference?: string;
+  notes?: string;
+  recordedBy?: string;
+}
+
+export interface IInvoiceGstDetails {
+  taxableValue?: number;
+  cgstRate?: number;
+  cgstAmount?: number;
+  sgstRate?: number;
+  sgstAmount?: number;
+  igstRate?: number;
+  igstAmount?: number;
+  totalGst?: number;
+  placeOfSupply?: string;
+  supplyType?: "INTRA" | "INTER";
+  clinicGstin?: string;
+  gstDate?: Date | string;
+}
+
 export interface IClinicDeal {
   donorCategory: "registry" | "normal" | "profile";
   hospitalDealPrice: number;
@@ -256,6 +285,13 @@ export interface IClinicDeal {
   tdsAmount?: number;
   serviceCharge?: number;
   totalAmount?: number;
+  billingMode?: "AWAITING" | "INVOICED" | "NO_INVOICE";
+  billingDecidedBy?: string;
+  billingDecidedAt?: Date | null;
+  billRef?: string;
+  payments?: IClinicPaymentItem[];
+  gst?: IInvoiceGstDetails;
+  tdsTotal?: number;
 }
 
 export interface IDonorDeal {
@@ -522,6 +558,17 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
       tdsAmount: { type: Number, default: 0 },
       serviceCharge: { type: Number, default: 0 },
       totalAmount: { type: Number, default: 0 },
+      billingMode: {
+        type: String,
+        enum: ["AWAITING", "INVOICED", "NO_INVOICE"],
+        default: null,
+      },
+      billingDecidedBy: { type: String, default: null },
+      billingDecidedAt: { type: Date, default: null },
+      billRef: { type: String, default: "" },
+      payments: { type: [Schema.Types.Mixed], default: [] },
+      gst: { type: Schema.Types.Mixed, default: null },
+      tdsTotal: { type: Number, default: 0 },
     },
 
     donorDeal: {

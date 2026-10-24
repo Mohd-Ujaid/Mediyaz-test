@@ -84,7 +84,14 @@ export async function GET(req: Request) {
     const preview = searchParams.get("preview") === "true";
 
     const baseQuery: any = {
-      status: { $in: ["FILE_COMPLETED", "COMPLETED", "APPROVED"] },
+      $or: [
+        { status: { $in: ["FILE_COMPLETED", "COMPLETED", "APPROVED"] } },
+        { pickupDate: { $exists: true, $nin: ["", null] } },
+        { isInvoiceGenerated: true },
+        { "clinicDeal.isInvoiceGenerated": true },
+        { invoiceNumber: { $exists: true, $nin: ["", null] } },
+        { "clinicDeal.invoiceNumber": { $exists: true, $nin: ["", null] } },
+      ],
     };
 
     let filterClinicName = "";
@@ -153,6 +160,7 @@ export async function GET(req: Request) {
       let sNo = 1;
       const invoicedClinicRecords = rawRecords.filter((r: any) => {
         const hasHospital = Boolean(r.assignedHospital);
+        const hasPickup = Boolean(r.pickupDate && String(r.pickupDate).trim() !== "");
         const isCompleted = r.status === "FILE_COMPLETED" || r.status === "COMPLETED";
         const hasInvoice = Boolean(
           r.clinicDeal?.isInvoiceGenerated === true ||
@@ -160,7 +168,7 @@ export async function GET(req: Request) {
           (r.clinicDeal?.invoiceNumber && r.clinicDeal.invoiceNumber.trim() !== "") ||
           (r.invoiceNumber && r.invoiceNumber.trim() !== "")
         );
-        return hasHospital && (hasInvoice || isCompleted);
+        return hasHospital && (hasPickup || hasInvoice || isCompleted);
       });
 
       let clinicEntries: ClinicLedgerEntry[] = invoicedClinicRecords.map((r: any) => {

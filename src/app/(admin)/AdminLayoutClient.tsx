@@ -33,6 +33,7 @@ import {
   Stethoscope,
   ShieldAlert,
   KeyRound,
+  BarChart3,
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { GlobalSearchModal } from "@/components/layout/GlobalSearchModal";
@@ -122,6 +123,7 @@ const sidebarNavigation: SidebarGroupSection[] = [
     title: "Billing & Accounts",
     items: [
       { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "pendingInvoices" },
+      { href: "/reports/finance", label: "Tax & Financial Audits", icon: BarChart3, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/ledger", label: "Accounts Ledger (Laser)", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
     ]
   },

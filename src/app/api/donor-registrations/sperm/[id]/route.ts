@@ -162,6 +162,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const directUpdates: any = {};
+    if (body.recruitmentDate !== undefined) directUpdates.recruitmentDate = body.recruitmentDate;
+    if (body.supplyDate !== undefined) directUpdates.supplyDate = body.supplyDate;
+    if (body.pickupDate !== undefined) directUpdates.pickupDate = body.pickupDate;
+    if (body.adminNotes !== undefined) directUpdates.adminNotes = body.adminNotes;
     if (body.donorDeal !== undefined) directUpdates.donorDeal = body.donorDeal;
     if (body.clinicDeal !== undefined) directUpdates.clinicDeal = body.clinicDeal;
     if (body.hospitalDealType !== undefined) directUpdates.hospitalDealType = body.hospitalDealType;

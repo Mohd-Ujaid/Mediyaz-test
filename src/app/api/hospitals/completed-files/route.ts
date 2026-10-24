@@ -457,6 +457,14 @@ export async function PATCH(req: Request) {
       if (updateFields.clinicDeal.netReceivableAmount !== undefined) {
         updatePayload.clinicDeal.netReceivableAmount = Number(updateFields.clinicDeal.netReceivableAmount);
       }
+      if (updateFields.clinicDeal.billingMode !== undefined) {
+        updatePayload.clinicDeal.billingMode = updateFields.clinicDeal.billingMode;
+        updatePayload.clinicDeal.billingDecidedBy = userName;
+        updatePayload.clinicDeal.billingDecidedAt = new Date();
+      }
+      if (updateFields.clinicDeal.gst !== undefined) {
+        updatePayload.clinicDeal.gst = updateFields.clinicDeal.gst;
+      }
 
       // Also ensure root level reflects invoice values
       if (invNum) updatePayload.invoiceNumber = invNum;

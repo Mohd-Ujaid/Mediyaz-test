@@ -583,6 +583,7 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
             isInvoiceGenerated: true,
             clinicDeal: {
               isInvoiceGenerated: true,
+              billingMode: "INVOICED",
               invoiceNumber: invNum,
               invoiceDate: invDate,
               hospitalDealPrice: defaultDealPrice,
@@ -590,6 +591,20 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
               serviceCharge: defaultServiceCharge,
               donorReimbursement,
               gstAmount: Math.round(defaultServiceCharge * 0.18),
+              gst: {
+                taxableValue: defaultServiceCharge,
+                cgstRate: 9,
+                cgstAmount: Math.round(defaultServiceCharge * 0.09),
+                sgstRate: 9,
+                sgstAmount: Math.round(defaultServiceCharge * 0.09),
+                igstRate: 0,
+                igstAmount: 0,
+                totalGst: Math.round(defaultServiceCharge * 0.18),
+                supplyType: "INTRA",
+                placeOfSupply: "Delhi (07)",
+                clinicGstin: hosp?.gstNumber || "07AANCM1124F1ZQ",
+                gstDate: invDate,
+              },
               tdsPercentage: 2,
               tdsAmount: Math.round(defaultDealPrice * 0.02),
               netReceivableAmount: Math.max(

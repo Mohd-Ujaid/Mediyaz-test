@@ -217,6 +217,16 @@ export default function AdminEggDonorRegistrationsPage() {
     assignedDoctor: "",
   });
 
+  const [recruitmentDateBounds, setRecruitmentDateBounds] = useState<{
+    minDate: string;
+    maxDate: string;
+    lastRecruitmentDate: string | null;
+  }>({
+    minDate: "",
+    maxDate: "",
+    lastRecruitmentDate: null,
+  });
+
   const fetchHospitals = useCallback(async () => {
     try {
       const res = await fetch("/api/hospitals?status=ACTIVE&limit=200", {
@@ -436,6 +446,28 @@ export default function AdminEggDonorRegistrationsPage() {
       targetStatus,
       assignedDoctor: reg.assignedDoctor || (reg.assignedHospital?.doctorName || ""),
     });
+
+    const regId = reg.registrationId || reg._id || "";
+    fetch(`/api/donor-registrations/egg/recruitment-date-bounds?excludeId=${regId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setRecruitmentDateBounds({
+            minDate: data.minDate || "",
+            maxDate: data.maxDate || "",
+            lastRecruitmentDate: data.lastRecruitmentDate || null,
+          });
+          // If no recruitment date exists on this donor, default to today
+          setDealForm((prev) => {
+            if (!prev.recruitmentDate && data.today) {
+              return { ...prev, recruitmentDate: data.today };
+            }
+            return prev;
+          });
+        }
+      })
+      .catch((err) => console.error("Error fetching recruitment date bounds:", err));
+
     setIsDealModalOpen(true);
   };
 
@@ -485,6 +517,17 @@ export default function AdminEggDonorRegistrationsPage() {
     if (dealForm.donorCategory !== "registry" && (!dealForm.compensationAmount || dealForm.compensationAmount <= 0)) {
       toast.error("Deal with donor (compensation amount) must be greater than ₹0.");
       return;
+    }
+
+    if (dealForm.recruitmentDate) {
+      if (recruitmentDateBounds.maxDate && dealForm.recruitmentDate > recruitmentDateBounds.maxDate) {
+        toast.error(`Recruitment date cannot be in the future (not tomorrow or later). Must be on or before Today (${formatDisplayDate(recruitmentDateBounds.maxDate) || "Today"}).`);
+        return;
+      }
+      if (recruitmentDateBounds.minDate && dealForm.recruitmentDate < recruitmentDateBounds.minDate) {
+        toast.error(`Recruitment date cannot be earlier than the last recruitment date (${formatDisplayDate(recruitmentDateBounds.minDate)}).`);
+        return;
+      }
     }
 
     setActionLoading(true);
@@ -2815,12 +2858,38 @@ export default function AdminEggDonorRegistrationsPage() {
                   <Input
                     type="date"
                     value={dealForm.recruitmentDate}
+                    min={recruitmentDateBounds.minDate || undefined}
+                    max={recruitmentDateBounds.maxDate || undefined}
                     onChange={(e) => setDealForm({ ...dealForm, recruitmentDate: e.target.value })}
                     className="rounded-xl text-xs h-9"
                   />
-                  <p className="text-[10px] text-muted-foreground">
-                    Donor onboarding and recruitment confirmation date.
-                  </p>
+                  {(() => {
+                    const minFormatted = formatDisplayDate(recruitmentDateBounds.minDate);
+                    const maxFormatted = formatDisplayDate(recruitmentDateBounds.maxDate) || "Today";
+                    const isSameDate = recruitmentDateBounds.minDate && recruitmentDateBounds.minDate === recruitmentDateBounds.maxDate;
+
+                    if (isSameDate) {
+                      return (
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium pt-0.5">
+                          Selectable: <span className="font-semibold text-foreground">{minFormatted} (Today)</span>
+                        </p>
+                      );
+                    }
+
+                    if (recruitmentDateBounds.minDate) {
+                      return (
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium pt-0.5">
+                          Selectable between <span className="font-semibold text-foreground">{minFormatted}</span> and <span className="font-semibold text-foreground">Today ({maxFormatted})</span>
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium pt-0.5">
+                        Selectable up to <span className="font-semibold text-foreground">Today ({maxFormatted})</span>
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div className="space-y-1.5">

@@ -7,24 +7,19 @@ import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import mongoose from "mongoose";
 import { formatDotDate } from "@/lib/invoice-utils";
+import {
+  getFinancialYear,
+  getIndianQuarter,
+  calculateGst,
+  parseDateSafe,
+  generateBillRef,
+} from "@/lib/tax-finance-utils";
 
 function parseYearAndMonth(dateVal: any, fallbackDate?: any): { year: number; month: number } {
   const tryVal = dateVal || fallbackDate;
   if (!tryVal) return { year: 0, month: 0 };
-  if (tryVal instanceof Date && !isNaN(tryVal.getTime())) {
-    return { year: tryVal.getFullYear(), month: tryVal.getMonth() + 1 };
-  }
-  const str = String(tryVal).trim();
-  const dmy = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
-  if (dmy) {
-    return { year: parseInt(dmy[3], 10), month: parseInt(dmy[2], 10) };
-  }
-  const ymd = str.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
-  if (ymd) {
-    return { year: parseInt(ymd[1], 10), month: parseInt(ymd[2], 10) };
-  }
-  const dt = new Date(str);
-  if (!isNaN(dt.getTime())) {
+  const dt = parseDateSafe(tryVal);
+  if (dt) {
     return { year: dt.getFullYear(), month: dt.getMonth() + 1 };
   }
   return { year: 0, month: 0 };
@@ -114,43 +109,48 @@ export async function GET(req: Request) {
     const branch = (searchParams.get("branch") || "").trim();
     const year = (searchParams.get("year") || "").trim();
     const month = (searchParams.get("month") || "").trim();
+    const financialYearParam = searchParams.get("financialYear") || searchParams.get("fy") || "";
+    const quarterParam = searchParams.get("quarter") || "";
+    const startDateParam = searchParams.get("startDate") || "";
+    const endDateParam = searchParams.get("endDate") || "";
+    const billingModeFilter = (searchParams.get("mode") || searchParams.get("billingMode") || "ALL").toUpperCase(); // ALL | AWAITING | INVOICED | NO_INVOICE
     const paymentStatusFilter = searchParams.get("status") || "ALL"; // ALL | PAID | PENDING | PARTIALLY_RECEIVED
     const donorTypeParam = searchParams.get("donorType") || "all"; // all | egg | sperm
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "25"));
 
-    // Only records with an explicitly generated invoice should appear in the Invoice Tracker
-    const invoiceOrConditions = [
-      { isInvoiceGenerated: true },
-      { "clinicDeal.isInvoiceGenerated": true },
-      { invoiceNumber: { $exists: true, $nin: ["", null] } },
-      { "clinicDeal.invoiceNumber": { $exists: true, $nin: ["", null] } },
-    ];
+    // Eligible records for Billing & Invoice Management:
+    // Any record with a pickupDate entered AND assignedHospital, OR an invoice was generated.
+    const eligibleQuery = {
+      $or: [
+        {
+          pickupDate: { $exists: true, $nin: ["", null] },
+          assignedHospital: { $exists: true, $ne: null },
+        },
+        { isInvoiceGenerated: true },
+        { "clinicDeal.isInvoiceGenerated": true },
+        { invoiceNumber: { $exists: true, $nin: ["", null] } },
+        { "clinicDeal.invoiceNumber": { $exists: true, $nin: ["", null] } },
+      ],
+    };
 
-    const queryFilter = { $or: invoiceOrConditions };
-
-    // Helper to fetch and normalize records
     const fetchAndNormalize = async (model: any, defaultType: "egg" | "sperm") => {
       const records = await model
-        .find(queryFilter)
+        .find(eligibleQuery)
         .select(
           "registrationId donorId donorType personalInfo.fullName personalInfo.husbandName contactInfo.mobileNumber assignedHospital assignedBranch assignedBranchId pickupLocation opuLocation clinicDeal donorDeal isInvoiceGenerated invoiceNumber invoiceDate pickupDate isDonorPaid paidAt createdAt updatedAt"
         )
-        .populate("assignedHospital", "name shortName code city state gstNumber addressLine1 eggDonorDealPrice eggProfileDonorDealPrice profiledonorDealPrice donorDealPrice spermDonorDealPrice spermProfileDonorDealPrice branches")
+        .populate("assignedHospital", "name shortName code city state gstNumber addressLine1 eggDonorDealPrice eggProfileDonorDealPrice profiledonorDealPrice donorDealPrice spermDonorDealPrice spermProfileDonorDealPrice serviceCharge tdsPercentage wantInvoice branches")
         .sort({ updatedAt: -1, createdAt: -1 })
         .lean();
 
-      return records
-        .filter((r: any) => {
-          const invNum = (r.clinicDeal?.invoiceNumber || r.invoiceNumber || "").trim();
-          return Boolean(invNum || r.clinicDeal?.isInvoiceGenerated || r.isInvoiceGenerated);
-        })
-        .map((r: any) => {
+      return records.map((r: any, index: number) => {
         const hosp = typeof r.assignedHospital === "object" ? r.assignedHospital : null;
         const clinicDeal = r.clinicDeal || {};
         const donorCategory = clinicDeal.donorCategory || r.donorDeal?.donorCategory || "normal";
+        const isSperm = r.donorType === "sperm" || defaultType === "sperm";
 
-        const isSperm = r.donorType === "sperm";
+        // Deal Price
         const dealPrice =
           clinicDeal.hospitalDealPrice ||
           (hosp
@@ -165,38 +165,7 @@ export async function GET(req: Request) {
             ? 15000
             : 65000);
 
-        const isReceived =
-          clinicDeal.isPaymentReceived === true ||
-          clinicDeal.paymentStatus === "RECEIVED" ||
-          (clinicDeal.receivedAmount && clinicDeal.receivedAmount >= dealPrice);
-
-        const isPartial =
-          !isReceived &&
-          (clinicDeal.paymentStatus === "PARTIALLY_RECEIVED" ||
-            (clinicDeal.receivedAmount && clinicDeal.receivedAmount > 0 && clinicDeal.receivedAmount < dealPrice));
-
-        const receivedAmount = isReceived
-          ? clinicDeal.receivedAmount || dealPrice
-          : clinicDeal.receivedAmount || 0;
-
-        const pendingAmount = Math.max(0, dealPrice - receivedAmount);
-
-        const paymentStatus: "RECEIVED" | "PENDING" | "PARTIALLY_RECEIVED" = isReceived
-          ? "RECEIVED"
-          : isPartial
-          ? "PARTIALLY_RECEIVED"
-          : "PENDING";
-
-        // Use actual generated invoice number
-        const invoiceNumber = (clinicDeal.invoiceNumber || r.invoiceNumber || "").trim();
-        const rawDate = clinicDeal.invoiceDate || r.pickupDate || r.createdAt;
-        const { year: parsedYear, month: parsedMonth } = parseYearAndMonth(rawDate, r.createdAt);
-        const invoiceDate = clinicDeal.invoiceDate
-          ? formatDotDate(clinicDeal.invoiceDate)
-          : r.pickupDate
-          ? formatDotDate(r.pickupDate)
-          : formatDotDate(r.createdAt || new Date());
-
+        // Service charge & Reimbursement
         const serviceCharge = clinicDeal.serviceCharge !== undefined && clinicDeal.serviceCharge !== null
           ? Number(clinicDeal.serviceCharge)
           : hosp?.serviceCharge || 5000;
@@ -204,18 +173,103 @@ export async function GET(req: Request) {
           ? Number(clinicDeal.donorReimbursement)
           : Math.max(0, dealPrice - serviceCharge);
 
-        // Tax details
-        const isInterState = hosp?.state && !hosp.state.toLowerCase().includes("delhi");
-        const taxRate = 18; // 18% IGST or 9%+9% CGST+SGST on service charge
-        const taxAmount = (serviceCharge * taxRate) / 100;
-        const totalAmountAfterTax = serviceCharge + taxAmount + donorReimbursement;
+        // Branch matching for wantInvoice flag
+        const assignedBranch = resolveHospitalBranch(r, hosp);
+        let branchWantInvoice = hosp?.wantInvoice !== false;
+        if (hosp?.branches && Array.isArray(hosp.branches)) {
+          const matchedB = hosp.branches.find(
+            (b: any) =>
+              (b._id && b._id.toString() === r.assignedBranchId) ||
+              b.branchName === assignedBranch ||
+              b.branchName === r.assignedBranch
+          );
+          if (matchedB && matchedB.wantInvoice !== undefined) {
+            branchWantInvoice = Boolean(matchedB.wantInvoice);
+          }
+        }
+
+        // Invoice Number & Dates
+        const invoiceNumber = (clinicDeal.invoiceNumber || r.invoiceNumber || "").trim();
+        const hasInvoice = Boolean(invoiceNumber || clinicDeal.isInvoiceGenerated || r.isInvoiceGenerated);
+
+        // Determine billingMode:
+        // Explicitly set > has actual invoice -> INVOICED > clinic does not want invoice -> NO_INVOICE > else AWAITING
+        let billingMode: "AWAITING" | "INVOICED" | "NO_INVOICE" = "AWAITING";
+        if (clinicDeal.billingMode) {
+          billingMode = clinicDeal.billingMode;
+        } else if (hasInvoice) {
+          billingMode = "INVOICED";
+        } else if (!branchWantInvoice) {
+          billingMode = "NO_INVOICE";
+        } else {
+          billingMode = "AWAITING";
+        }
+
+        // Bill Reference for non-invoiced items
+        const billRef =
+          clinicDeal.billRef ||
+          (billingMode === "NO_INVOICE" ? generateBillRef(index + 1, parseDateSafe(r.pickupDate) || new Date()) : "");
+
+        // Dates & Periods
+        const rawDate = clinicDeal.invoiceDate || r.pickupDate || r.createdAt;
+        const { year: parsedYear, month: parsedMonth } = parseYearAndMonth(rawDate, r.createdAt);
+        const parsedDate = parseDateSafe(rawDate) || new Date();
+        const financialYear = getFinancialYear(parsedDate);
+        const quarter = getIndianQuarter(parsedDate);
+
+        const invoiceDate = clinicDeal.invoiceDate
+          ? formatDotDate(clinicDeal.invoiceDate)
+          : r.pickupDate
+          ? formatDotDate(r.pickupDate)
+          : formatDotDate(r.createdAt || new Date());
+
+        const pickupDateStr = r.pickupDate ? formatDotDate(r.pickupDate) : invoiceDate;
+
+        // GST calculation / snapshot
+        let gstDetails = clinicDeal.gst;
+        if (!gstDetails && hasInvoice) {
+          gstDetails = calculateGst(serviceCharge, hosp?.state);
+        }
+        const gstAmount = gstDetails?.totalGst || 0;
+
+        // Payments and TDS tracking
+        const paymentsList: any[] = Array.isArray(clinicDeal.payments) ? clinicDeal.payments : [];
+        let receivedAmount = 0;
+        let tdsAmount = 0;
+
+        if (paymentsList.length > 0) {
+          receivedAmount = paymentsList.reduce((acc, p) => acc + Number(p.netAmount ?? p.amount ?? 0), 0);
+          tdsAmount = paymentsList.reduce((acc, p) => acc + Number(p.tdsAmount ?? 0), 0);
+        } else {
+          receivedAmount = Number(clinicDeal.receivedAmount || 0);
+          tdsAmount = Number(clinicDeal.tdsAmount || clinicDeal.tdsTotal || 0);
+        }
+
+        const totalSettled = receivedAmount + tdsAmount;
+        const isReceived =
+          clinicDeal.isPaymentReceived === true ||
+          clinicDeal.paymentStatus === "RECEIVED" ||
+          totalSettled >= dealPrice;
+
+        const isPartial =
+          !isReceived &&
+          (clinicDeal.paymentStatus === "PARTIALLY_RECEIVED" ||
+            (totalSettled > 0 && totalSettled < dealPrice));
+
+        const finalReceived = isReceived ? (receivedAmount || dealPrice) : receivedAmount;
+        const pendingAmount = Math.max(0, dealPrice - (finalReceived + tdsAmount));
+
+        const paymentStatus: "RECEIVED" | "PENDING" | "PARTIALLY_RECEIVED" = isReceived
+          ? "RECEIVED"
+          : isPartial
+          ? "PARTIALLY_RECEIVED"
+          : "PENDING";
 
         // Donor deal info
         const donorDeal = r.donorDeal || {};
         const donorComp = donorDeal.compensationAmount || clinicDeal.donorReimbursement || (donorCategory === "profile" ? 60000 : 55000);
         const isDonorPaid = r.isDonorPaid === true || donorDeal.paymentStatus === "PAID";
 
-        const assignedBranch = resolveHospitalBranch(r, hosp);
         const opuLocationStr = (r.opuLocation && !isClinicSelfName(r.opuLocation, hosp))
           ? r.opuLocation
           : (r.pickupLocation && !isClinicSelfName(r.pickupLocation, hosp))
@@ -240,6 +294,8 @@ export async function GET(req: Request) {
                 state: hosp.state || "",
                 gstNumber: hosp.gstNumber || "07AANCM1124F1ZQ",
                 addressLine1: hosp.addressLine1 || "",
+                wantInvoice: hosp.wantInvoice !== false,
+                tdsPercentage: hosp.tdsPercentage || 10,
                 branches: Array.isArray(hosp.branches) ? hosp.branches : [],
               }
             : null,
@@ -247,22 +303,32 @@ export async function GET(req: Request) {
           assignedBranchId: r.assignedBranchId || "",
           branchName: assignedBranch,
           opuLocation: opuLocationStr,
+          billingMode,
+          billRef,
+          hasInvoice,
           invoiceNumber,
           invoiceDate,
           parsedYear,
           parsedMonth,
-          pickupDate: r.pickupDate ? formatDotDate(r.pickupDate) : invoiceDate,
+          parsedDate,
+          financialYear,
+          quarter,
+          pickupDate: pickupDateStr,
+          rawPickupDate: r.pickupDate || "",
           dealPrice,
           serviceCharge,
           donorReimbursement,
-          taxAmount,
-          totalAmountAfterTax,
-          receivedAmount,
+          gst: gstDetails || null,
+          gstAmount,
+          tdsAmount,
+          totalAmountAfterTax: serviceCharge + gstAmount + donorReimbursement,
+          receivedAmount: finalReceived,
           pendingAmount,
           paymentStatus,
           isPaymentReceived: isReceived,
           paymentReference: clinicDeal.paymentReference || "",
           receivedAt: clinicDeal.receivedAt || null,
+          payments: paymentsList,
           donorDeal: {
             compensationAmount: donorComp,
             advanceAmount: donorDeal.advanceAmount || 0,
@@ -291,7 +357,7 @@ export async function GET(req: Request) {
     // Sort descending by date
     allItems.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-    // Extract available years across all invoices
+    // Extract available years across all items
     const yearsSet = new Set<number>();
     const currentYr = new Date().getFullYear();
     yearsSet.add(currentYr);
@@ -300,13 +366,13 @@ export async function GET(req: Request) {
     });
     const availableYears = Array.from(yearsSet).sort((a, b) => b - a);
 
-    // Extract available branches across all invoices and registered hospital profiles
+    // Extract available branches across all records and registered hospitals
     const branchSet = new Set<string>();
     allItems.forEach((i) => {
       if (i.assignedBranch) branchSet.add(i.assignedBranch);
     });
 
-    const allHospitals = await Hospital.find({}).select("name shortName branches city").lean();
+    const allHospitals = await Hospital.find({}).select("name shortName branches city wantInvoice").lean();
     allHospitals.forEach((h: any) => {
       if (Array.isArray(h.branches) && h.branches.length > 0) {
         h.branches.forEach((b: any) => {
@@ -317,49 +383,21 @@ export async function GET(req: Request) {
     });
     const availableBranches = Array.from(branchSet).filter(Boolean).sort();
 
-    // Compute Overall KPI Metrics across all loaded records before paymentStatus filter
-    const totalInvoices = allItems.length;
-    let paidInvoicesCount = 0;
-    let pendingInvoicesCount = 0;
-    let partialInvoicesCount = 0;
-    let totalBilledAmount = 0;
-    let totalReceivedAmount = 0;
-    let totalPendingAmount = 0;
-
-    // Clinic-wise aggregation map
-    const clinicMap: Record<
-      string,
-      {
-        hospitalId: string;
-        hospitalName: string;
-        hospitalCode: string;
-        city: string;
-        state: string;
-        branches: Array<{ branchId: string; branchName: string; city?: string }>;
-        invoiceCount: number;
-        paidCount: number;
-        pendingCount: number;
-        partialCount: number;
-        totalBilled: number;
-        totalReceived: number;
-        totalPending: number;
-      }
-    > = {};
+    // Mode counts across all loaded items (before mode/status filter)
+    let awaitingCount = 0;
+    let invoicedCount = 0;
+    let noInvoiceCount = 0;
 
     allItems.forEach((item) => {
-      totalBilledAmount += item.dealPrice;
-      totalReceivedAmount += item.receivedAmount;
-      totalPendingAmount += item.pendingAmount;
+      if (item.billingMode === "AWAITING") awaitingCount++;
+      else if (item.billingMode === "INVOICED") invoicedCount++;
+      else if (item.billingMode === "NO_INVOICE") noInvoiceCount++;
+    });
 
-      if (item.paymentStatus === "RECEIVED") {
-        paidInvoicesCount++;
-      } else if (item.paymentStatus === "PARTIALLY_RECEIVED") {
-        partialInvoicesCount++;
-      } else {
-        pendingInvoicesCount++;
-      }
+    // Clinic-wise aggregation
+    const clinicMap: Record<string, any> = {};
 
-      // Clinic breakdown
+    allItems.forEach((item) => {
       const hosp = item.assignedHospital;
       const hId = hosp?._id || "unassigned";
       const hName = hosp?.name || "Unassigned Clinic";
@@ -368,72 +406,75 @@ export async function GET(req: Request) {
       const hState = hosp?.state || "";
 
       if (!clinicMap[hId]) {
-        const initialBranches: Array<{ branchId: string; branchName: string; city?: string }> = [];
-        if (hosp?.branches && Array.isArray(hosp.branches)) {
-          hosp.branches.forEach((b: any) => {
-            const bName = typeof b === "string" ? b : b.branchName || b.name;
-            const bId = b._id?.toString() || b.branchId || bName;
-            if (bName && !initialBranches.some((cb) => cb.branchName === bName)) {
-              initialBranches.push({
-                branchId: bId,
-                branchName: bName,
-                city: b.city || hCity,
-              });
-            }
-          });
-        }
-
         clinicMap[hId] = {
           hospitalId: hId,
           hospitalName: hName,
           hospitalCode: hCode,
           city: hCity,
           state: hState,
-          branches: initialBranches,
-          invoiceCount: 0,
+          branches: [],
+          totalCount: 0,
+          awaitingCount: 0,
+          invoicedCount: 0,
+          noInvoiceCount: 0,
           paidCount: 0,
           pendingCount: 0,
           partialCount: 0,
           totalBilled: 0,
           totalReceived: 0,
+          totalTds: 0,
+          totalGst: 0,
           totalPending: 0,
         };
       }
 
-      clinicMap[hId].invoiceCount++;
-      clinicMap[hId].totalBilled += item.dealPrice;
-      clinicMap[hId].totalReceived += item.receivedAmount;
-      clinicMap[hId].totalPending += item.pendingAmount;
+      const c = clinicMap[hId];
+      c.totalCount++;
+      c.totalBilled += item.dealPrice;
+      c.totalReceived += item.receivedAmount;
+      c.totalTds += item.tdsAmount;
+      c.totalGst += item.gstAmount;
+      c.totalPending += item.pendingAmount;
+
+      if (item.billingMode === "AWAITING") c.awaitingCount++;
+      else if (item.billingMode === "INVOICED") c.invoicedCount++;
+      else if (item.billingMode === "NO_INVOICE") c.noInvoiceCount++;
+
+      if (item.paymentStatus === "RECEIVED") c.paidCount++;
+      else if (item.paymentStatus === "PARTIALLY_RECEIVED") c.partialCount++;
+      else c.pendingCount++;
 
       const itemBranch = item.assignedBranch;
-      if (itemBranch && !clinicMap[hId].branches.some((b) => b.branchName === itemBranch)) {
-        clinicMap[hId].branches.push({
+      if (itemBranch && !c.branches.some((b: any) => b.branchName === itemBranch)) {
+        c.branches.push({
           branchId: item.assignedBranchId || itemBranch,
           branchName: itemBranch,
           city: hCity,
         });
       }
-
-      if (item.paymentStatus === "RECEIVED") clinicMap[hId].paidCount++;
-      else if (item.paymentStatus === "PARTIALLY_RECEIVED") clinicMap[hId].partialCount++;
-      else clinicMap[hId].pendingCount++;
     });
 
-    const clinicBreakdown = Object.values(clinicMap).map((c) => ({
+    const clinicBreakdown = Object.values(clinicMap).map((c: any) => ({
       ...c,
       collectionRate: c.totalBilled > 0 ? Math.round((c.totalReceived / c.totalBilled) * 100) : 0,
     }));
+    clinicBreakdown.sort((a: any, b: any) => b.totalBilled - a.totalBilled);
 
-    clinicBreakdown.sort((a, b) => b.totalBilled - a.totalBilled);
+    // Apply Active Filters
+    let filteredItems = allItems;
 
-    // Apply Filters: Search, DonorType, Clinic, Branch, Year, Month, and Payment Status
-    let filteredInvoices = allItems;
+    // Billing Mode Filter
+    if (billingModeFilter && billingModeFilter !== "ALL") {
+      filteredItems = filteredItems.filter((i) => i.billingMode === billingModeFilter);
+    }
 
+    // Search Query
     if (search) {
       const q = search.toLowerCase();
-      filteredInvoices = filteredInvoices.filter((i) =>
+      filteredItems = filteredItems.filter((i) =>
         Boolean(
           i.invoiceNumber?.toLowerCase().includes(q) ||
+          i.billRef?.toLowerCase().includes(q) ||
           i.registrationId?.toLowerCase().includes(q) ||
           i.donorId?.toLowerCase().includes(q) ||
           i.donorName?.toLowerCase().includes(q) ||
@@ -447,11 +488,11 @@ export async function GET(req: Request) {
     }
 
     if (donorTypeParam && donorTypeParam !== "all") {
-      filteredInvoices = filteredInvoices.filter((i) => i.donorType === donorTypeParam);
+      filteredItems = filteredItems.filter((i) => i.donorType === donorTypeParam);
     }
 
     if (hospitalId && hospitalId !== "ALL") {
-      filteredInvoices = filteredInvoices.filter(
+      filteredItems = filteredItems.filter(
         (i) =>
           i.assignedHospital?._id === hospitalId ||
           i.assignedHospital?.name === hospitalId ||
@@ -461,7 +502,7 @@ export async function GET(req: Request) {
 
     if (branch && branch !== "ALL") {
       const target = branch.trim().toLowerCase();
-      filteredInvoices = filteredInvoices.filter((i) => {
+      filteredItems = filteredItems.filter((i) => {
         const b = (i.assignedBranch || i.branchName || "").trim().toLowerCase();
         if (b === target) return true;
         if (i.assignedBranchId && i.assignedBranchId.trim().toLowerCase() === target) return true;
@@ -475,40 +516,65 @@ export async function GET(req: Request) {
       });
     }
 
+    // Financial Year filter (e.g. "2026-27")
+    if (financialYearParam && financialYearParam !== "ALL") {
+      filteredItems = filteredItems.filter((i) => i.financialYear === financialYearParam);
+    }
+
+    // Quarter filter (e.g. "Q1", "Q2")
+    if (quarterParam && quarterParam !== "ALL") {
+      filteredItems = filteredItems.filter((i) => i.quarter === quarterParam);
+    }
+
+    // Date range filter
+    if (startDateParam || endDateParam) {
+      const startDt = startDateParam ? new Date(startDateParam).getTime() : 0;
+      const endDt = endDateParam ? new Date(endDateParam + "T23:59:59.999Z").getTime() : Infinity;
+      filteredItems = filteredItems.filter((i) => {
+        const t = new Date(i.parsedDate || i.createdAt).getTime();
+        return t >= startDt && t <= endDt;
+      });
+    }
+
     if (year && year !== "ALL") {
       const yNum = parseInt(year, 10);
-      filteredInvoices = filteredInvoices.filter((i) => i.parsedYear === yNum);
+      filteredItems = filteredItems.filter((i) => i.parsedYear === yNum);
     }
 
     if (month && month !== "ALL") {
       const mNum = parseInt(month, 10);
-      filteredInvoices = filteredInvoices.filter((i) => i.parsedMonth === mNum);
+      filteredItems = filteredItems.filter((i) => i.parsedMonth === mNum);
     }
 
     if (paymentStatusFilter === "PAID") {
-      filteredInvoices = filteredInvoices.filter((i) => i.paymentStatus === "RECEIVED");
+      filteredItems = filteredItems.filter((i) => i.paymentStatus === "RECEIVED");
     } else if (paymentStatusFilter === "PENDING") {
-      filteredInvoices = filteredInvoices.filter((i) => i.paymentStatus === "PENDING");
+      filteredItems = filteredItems.filter((i) => i.paymentStatus === "PENDING");
     } else if (paymentStatusFilter === "PARTIALLY_RECEIVED") {
-      filteredInvoices = filteredInvoices.filter((i) => i.paymentStatus === "PARTIALLY_RECEIVED");
+      filteredItems = filteredItems.filter((i) => i.paymentStatus === "PARTIALLY_RECEIVED");
     }
 
-    const totalFiltered = filteredInvoices.length;
+    // Paginate
+    const totalFiltered = filteredItems.length;
     const totalPages = Math.ceil(totalFiltered / limit) || 1;
-    const paginatedInvoices = filteredInvoices.slice((page - 1) * limit, page * limit);
+    const paginatedInvoices = filteredItems.slice((page - 1) * limit, page * limit);
 
-    // Compute metrics matching active filters
+    // Compute metrics on filtered result set
     let filterBilled = 0;
     let filterReceived = 0;
     let filterPending = 0;
+    let filterTds = 0;
+    let filterGst = 0;
     let filterPaidCount = 0;
     let filterPendingCount = 0;
     let filterPartialCount = 0;
 
-    filteredInvoices.forEach((i) => {
+    filteredItems.forEach((i) => {
       filterBilled += i.dealPrice;
       filterReceived += i.receivedAmount;
       filterPending += i.pendingAmount;
+      filterTds += i.tdsAmount;
+      filterGst += i.gstAmount;
       if (i.paymentStatus === "RECEIVED") filterPaidCount++;
       else if (i.paymentStatus === "PARTIALLY_RECEIVED") filterPartialCount++;
       else filterPendingCount++;
@@ -521,11 +587,16 @@ export async function GET(req: Request) {
       success: true,
       stats: {
         totalInvoices: totalFiltered,
+        awaitingCount,
+        invoicedCount,
+        noInvoiceCount,
         paidInvoicesCount: filterPaidCount,
         pendingInvoicesCount: filterPendingCount,
         partialInvoicesCount: filterPartialCount,
         totalBilledAmount: filterBilled,
         totalReceivedAmount: filterReceived,
+        totalTdsAmount: filterTds,
+        totalGstAmount: filterGst,
         totalPendingAmount: filterPending,
         paidPercentage,
       },
@@ -533,7 +604,7 @@ export async function GET(req: Request) {
       availableYears,
       availableBranches,
       invoices: paginatedInvoices,
-      allMatchingInvoices: filteredInvoices, // All invoices matching clinic, branch, year, month & status
+      allMatchingInvoices: filteredItems,
       pagination: {
         page,
         limit,
@@ -550,7 +621,7 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH handler to update payment receipt status for an invoice/deal
+// PATCH handler to update billing mode or payment receipt status
 export async function PATCH(req: Request) {
   try {
     const reqHeaders = await headers();
@@ -570,20 +641,62 @@ export async function PATCH(req: Request) {
 
     const userName = session.user?.name || session.user?.email || "Admin";
     const body = await req.json();
-    const { registrationId, donorType = "egg", paymentStatus, receivedAmount, paymentReference, notes } = body;
+    const { action = "record-payment" } = body;
+
+    await connectToDatabase();
+
+    // ACTION 1: Set Billing Mode (single or bulk)
+    if (action === "set-billing-mode") {
+      const { registrationIds, billingMode, donorType } = body;
+      const ids: string[] = Array.isArray(registrationIds)
+        ? registrationIds
+        : body.registrationId
+        ? [body.registrationId]
+        : [];
+
+      if (ids.length === 0 || !billingMode) {
+        return NextResponse.json(
+          { success: false, error: "registrationIds and billingMode are required" },
+          { status: 400 }
+        );
+      }
+
+      if (!["AWAITING", "INVOICED", "NO_INVOICE"].includes(billingMode)) {
+        return NextResponse.json({ success: false, error: "Invalid billingMode" }, { status: 400 });
+      }
+
+      const updateData: any = {
+        "clinicDeal.billingMode": billingMode,
+        "clinicDeal.billingDecidedBy": userName,
+        "clinicDeal.billingDecidedAt": new Date(),
+        updatedBy: userName,
+        updatedAt: new Date(),
+      };
+
+      if (billingMode === "NO_INVOICE") {
+        updateData["clinicDeal.billRef"] = generateBillRef(Date.now() % 10000);
+      }
+
+      await EggDonorRegistration.updateMany({ registrationId: { $in: ids } }, { $set: updateData });
+      await SpermDonorRegistration.updateMany({ registrationId: { $in: ids } }, { $set: updateData });
+
+      return NextResponse.json({
+        success: true,
+        message: `Billing mode updated to ${billingMode} for ${ids.length} registration(s)`,
+      });
+    }
+
+    // ACTION 2: Direct Single Payment Update (Backwards compatible)
+    const { registrationId, donorType = "egg", paymentStatus, receivedAmount, paymentReference, notes, tdsAmount } = body;
 
     if (!registrationId) {
       return NextResponse.json({ success: false, error: "registrationId is required" }, { status: 400 });
     }
 
-    await connectToDatabase();
-
-    // Find the record
     let targetModel: any = donorType === "sperm" ? SpermDonorRegistration : EggDonorRegistration;
     let existing = await targetModel.findOne({ registrationId });
 
     if (!existing) {
-      // Fallback search in opposite model
       const oppositeModel = donorType === "sperm" ? EggDonorRegistration : SpermDonorRegistration;
       existing = await oppositeModel.findOne({ registrationId });
       if (existing) {
@@ -596,7 +709,7 @@ export async function PATCH(req: Request) {
     }
 
     const prevClinic = existing.clinicDeal || {};
-    const dealPrice = prevClinic.hospitalDealPrice || 100000;
+    const dealPrice = prevClinic.hospitalDealPrice || 65000;
     const isPaid = paymentStatus === "RECEIVED" || paymentStatus === "PAID";
 
     const finalReceivedAmt =
@@ -606,12 +719,33 @@ export async function PATCH(req: Request) {
         ? dealPrice
         : prevClinic.receivedAmount || 0;
 
+    const finalTds = tdsAmount !== undefined ? Number(tdsAmount) : prevClinic.tdsAmount || 0;
+    const totalCovered = finalReceivedAmt + finalTds;
+
     const newPaymentStatus: "RECEIVED" | "PENDING" | "PARTIALLY_RECEIVED" =
-      isPaid || finalReceivedAmt >= dealPrice
+      isPaid || totalCovered >= dealPrice
         ? "RECEIVED"
-        : finalReceivedAmt > 0
+        : totalCovered > 0
         ? "PARTIALLY_RECEIVED"
         : "PENDING";
+
+    // Append to payments array if amount changed
+    const existingPayments = Array.isArray(prevClinic.payments) ? [...prevClinic.payments] : [];
+    if (finalReceivedAmt > 0 && existingPayments.length === 0) {
+      existingPayments.push({
+        paymentId: new mongoose.Types.ObjectId().toString(),
+        paymentNo: `MANUAL-${Date.now().toString().slice(-4)}`,
+        grossAmount: totalCovered,
+        tdsAmount: finalTds,
+        netAmount: finalReceivedAmt,
+        amount: finalReceivedAmt,
+        date: new Date(),
+        paymentMode: "bank_transfer",
+        reference: paymentReference || prevClinic.paymentReference || "",
+        notes: notes || "Direct payment update",
+        recordedBy: userName,
+      });
+    }
 
     const updatePayload = {
       clinicDeal: {
@@ -620,10 +754,13 @@ export async function PATCH(req: Request) {
         isPaymentReceived: newPaymentStatus === "RECEIVED",
         paymentStatus: newPaymentStatus,
         receivedAmount: finalReceivedAmt,
+        tdsAmount: finalTds,
+        tdsTotal: finalTds,
         receivedAt: newPaymentStatus === "RECEIVED" ? new Date() : prevClinic.receivedAt || null,
         paymentReference: paymentReference !== undefined ? paymentReference : prevClinic.paymentReference || "",
         notes: notes !== undefined ? notes : prevClinic.notes || "",
         agreedBy: prevClinic.agreedBy || userName,
+        payments: existingPayments,
       },
       updatedBy: userName,
       updatedAt: new Date(),
