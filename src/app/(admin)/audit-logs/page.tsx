@@ -47,6 +47,7 @@ export default function AdminAuditLogsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   // Table UX Density
   const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable");
@@ -61,7 +62,7 @@ export default function AdminAuditLogsPage() {
     try {
       const params = new URLSearchParams();
       params.append("page", String(currentPage));
-      params.append("limit", "15");
+      params.append("limit", String(pageSize));
       if (search) params.append("search", search);
       if (entityTypeFilter && entityTypeFilter !== "ALL") {
         params.append("entityType", entityTypeFilter);
@@ -87,7 +88,7 @@ export default function AdminAuditLogsPage() {
 
   useEffect(() => {
     loadLogs();
-  }, [search, entityTypeFilter, currentPage]);
+  }, [search, entityTypeFilter, currentPage, pageSize]);
 
   const handleCopyJson = (val: any, type: "old" | "new") => {
     const text = typeof val === "object" ? JSON.stringify(val, null, 2) : String(val);
@@ -227,7 +228,7 @@ export default function AdminAuditLogsPage() {
 
       {/* Main Table */}
       <Card className="rounded-2xl border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden bg-white dark:bg-slate-950">
-        <div className="overflow-x-auto max-h-[72vh]">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 shadow-2xs border-b border-slate-200 dark:border-slate-800">
               <tr className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
@@ -339,14 +340,21 @@ export default function AdminAuditLogsPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-            <CustomPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </div>
+        {!loading && (logs.length > 0 || totalCount > 0) && (
+          <CustomPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            pageSizeOptions={[10, 15, 25, 50, 100]}
+            itemName="activity logs"
+            loading={loading}
+          />
         )}
       </Card>
 

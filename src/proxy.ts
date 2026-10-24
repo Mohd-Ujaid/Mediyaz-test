@@ -60,7 +60,11 @@ export async function proxy(request: NextRequest) {
 
   const isAuthPage =
     path === "/login" ||
+    path === "/signup" ||
     path === "/admin" ||
+    path === "/secure/login" ||
+    path === "/secure/setup" ||
+    path.startsWith("/accept-invite") ||
     path.startsWith("/forgot-password") ||
     path.startsWith("/reset-password");
   const isPublicApi = path.startsWith("/api/auth");
@@ -82,6 +86,9 @@ export async function proxy(request: NextRequest) {
       );
     }
     if (!isAuthPage) {
+      if (path.startsWith("/secure")) {
+        return NextResponse.redirect(new URL("/secure/login", request.url));
+      }
       return NextResponse.redirect(new URL("/login", request.url));
     }
     return NextResponse.next({
@@ -91,36 +98,58 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  // 2. Authenticated Admin Authorization & Global Delete Restrictions
-  const role = (session?.user as any)?.role;
-  const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(role);
+  // 2. Extract Session User & Role
+  const user = session?.user as any;
+  const role = user?.role;
+  const isSuperAdminRole = role === "SUPER_ADMIN";
+  const isAllowedStaff = [
+    "SUPER_ADMIN",
+    "ADMIN",
+    "MANAGER",
+    "EMPLOYEE",
+    "DOCTOR",
+    "STAFF",
+    "RECEPTIONIST",
+  ].includes(role);
 
-  // Global Permissions: Prevent non-admins from executing DELETE requests anywhere
+  // 3. Strict Super Admin Portal Isolation
+  // Non-Super Admins cannot access /secure routes
+  if (path.startsWith("/secure") && !isSuperAdminRole) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: High-security console restricted to Super Administrator." },
+        { status: 403 }
+      );
+    }
+    return NextResponse.redirect(new URL("/login?error=super_admin_only", request.url));
+  }
+
+  // 4. Global Deletion Restriction (Strictly Super Admin Only)
+  // Admins, Managers, and Employees CANNOT execute HTTP DELETE requests anywhere
   if (request.method === "DELETE") {
-    if (!isAdmin) {
+    if (!isSuperAdminRole) {
       return NextResponse.json(
         {
           success: false,
-          error: "Forbidden: Only Administrators can delete records.",
+          error:
+            "Forbidden: Direct deletion is restricted exclusively to the Super Administrator. Administrators may submit a Deletion Request for review.",
         },
         { status: 403 }
       );
     }
   }
 
-  // 3. Non-admin access restriction:
-  // If an employee or customer without admin role logs in, prevent administrative access
-  if (!isAdmin) {
+  // 5. Non-Staff Access Restriction (Donors or Recipients cannot enter the staff portal)
+  if (!isAllowedStaff) {
     if (path.startsWith("/api/")) {
       return NextResponse.json(
         {
           success: false,
-          error: "Forbidden: Administrative privileges required.",
+          error: "Forbidden: Staff credentials required to access this system.",
         },
         { status: 403 }
       );
     }
-    // If they are on an auth page, allow them to view it without looping back to /dashboard
     if (isAuthPage) {
       return NextResponse.next({
         request: {
@@ -131,7 +160,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=unauthorized", request.url));
   }
 
-  // 4. Authenticated Admin on auth pages or root redirected to dashboard
+  // 6. Authenticated Staff on auth pages or root redirected to dashboard
   if (isAuthPage || path === "/") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

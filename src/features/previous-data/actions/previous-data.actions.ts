@@ -234,6 +234,17 @@ export async function savePreviousDonorAction(payload: any) {
 
 export async function deletePreviousDonorAction(id: string) {
   try {
+    const { getAuthenticatedActor } = await import("@/lib/rbac/guard");
+    const { isSuperAdmin } = await import("@/lib/rbac/roles");
+    const actor = await getAuthenticatedActor();
+
+    if (!actor || !isSuperAdmin(actor.role)) {
+      return {
+        success: false,
+        error: "Forbidden: Only the Super Administrator can permanently delete records. Standard Administrators must submit a Deletion Request.",
+      };
+    }
+
     await connectToDatabase();
     const deleted = await PreviousDonor.findByIdAndDelete(id);
     if (!deleted) {

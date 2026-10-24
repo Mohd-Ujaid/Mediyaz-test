@@ -27,6 +27,7 @@ export interface CompletedFileInvoiceData {
   hospitalName: string;
   hospitalGstin?: string;
   hospitalAddress?: string;
+  branchName?: string;
   pickupDate: string; // e.g. "19.09.2026"
   pickupLocation?: string;
   saleType?: "STATE" | "INTER-STATE";
@@ -680,6 +681,14 @@ export default function CompletedFileInvoicePdfDocument({
                   {invoice.hospitalAddress || "N/A"}
                 </Text>
               </View>
+              {Boolean(invoice.branchName) && (
+                <View style={styles.billToRow}>
+                  <Text style={styles.billToLabel}>Branch :</Text>
+                  <Text style={styles.billToValueNormal}>
+                    {invoice.branchName}
+                  </Text>
+                </View>
+              )}
               <View style={styles.billToRow}>
                 <Text style={styles.billToLabel}>{pickupLabel}</Text>
                 <Text style={styles.billToValue}>

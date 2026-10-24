@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     const state = searchParams.get("state") || "";
     const city = searchParams.get("city") || "";
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const limit = parseInt(searchParams.get("limit") || "25");
     const skip = (page - 1) * limit;
 
     const escapeRegex = (s: string) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");

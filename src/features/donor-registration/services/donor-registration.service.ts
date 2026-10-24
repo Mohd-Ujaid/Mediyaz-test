@@ -576,7 +576,7 @@ export async function getAdminRegistrations(filters: {
   const isSperm = filters.donorType === "sperm";
   const Model = isSperm ? SpermDonorRegistration : EggDonorRegistration;
 
-  const { search = "", status = "", bloodGroup = "", hospital = "", branch = "", startDate = "", endDate = "", page = 1, limit = 10 } = filters;
+  const { search = "", status = "", bloodGroup = "", hospital = "", branch = "", startDate = "", endDate = "", page = 1, limit = 25 } = filters;
   const skip = (page - 1) * limit;
 
   const query: any = {};

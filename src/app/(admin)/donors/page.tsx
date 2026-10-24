@@ -39,6 +39,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
+import { useSession } from "@/lib/auth";
+import { UnifiedDeleteModal } from "@/components/ui/unified-delete-modal";
+import { CustomPagination } from "@/components/ui/custom-pagination";
 
 export interface ArtDonorItem {
   _id: string;
@@ -223,9 +226,16 @@ const EMPTY_FORM_DATA = {
 };
 
 export default function AdminDonorsPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as any)?.role === "SUPER_ADMIN";
+
   const [donors, setDonors] = useState<ArtDonorItem[]>([]);
   const [stats, setStats] = useState({ total: 0, egg: 0, sperm: 0, available: 0 });
   const [loading, setLoading] = useState(true);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Filters & Search
   const [search, setSearch] = useState("");
@@ -821,7 +831,7 @@ export default function AdminDonorsPage() {
                   </td>
                 </tr>
               ) : (
-                donors.map((donor) => (
+                donors.slice((page - 1) * pageSize, page * pageSize).map((donor) => (
                   <tr key={donor._id} className="hover:bg-muted/30 transition-colors">
                     {/* Donor Code & Details */}
                     <td className="py-4 px-5">
@@ -971,6 +981,23 @@ export default function AdminDonorsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {!loading && donors.length > 0 && (
+          <CustomPagination
+            currentPage={page}
+            totalPages={Math.ceil(donors.length / pageSize)}
+            totalCount={donors.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            itemName="donors"
+            loading={loading}
+          />
+        )}
       </Card>
 
       {/* ================= ADD DONOR DIALOG (Specialized for Egg vs Sperm) ================= */}
@@ -2536,42 +2563,19 @@ export default function AdminDonorsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ================= DELETE CONFIRMATION DIALOG ================= */}
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="max-w-md p-6 rounded-3xl border-0 shadow-2xl">
-          <DialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center mb-3">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-            <DialogTitle className="text-xl font-bold">Permanently Delete Donor Profile?</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground mt-2 leading-relaxed">
-              This action will permanently delete donor{" "}
-              <strong className="text-foreground font-mono">{activeDonor?.donorCode}</strong>{" "}
-              ({activeDonor?.gameteType === "egg" ? "Egg Donor" : "Sperm Donor"}) from the MongoDB
-              database. It will immediately disappear from both the admin portal and the user-facing catalog.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex items-center gap-3 mt-5">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsDeleteOpen(false)}
-              className="rounded-xl h-11 text-xs font-semibold flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDeleteDonor}
-              disabled={submitting}
-              className="rounded-xl h-11 text-xs font-bold flex-1 shadow-md hover:shadow-lg"
-            >
-              {submitting ? "Deleting..." : "Confirm Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ================= UNIFIED ROLE-AWARE DELETE / DELETION REQUEST MODAL ================= */}
+      {activeDonor && (
+        <UnifiedDeleteModal
+          open={isDeleteOpen}
+          onOpenChange={setIsDeleteOpen}
+          resourceType="DONOR"
+          resourceTitle={`Donor ${activeDonor.donorCode} (${activeDonor.gameteType === "egg" ? "Egg Donor" : "Sperm Donor"} - Blood Group ${activeDonor.bloodType || "N/A"})`}
+          resourceId={activeDonor._id}
+          deleteEndpoint={`/api/art-donors/${activeDonor._id}`}
+          onSuccess={fetchDonors}
+          requireIdConfirmation={isSuperAdmin}
+        />
+      )}
 
       {/* ================= VIEW DOSSIER PREVIEW DIALOG ================= */}
       {activeDonor && (

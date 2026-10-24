@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     const hospital = searchParams.get("hospital") || "";
     
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const limit = parseInt(searchParams.get("limit") || "25");
     const skip = (page - 1) * limit;
     
     const query: any = {};

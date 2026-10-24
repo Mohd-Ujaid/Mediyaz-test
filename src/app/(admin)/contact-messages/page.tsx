@@ -35,6 +35,8 @@ export default function AdminContactMessagesPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [limit, setLimit] = useState(25);
 
   // Modals state
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
@@ -47,12 +49,15 @@ export default function AdminContactMessagesPage() {
   async function loadMessages() {
     setLoading(true);
     try {
-      let query = `/api/contact?page=${currentPage}&limit=10`;
+      let query = `/api/contact?page=${currentPage}&limit=${limit}`;
       const res = await fetch(query);
       const data = await res.json();
       if (data.success) {
         setMessages(data.messages || []);
-        if (data.pagination) setTotalPages(data.pagination.pages);
+        if (data.pagination) {
+          setTotalPages(data.pagination.pages || 1);
+          setTotalCount(data.pagination.total || 0);
+        }
       } else {
         toast.error(data.error || "Failed to fetch contact messages.");
       }
@@ -65,7 +70,7 @@ export default function AdminContactMessagesPage() {
 
   useEffect(() => {
     loadMessages();
-  }, [currentPage]);
+  }, [currentPage, limit]);
 
   const getParsedChatFeed = (msg: any) => {
     if (!msg) return [];
@@ -351,14 +356,20 @@ export default function AdminContactMessagesPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-            <CustomPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </div>
+        {!loading && (messages.length > 0 || totalCount > 0) && (
+          <CustomPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={limit}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newLimit) => {
+              setLimit(newLimit);
+              setCurrentPage(1);
+            }}
+            itemName="messages"
+            loading={loading}
+          />
         )}
       </Card>
 

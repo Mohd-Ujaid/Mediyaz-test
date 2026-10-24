@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
 
 // Dynamic Tiptap Editor (client-only to avoid hydration mismatches)
 const TiptapEditor = dynamic(
@@ -210,7 +211,13 @@ export default function AdminBlogPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this article?")) return;
+    const confirmed = await confirmAction({
+      title: "Delete Article",
+      message: "Are you sure you want to delete this article?",
+      confirmText: "Yes, Delete Article",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
     
     try {
       const res = await fetch(`/api/blog/${id}`, { method: "DELETE" });
@@ -557,13 +564,12 @@ export default function AdminBlogPage() {
           </div>
         )}
         {!loading && articles.length > 0 && (
-          <div className="p-4 border-t dark:border-slate-800">
-            <CustomPagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => setCurrentPage(p)}
-            />
-          </div>
+          <CustomPagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={(p) => setCurrentPage(p)}
+            itemName="articles"
+          />
         )}
       </Card>
     </div>

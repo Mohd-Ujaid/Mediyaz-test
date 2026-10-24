@@ -17,7 +17,6 @@ client = (global as any)._mongoClient;
 
 const db = client.db();
 
-
 const authSecret = process.env.BETTER_AUTH_SECRET;
 if (!authSecret) {
   throw new Error(
@@ -40,28 +39,46 @@ export const auth = betterAuth({
     ],
 
     database: mongodbAdapter(db),
+    plugins: [],
     user: {
         modelName: "users",
         additionalFields: {
             role: {
                 type: "string",
                 required: false,
-                defaultValue: "RECIPIENT",
+                defaultValue: "EMPLOYEE",
+                input: false, // Security: Never allow client injection of role
             },
             status: {
                 type: "string",
                 required: false,
                 defaultValue: "ACTIVE",
+                input: false, // Security: Never allow client injection of status
             },
             department: {
                 type: "string",
                 required: false,
-                defaultValue: "General",
+                defaultValue: "Clinical Operations",
+            },
+            designation: {
+                type: "string",
+                required: false,
+                input: false,
             },
             permissions: {
                 type: "string[]",
                 required: false,
-                defaultValue: ["READ_PORTAL"],
+                defaultValue: ["VIEW_DASHBOARD"],
+                input: false, // Security: Never allow client injection of permissions
+            },
+            twoFactorEnabled: {
+                type: "boolean",
+                required: false,
+                defaultValue: false,
+            },
+            loginPortal: {
+                type: "string",
+                required: false,
             },
             avatar: {
                 type: "string",

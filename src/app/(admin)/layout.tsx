@@ -27,7 +27,15 @@ export default async function AdminLayout({
     return <>{children}</>;
   }
 
-  const allowedRoles = ["ADMIN", "SUPER_ADMIN"];
+  const allowedRoles = [
+    "SUPER_ADMIN",
+    "ADMIN",
+    "MANAGER",
+    "EMPLOYEE",
+    "DOCTOR",
+    "STAFF",
+    "RECEPTIONIST",
+  ];
   const userRole = (session?.user as any)?.role;
   const isAllowedRole = session && allowedRoles.includes(userRole);
 

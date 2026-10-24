@@ -3,6 +3,8 @@ import mongoose, { Schema, Document } from "mongoose";
 export enum UserRole {
   SUPER_ADMIN = "SUPER_ADMIN",
   ADMIN = "ADMIN",
+  MANAGER = "MANAGER",
+  EMPLOYEE = "EMPLOYEE",
   DOCTOR = "DOCTOR",
   STAFF = "STAFF",
   RECEPTIONIST = "RECEPTIONIST",
@@ -16,9 +18,13 @@ export interface IUser extends Document {
   password?: string;
   phone?: string;
   role: UserRole;
+  designation?: string;
   avatar?: string;
   status: "ACTIVE" | "INACTIVE" | "SUSPENDED";
   emailVerified: boolean;
+  twoFactorEnabled?: boolean;
+  managerId?: mongoose.Types.ObjectId;
+  invitedBy?: mongoose.Types.ObjectId;
   lastLogin?: Date;
   department?: string;
   permissions?: string[];
@@ -35,9 +41,13 @@ const UserSchema = new Schema<IUser>(
     password: { type: String }, // Optional for OAuth
     phone: { type: String },
     role: { type: String, enum: Object.values(UserRole), default: UserRole.RECIPIENT },
+    designation: { type: String },
     avatar: { type: String },
     status: { type: String, enum: ["ACTIVE", "INACTIVE", "SUSPENDED"], default: "ACTIVE" },
     emailVerified: { type: Boolean, default: false },
+    twoFactorEnabled: { type: Boolean, default: false },
+    managerId: { type: Schema.Types.ObjectId, ref: "User" },
+    invitedBy: { type: Schema.Types.ObjectId, ref: "User" },
     lastLogin: { type: Date },
     department: { type: String, default: "General" },
     permissions: { type: [String], default: ["READ_PORTAL"] },
@@ -57,6 +67,16 @@ const UserSchema = new Schema<IUser>(
     ]
   },
   { timestamps: true }
+);
+
+// Enforce at database level that only ONE active Super Admin can ever exist
+UserSchema.index(
+  { role: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { role: "SUPER_ADMIN" },
+    name: "single_super_admin_unique_idx"
+  }
 );
 
 export const User = mongoose.models?.User || mongoose.model<IUser>("User", UserSchema);

@@ -18,6 +18,41 @@ import DonorLedgerPdfDocument, {
 } from "@/features/pdf-generator/ledger/DonorLedgerPdfDocument";
 import { formatDotDate } from "@/lib/invoice-utils";
 
+function parseYearAndMonth(dateVal: any, fallbackDate: any = null): { year: number | null; month: number | null } {
+  const tryParse = (d: any): { year: number | null; month: number | null } => {
+    if (!d) return { year: null, month: null };
+    if (typeof d === "string") {
+      const trimmed = d.trim();
+      if (trimmed.includes(".")) {
+        const parts = trimmed.split(".");
+        if (parts.length === 3) {
+          const month = parseInt(parts[1], 10);
+          const year = parseInt(parts[2], 10);
+          if (!isNaN(year) && !isNaN(month)) return { year, month };
+        }
+      }
+      if (trimmed.includes("-")) {
+        const parts = trimmed.split("-");
+        if (parts.length >= 3) {
+          const year = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10);
+          if (!isNaN(year) && !isNaN(month)) return { year, month };
+        }
+      }
+    }
+    const dt = new Date(d);
+    if (!isNaN(dt.getTime())) {
+      return { year: dt.getFullYear(), month: dt.getMonth() + 1 };
+    }
+    return { year: null, month: null };
+  };
+
+  const res = tryParse(dateVal);
+  if (res.year && res.month) return res;
+  if (fallbackDate) return tryParse(fallbackDate);
+  return { year: null, month: null };
+}
+
 export const maxDuration = 30;
 
 export async function GET(req: Request) {
@@ -43,6 +78,8 @@ export async function GET(req: Request) {
     const branchParam = searchParams.get("branch") || "ALL";
     const startDateParam = searchParams.get("startDate") || "";
     const endDateParam = searchParams.get("endDate") || "";
+    const yearParam = searchParams.get("year") || "ALL";
+    const monthParam = searchParams.get("month") || "ALL";
     const search = (searchParams.get("search") || "").trim();
     const preview = searchParams.get("preview") === "true";
 
@@ -261,6 +298,8 @@ export async function GET(req: Request) {
           donorType: r.donorType as "egg" | "sperm",
           recruitmentDate: r.recruitmentDate ? formatDotDate(r.recruitmentDate) : "-",
           supplyDate: r.supplyDate ? formatDotDate(r.supplyDate) : (r.pickupDate ? formatDotDate(r.pickupDate) : "-"),
+          parsedYear: parseYearAndMonth(clinicDeal.invoiceDate || r.invoiceDate, r.pickupDate || r.createdAt).year,
+          parsedMonth: parseYearAndMonth(clinicDeal.invoiceDate || r.invoiceDate, r.pickupDate || r.createdAt).month,
         };
       });
 
@@ -281,6 +320,16 @@ export async function GET(req: Request) {
           (e.hospitalLocation && e.hospitalLocation.toLowerCase().includes(bLower)) ||
           (e.hospitalCity && e.hospitalCity.toLowerCase().includes(bLower))
         );
+      }
+
+      if (yearParam && yearParam !== "ALL") {
+        const targetYear = parseInt(yearParam, 10);
+        clinicEntries = clinicEntries.filter((e: any) => e.parsedYear === targetYear);
+      }
+
+      if (monthParam && monthParam !== "ALL") {
+        const targetMonth = parseInt(monthParam, 10);
+        clinicEntries = clinicEntries.filter((e: any) => e.parsedMonth === targetMonth);
       }
 
       if (startDateParam || endDateParam) {
@@ -428,6 +477,8 @@ export async function GET(req: Request) {
         supplyDate: supplyDateStr,
         paidAt: paidAtStr,
         paymentRef: donorDeal.paymentReference || "",
+        parsedYear: parseYearAndMonth(r.pickupDate, r.createdAt).year,
+        parsedMonth: parseYearAndMonth(r.pickupDate, r.createdAt).month,
       };
     });
 
@@ -437,6 +488,16 @@ export async function GET(req: Request) {
       donorEntries = donorEntries.filter((e) => e.paymentStatus === "PENDING");
     } else if (statusParam === "PARTIAL") {
       donorEntries = donorEntries.filter((e) => e.paymentStatus === "PARTIALLY_PAID");
+    }
+
+    if (yearParam && yearParam !== "ALL") {
+      const targetYear = parseInt(yearParam, 10);
+      donorEntries = donorEntries.filter((e: any) => e.parsedYear === targetYear);
+    }
+
+    if (monthParam && monthParam !== "ALL") {
+      const targetMonth = parseInt(monthParam, 10);
+      donorEntries = donorEntries.filter((e: any) => e.parsedMonth === targetMonth);
     }
 
     if (startDateParam || endDateParam) {

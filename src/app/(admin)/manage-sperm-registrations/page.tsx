@@ -62,6 +62,7 @@ import { DonorPrintModal } from "@/features/donor-registration/components/DonorP
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 import { FloatingBulkBar } from "@/components/ui/floating-bulk-bar";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
 
 const DOCUMENTS_CONFIG = [
   { key: "passportPhoto", label: "Photo", accept: ".png,.jpg,.jpeg,.webp", folder: "profile-images" },
@@ -177,6 +178,8 @@ export default function ManageSpermRegistrationsPage() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Modal / Detail view
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
@@ -672,7 +675,13 @@ export default function ManageSpermRegistrationsPage() {
 
   const handleRemoveForm13 = async () => {
     if (!form13Reg) return;
-    if (!confirm("Are you sure you want to remove Form 13? The registration will be marked incomplete.")) return;
+    const confirmed = await confirmAction({
+      title: "Remove Form 13",
+      message: "Are you sure you want to remove Form 13? The registration will be marked incomplete.",
+      confirmText: "Yes, Remove Form 13",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     setUploadingForm13(true);
     try {
@@ -847,7 +856,13 @@ export default function ManageSpermRegistrationsPage() {
 
   const handleRemoveForm14 = async () => {
     if (!form14Reg) return;
-    if (!confirm("Are you sure you want to remove Form 14?")) return;
+    const confirmed = await confirmAction({
+      title: "Remove Form 14",
+      message: "Are you sure you want to remove Form 14?",
+      confirmText: "Yes, Remove Form 14",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     setUploadingForm14(true);
     try {
@@ -1041,7 +1056,7 @@ export default function ManageSpermRegistrationsPage() {
     try {
       const data = (await getAdminRegistrationsAction({
         page: currentPage,
-        limit: 10,
+        limit: itemsPerPage,
         search,
         donorType: "sperm",
         status: statusFilter || undefined,
@@ -1079,7 +1094,12 @@ export default function ManageSpermRegistrationsPage() {
             return r;
           });
         setRegistrations(spermOnly);
-        if (data.pagination) setTotalPages(data.pagination.pages);
+        if (data.pagination) {
+          setTotalPages(data.pagination.pages || 1);
+          setTotalCount(data.pagination.total || spermOnly.length);
+        } else {
+          setTotalCount(spermOnly.length);
+        }
         if (data.statusCounts) setStatusCounts(data.statusCounts);
       } else {
         toast.error(data.error || "Failed to load registrations.");
@@ -1125,7 +1145,7 @@ export default function ManageSpermRegistrationsPage() {
 
   useEffect(() => {
     loadRegistrations();
-  }, [search, hospitalFilter, branchFilter, statusFilter, fromDateFilter, toDateFilter, currentPage]);
+  }, [search, hospitalFilter, branchFilter, statusFilter, fromDateFilter, toDateFilter, currentPage, itemsPerPage]);
 
   useEffect(() => {
     loadHospitals();
@@ -1226,7 +1246,13 @@ export default function ManageSpermRegistrationsPage() {
 
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to change status to "${newStatus}" for ${selectedIds.length} donors?`)) return;
+    const confirmed = await confirmAction({
+      title: "Update Status",
+      message: `Are you sure you want to change status to "${newStatus}" for ${selectedIds.length} donors?`,
+      confirmText: `Yes, Set to ${newStatus}`,
+      variant: newStatus === "CANCELLED" ? "destructive" : "default",
+    });
+    if (!confirmed) return;
 
     setActionLoading(true);
     try {
@@ -1981,7 +2007,7 @@ export default function ManageSpermRegistrationsPage() {
         ) : paginatedRegs.length === 0 ? (
           <div className="text-center py-20 text-slate-400 text-xs">No sperm donor records found for the selected status.</div>
         ) : (
-          <div className="overflow-x-auto w-full max-h-[75vh]">
+          <div className="overflow-x-auto w-full">
             <table className="w-full min-w-[1280px] text-left text-xs border-collapse">
               <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                 <tr>
@@ -2385,8 +2411,14 @@ export default function ManageSpermRegistrationsPage() {
                               <DropdownMenuSeparator />
                               {reg.status !== "CANCELLED" ? (
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    if (confirm(`Are you sure you want to cancel the registration for ${reg.personalInfo?.fullName || reg.registrationId}?`)) {
+                                  onClick={async () => {
+                                    const confirmed = await confirmAction({
+                                      title: "Cancel Registration",
+                                      message: `Are you sure you want to cancel the registration for ${reg.personalInfo?.fullName || reg.registrationId}?`,
+                                      confirmText: "Yes, Cancel Registration",
+                                      variant: "destructive",
+                                    });
+                                    if (confirmed) {
                                       handleSingleStatusChange(reg.registrationId, "CANCELLED");
                                     }
                                   }}
@@ -2396,8 +2428,14 @@ export default function ManageSpermRegistrationsPage() {
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    if (confirm(`Re-activate registration for ${reg.personalInfo?.fullName || reg.registrationId}?`)) {
+                                  onClick={async () => {
+                                    const confirmed = await confirmAction({
+                                      title: "Re-Approve Registration",
+                                      message: `Re-activate registration for ${reg.personalInfo?.fullName || reg.registrationId}?`,
+                                      confirmText: "Yes, Restore to Approved",
+                                      variant: "default",
+                                    });
+                                    if (confirmed) {
                                       handleSingleStatusChange(reg.registrationId, "APPROVED");
                                     }
                                   }}
@@ -2419,14 +2457,20 @@ export default function ManageSpermRegistrationsPage() {
         )}
 
         {/* Custom Pagination */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-            <CustomPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => setCurrentPage(p)}
-            />
-          </div>
+        {!loading && (registrations.length > 0 || totalCount > 0) && (
+          <CustomPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={itemsPerPage}
+            onPageChange={(p) => setCurrentPage(p)}
+            onPageSizeChange={(newSize) => {
+              setItemsPerPage(newSize);
+              setCurrentPage(1);
+            }}
+            itemName="sperm donor registrations"
+            loading={loading}
+          />
         )}
       </Card>
 

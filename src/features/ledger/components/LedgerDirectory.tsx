@@ -20,6 +20,12 @@ const ReactPdfViewer = dynamic(
     ),
   }
 );
+import JSZip from "jszip";
+import { pdf } from "@react-pdf/renderer";
+import CompletedFileInvoicePdfDocument, {
+  CompletedFileInvoiceData,
+} from "@/features/pdf-generator/invoice/CompletedFileInvoicePdfDocument";
+import { formatDotDate, numberToWordsIndian } from "@/lib/invoice-utils";
 import {
   BookOpen,
   Building2,
@@ -50,18 +56,99 @@ import {
   Maximize2,
   Minimize2,
   SlidersHorizontal,
+  GitBranch,
+  CalendarRange,
+  Calendar,
+  FileArchive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CustomPagination } from "@/components/ui/custom-pagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
+
 const formatInr = (amount: number) => {
   return "₹" + (amount || 0).toLocaleString("en-IN");
 };
+
+const MONTH_OPTIONS = [
+  { value: "ALL", label: "All Months" },
+  { value: "1", label: "January (01)" },
+  { value: "2", label: "February (02)" },
+  { value: "3", label: "March (03)" },
+  { value: "4", label: "April (04)" },
+  { value: "5", label: "May (05)" },
+  { value: "6", label: "June (06)" },
+  { value: "7", label: "July (07)" },
+  { value: "8", label: "August (08)" },
+  { value: "9", label: "September (09)" },
+  { value: "10", label: "October (10)" },
+  { value: "11", label: "November (11)" },
+  { value: "12", label: "December (12)" },
+];
+
+function convertLedgerEntryToInvoicePdfData(entry: any): CompletedFileInvoiceData {
+  const isEgg = entry.donorType !== "sperm";
+  const hosp = entry.assignedHospital || {};
+  const isInterState = hosp?.state && !hosp.state.toLowerCase().includes("delhi");
+  const dealPrice = entry.dealPrice || entry.amount || 65000;
+  const serviceCharge = entry.serviceCharge || 5000;
+  const donorReimbursement = entry.donorReimbursement || Math.max(0, dealPrice - serviceCharge);
+
+  const cgstRate = isInterState ? 0 : 9;
+  const cgstAmount = isInterState ? 0 : (serviceCharge * 9) / 100;
+  const sgstRate = isInterState ? 0 : 9;
+  const sgstAmount = isInterState ? 0 : (serviceCharge * 9) / 100;
+  const igstRate = isInterState ? 18 : 0;
+  const igstAmount = isInterState ? (serviceCharge * 18) / 100 : 0;
+
+  const totalBeforeTax = serviceCharge + donorReimbursement;
+  const totalAmountAfterTax = serviceCharge + cgstAmount + sgstAmount + igstAmount + donorReimbursement;
+
+  const hospitalAddress = hosp
+    ? [
+        hosp.addressLine1 || hosp.address,
+        hosp.city,
+        hosp.state ? `${hosp.state}` : "",
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : entry.location || entry.hospitalLocation || "";
+
+  return {
+    invoiceNumber: entry.invoiceNumber || entry.registrationId?.replace(/^[A-Z]+-/, "") || "INV",
+    invoiceDate: entry.invoiceDate || formatDotDate(new Date()),
+    sacCode: "999317",
+    gstin: "07FJBPS6601G1Z7",
+    donorType: isEgg ? "egg" : "sperm",
+    donorName: entry.donorName || "Donor",
+    huidNo: entry.donorId || entry.registrationId || "N/A",
+    hospitalName: entry.clinicName || entry.hospitalName || hosp?.name || "Partner ART Clinic",
+    hospitalGstin: hosp?.gstNumber || "07AANCM1124F1ZQ",
+    hospitalAddress,
+    pickupDate: entry.donorOpuDate || entry.opuDate || entry.pickupDate || entry.invoiceDate || formatDotDate(new Date()),
+    pickupLocation: entry.donorOpuLocation || entry.opuLocation || hospitalAddress,
+    saleType: isInterState ? "INTER-STATE" : "STATE",
+    serviceCharge,
+    serviceChargeSac: "999321",
+    donorReimbursement,
+    reimbursementSac: "999317",
+    cgstRate,
+    cgstAmount,
+    sgstRate,
+    sgstAmount,
+    igstRate,
+    igstAmount,
+    totalAmountBeforeTax: totalBeforeTax,
+    totalAmountAfterTax,
+    amountInWords: numberToWordsIndian(totalAmountAfterTax),
+    beforeTaxAmountInWords: numberToWordsIndian(totalBeforeTax),
+  };
+}
 
 export function LedgerDirectory() {
   const [activeTab, setActiveTab] = useState<"clinic" | "donor">("clinic");
@@ -108,11 +195,19 @@ export function LedgerDirectory() {
   const [search, setSearch] = useState("");
   const [selectedHospitalId, setSelectedHospitalId] = useState("ALL");
   const [selectedBranch, setSelectedBranch] = useState("ALL");
+  const [selectedYear, setSelectedYear] = useState("ALL");
+  const [selectedMonth, setSelectedMonth] = useState("ALL");
+  const [availableYears, setAvailableYears] = useState<number[]>([2027, 2026, 2025, 2024]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | RECEIVED/PAID | PENDING | PARTIAL
   const [donorTypeFilter, setDonorTypeFilter] = useState("all"); // all | egg | sperm
   const [hospitalsList, setHospitalsList] = useState<any[]>([]);
+
+  // Row selection & Bulk Invoice Download State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Table Density and Columns
   const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable");
@@ -129,9 +224,9 @@ export function LedgerDirectory() {
 
   // Pagination State
   const [clinicPage, setClinicPage] = useState(1);
-  const [clinicPageSize, setClinicPageSize] = useState(15);
+  const [clinicPageSize, setClinicPageSize] = useState(25);
   const [donorPage, setDonorPage] = useState(1);
-  const [donorPageSize, setDonorPageSize] = useState(15);
+  const [donorPageSize, setDonorPageSize] = useState(25);
 
   // Memoized Pagination Slices
   const totalClinicPages = Math.max(1, Math.ceil(clinicEntries.length / clinicPageSize));
@@ -202,6 +297,8 @@ export function LedgerDirectory() {
       if (search) params.append("search", search);
       if (selectedHospitalId && selectedHospitalId !== "ALL") params.append("hospitalId", selectedHospitalId);
       if (selectedBranch && selectedBranch !== "ALL") params.append("branch", selectedBranch);
+      if (selectedYear && selectedYear !== "ALL") params.append("year", selectedYear);
+      if (selectedMonth && selectedMonth !== "ALL") params.append("month", selectedMonth);
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
       if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
@@ -213,6 +310,9 @@ export function LedgerDirectory() {
       if (data.success) {
         if (data.hospitals) {
           setHospitalsList(data.hospitals);
+        }
+        if (data.availableYears && data.availableYears.length > 0) {
+          setAvailableYears(data.availableYears);
         }
         if (data.clinicLedger) {
           setClinicEntries(data.clinicLedger.entries || []);
@@ -238,13 +338,140 @@ export function LedgerDirectory() {
     setClinicPage(1);
     setDonorPage(1);
     loadLedgerData();
-  }, [selectedHospitalId, selectedBranch, startDate, endDate, statusFilter, donorTypeFilter]);
+  }, [selectedHospitalId, selectedBranch, selectedYear, selectedMonth, startDate, endDate, statusFilter, donorTypeFilter]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [selectedHospitalId, selectedBranch, selectedYear, selectedMonth, startDate, endDate, statusFilter, donorTypeFilter]);
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = clinicEntries.map((i) => i._id || i.registrationId);
+      setSelectedIds(allIds);
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleToggleRow = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleResetFilters = () => {
+    setSelectedHospitalId("ALL");
+    setSelectedBranch("ALL");
+    setSelectedYear("ALL");
+    setSelectedMonth("ALL");
+    setStartDate("");
+    setEndDate("");
+    setStatusFilter("ALL");
+    setDonorTypeFilter("all");
+    setSearch("");
+    setClinicPage(1);
+    setDonorPage(1);
+    setSelectedIds([]);
+  };
+
+  const hasActiveFilters = Boolean(
+    selectedHospitalId !== "ALL" ||
+    selectedBranch !== "ALL" ||
+    selectedYear !== "ALL" ||
+    selectedMonth !== "ALL" ||
+    Boolean(startDate) ||
+    Boolean(endDate) ||
+    statusFilter !== "ALL" ||
+    donorTypeFilter !== "all" ||
+    search.trim() !== ""
+  );
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setClinicPage(1);
     setDonorPage(1);
     loadLedgerData();
+  };
+
+  // Bulk PDF Download Handler for Invoices in Ledger
+  const handleDownloadAllPdfs = async (targetEntries?: any[]) => {
+    const listToDownload = targetEntries && targetEntries.length > 0
+      ? targetEntries
+      : selectedIds.length > 0
+      ? clinicEntries.filter((e) => selectedIds.includes(e._id || e.registrationId))
+      : clinicEntries;
+
+    if (listToDownload.length === 0) {
+      toast.error("No invoices matching the current ledger filter selection to download.");
+      return;
+    }
+
+    setIsDownloadingZip(true);
+    setDownloadProgress({ current: 0, total: listToDownload.length });
+
+    try {
+      if (listToDownload.length === 1) {
+        const inv = listToDownload[0];
+        const pdfData = convertLedgerEntryToInvoicePdfData(inv);
+        const blob = await pdf(<CompletedFileInvoicePdfDocument invoice={pdfData} />).toBlob();
+        const safeDonor = (inv.donorName || "Donor").replace(/[^a-zA-Z0-9]/g, "_");
+        const fileName = `Invoice_${inv.invoiceNumber || inv.registrationId}_${safeDonor}.pdf`;
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast.success(`Downloaded ${fileName}`);
+        return;
+      }
+
+      const zip = new JSZip();
+      const folder = zip.folder("Ledger_Invoices") || zip;
+
+      for (let i = 0; i < listToDownload.length; i++) {
+        const inv = listToDownload[i];
+        setDownloadProgress({ current: i + 1, total: listToDownload.length });
+
+        const pdfData = convertLedgerEntryToInvoicePdfData(inv);
+        const blob = await pdf(<CompletedFileInvoicePdfDocument invoice={pdfData} />).toBlob();
+        const safeDonor = (inv.donorName || "Donor").replace(/[^a-zA-Z0-9]/g, "_");
+        const fileName = `Invoice_${inv.invoiceNumber || inv.registrationId}_${safeDonor}.pdf`;
+        folder.file(fileName, blob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+
+      const selectedHosp = clinicAccounts.find((c) => c.hospitalId === selectedHospitalId);
+      const clinicName = selectedHospitalId !== "ALL"
+        ? (selectedHosp?.hospitalName || "Clinic").replace(/[^a-zA-Z0-9]/g, "_")
+        : "All_Clinics";
+      const branchName = selectedBranch !== "ALL" ? selectedBranch.replace(/[^a-zA-Z0-9]/g, "_") : "";
+      const monthName = selectedMonth !== "ALL" ? (MONTH_OPTIONS.find((m) => m.value === selectedMonth)?.label.split(" ")[0] || "Month") : "All_Months";
+      const yearName = selectedYear !== "ALL" ? selectedYear : "All_Years";
+
+      const zipFileName = `Ledger_Invoices_${clinicName}${branchName ? `_${branchName}` : ""}_${monthName}_${yearName}.zip`;
+
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = zipFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.success(`Downloaded all ${listToDownload.length} invoice PDFs in ${zipFileName}!`);
+    } catch (err: any) {
+      console.error("Bulk PDF download error:", err);
+      toast.error(err.message || "Failed to download invoice PDFs");
+    } finally {
+      setIsDownloadingZip(false);
+      setDownloadProgress(null);
+    }
   };
 
   // BUILD PDF URL
@@ -254,6 +481,8 @@ export function LedgerDirectory() {
     if (isPreview) params.append("preview", "true");
     if (selectedHospitalId && selectedHospitalId !== "ALL") params.append("hospitalId", selectedHospitalId);
     if (selectedBranch && selectedBranch !== "ALL") params.append("branch", selectedBranch);
+    if (selectedYear && selectedYear !== "ALL") params.append("year", selectedYear);
+    if (selectedMonth && selectedMonth !== "ALL") params.append("month", selectedMonth);
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
@@ -433,7 +662,31 @@ export function LedgerDirectory() {
               : "View Donor PDF Statement"}
           </Button>
 
-          {/* DOWNLOAD PDF */}
+          {/* DOWNLOAD ALL INVOICE PDFS (.ZIP) */}
+          {activeTab === "clinic" && (
+            <Button
+              onClick={() => handleDownloadAllPdfs()}
+              disabled={isDownloadingZip || loading || clinicEntries.length === 0}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 gap-2 font-semibold h-10 px-4 cursor-pointer"
+              title="Download all matching invoice PDFs in a single click"
+            >
+              {isDownloadingZip ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>
+                    {downloadProgress ? `Generating (${downloadProgress.current}/${downloadProgress.total})...` : "Packaging ZIP..."}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <FileArchive className="h-4 w-4" />
+                  <span>Download All Invoices (.ZIP)</span>
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* DOWNLOAD PDF STATEMENT */}
           <Button
             variant="outline"
             size="sm"
@@ -443,7 +696,7 @@ export function LedgerDirectory() {
             title="Download PDF statement file directly"
           >
             <Download className={`h-4 w-4 text-emerald-600 ${pdfGenerating ? "animate-bounce" : ""}`} />
-            Download PDF
+            Download Statement
           </Button>
 
           <Button
@@ -668,108 +921,369 @@ export function LedgerDirectory() {
           {/* Clinic Ledger Full Transactions Table */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
             {/* Filter Bar */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  type="text"
-                  placeholder="Search Reg No, Clinic, or Donor..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 h-9 text-xs rounded-xl"
-                />
-              </form>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {/* ART Clinic Filter */}
-                <select
-                  value={selectedHospitalId}
-                  onChange={(e) => {
-                    setSelectedHospitalId(e.target.value);
-                    setSelectedBranch("ALL");
-                  }}
-                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
-                >
-                  <option value="ALL">All ART Clinics</option>
-                  {hospitalsList.length > 0
-                    ? hospitalsList.map((h: any) => (
-                        <option key={h._id} value={h._id}>
-                          {h.name}
-                        </option>
-                      ))
-                    : clinicAccounts.map((a) => (
-                        <option key={a.hospitalId} value={a.hospitalId}>
-                          {a.hospitalName} ({a.totalCases})
-                        </option>
-                      ))}
-                </select>
-
-                {/* Branch Filter */}
-                <select
-                  value={selectedBranch}
-                  onChange={(e) => setSelectedBranch(e.target.value)}
-                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
-                >
-                  <option value="ALL">All Branches</option>
-                  {availableBranches.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Date Filter */}
-                <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-9">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">From</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 space-y-3.5 bg-slate-50/40 dark:bg-slate-900/40">
+              {/* Row 1: Search, Donor Type, and Payment Status */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <form onSubmit={handleSearchSubmit} className="flex-1 max-w-md relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search Reg No, Clinic, or Donor..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-10 h-9 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs"
                   />
-                  <span className="text-[10px] uppercase font-bold text-slate-400">To</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
-                  />
-                  {(startDate || endDate) && (
+                </form>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Donor Type */}
+                  <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
                     <button
                       type="button"
                       onClick={() => {
-                        setStartDate("");
-                        setEndDate("");
+                        setDonorTypeFilter("all");
+                        setClinicPage(1);
                       }}
-                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
-                      title="Clear Dates"
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        donorTypeFilter === "all"
+                          ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
                     >
-                      <X className="h-3.5 w-3.5" />
+                      All Types
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDonorTypeFilter("egg");
+                        setClinicPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${
+                        donorTypeFilter === "egg"
+                          ? "bg-white dark:bg-slate-700 text-pink-600 dark:text-pink-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      <Heart className="h-3 w-3" />
+                      Egg
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDonorTypeFilter("sperm");
+                        setClinicPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${
+                        donorTypeFilter === "sperm"
+                          ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      <Dna className="h-3 w-3" />
+                      Sperm
+                    </button>
+                  </div>
+
+                  {/* Payment Status Tabs */}
+                  <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter("ALL");
+                        setClinicPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        statusFilter === "ALL"
+                          ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      All Status
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter("RECEIVED");
+                        setClinicPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        statusFilter === "RECEIVED"
+                          ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      Received (Paid)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter("PENDING");
+                        setClinicPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        statusFilter === "PENDING"
+                          ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      Pending
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusFilter("PARTIAL");
+                        setClinicPage(1);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                        statusFilter === "PARTIAL"
+                          ? "bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
+                    >
+                      Partial
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Clinic, Branch, Year, Month Pickers & Instant Bulk Download */}
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[300px]">
+                  {/* ART Clinic Filter */}
+                  <div className="flex items-center gap-1.5 min-w-[190px] flex-1">
+                    <div className="h-8 w-8 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                    <select
+                      value={selectedHospitalId}
+                      onChange={(e) => {
+                        setSelectedHospitalId(e.target.value);
+                        setSelectedBranch("ALL");
+                        setClinicPage(1);
+                      }}
+                      className="w-full h-8.5 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1 focus:ring-teal-500"
+                      title="Filter by ART Clinic"
+                    >
+                      <option value="ALL">All ART Clinics</option>
+                      {hospitalsList.length > 0
+                        ? hospitalsList.map((h: any) => (
+                            <option key={h._id} value={h._id}>
+                              {h.name}
+                            </option>
+                          ))
+                        : clinicAccounts.map((a) => (
+                            <option key={a.hospitalId} value={a.hospitalId}>
+                              {a.hospitalName} ({a.totalCases})
+                            </option>
+                          ))}
+                    </select>
+                  </div>
+
+                  {/* Branch Filter */}
+                  <div className="flex items-center gap-1.5 min-w-[170px] flex-1">
+                    <div className="h-8 w-8 rounded-lg bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                      <GitBranch className="h-4 w-4" />
+                    </div>
+                    <select
+                      value={selectedBranch}
+                      onChange={(e) => {
+                        setSelectedBranch(e.target.value);
+                        setClinicPage(1);
+                      }}
+                      disabled={availableBranches.length === 0}
+                      className="w-full h-8.5 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200 disabled:opacity-50 focus:outline-hidden focus:ring-1 focus:ring-teal-500"
+                      title="Filter by Clinic Branch"
+                    >
+                      <option value="ALL">
+                        {availableBranches.length === 0 ? "All Branches (None)" : `All Branches (${availableBranches.length})`}
+                      </option>
+                      {availableBranches.map((b) => (
+                        <option key={b} value={b}>
+                          Branch: {b}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Year Filter */}
+                  <div className="flex items-center gap-1.5 min-w-[130px]">
+                    <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                      <CalendarRange className="h-4 w-4" />
+                    </div>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => {
+                        setSelectedYear(e.target.value);
+                        setClinicPage(1);
+                      }}
+                      className="w-full h-8.5 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1 focus:ring-teal-500"
+                      title="Filter by Year"
+                    >
+                      <option value="ALL">All Years</option>
+                      {availableYears.map((yr) => (
+                        <option key={yr} value={yr.toString()}>
+                          Year {yr}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Month Filter */}
+                  <div className="flex items-center gap-1.5 min-w-[155px]">
+                    <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        setSelectedMonth(e.target.value);
+                        setClinicPage(1);
+                      }}
+                      className="w-full h-8.5 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-1 focus:ring-teal-500"
+                      title="Filter by Month"
+                    >
+                      {MONTH_OPTIONS.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Date Range Filter */}
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 h-8.5">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">From</span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        setClinicPage(1);
+                      }}
+                      className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                    />
+                    <span className="text-[10px] uppercase font-bold text-slate-400">To</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => {
+                        setEndDate(e.target.value);
+                        setClinicPage(1);
+                      }}
+                      className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
+                    />
+                    {(startDate || endDate) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStartDate("");
+                          setEndDate("");
+                          setClinicPage(1);
+                        }}
+                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
+                        title="Clear Dates"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
-                >
-                  <option value="ALL">All Payment Status</option>
-                  <option value="RECEIVED">Received (Paid)</option>
-                  <option value="PENDING">Pending (Due)</option>
-                  <option value="PARTIAL">Partially Received</option>
-                </select>
+                {/* Quick Bulk Download Button for Current Filters */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownloadAllPdfs()}
+                    disabled={isDownloadingZip || loading || clinicEntries.length === 0}
+                    className="h-8.5 px-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs gap-1.5 cursor-pointer whitespace-nowrap"
+                    title="Download all matching invoice PDFs in a single click"
+                  >
+                    {isDownloadingZip ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>
+                          {downloadProgress ? `${downloadProgress.current}/${downloadProgress.total}` : "Zipping..."}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <FileArchive className="h-3.5 w-3.5" />
+                        <span>Download Invoices ({clinicEntries.length})</span>
+                      </>
+                    )}
+                  </Button>
 
-                <select
-                  value={donorTypeFilter}
-                  onChange={(e) => setDonorTypeFilter(e.target.value)}
-                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
-                >
-                  <option value="all">All Donor Types</option>
-                  <option value="egg">Egg Donors</option>
-                  <option value="sperm">Sperm Donors</option>
-                </select>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetFilters}
+                      className="h-8.5 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1 cursor-pointer shrink-0"
+                      title="Reset all active filters"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      <span>Reset</span>
+                    </Button>
+                  )}
+                </div>
               </div>
+
+              {/* Active Filter Summary Banner */}
+              {hasActiveFilters && (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-teal-50/70 dark:bg-teal-950/30 border border-teal-100 dark:border-teal-900/50 rounded-xl text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                    <span className="font-semibold text-teal-700 dark:text-teal-400">Active Filters:</span>
+                    {selectedHospitalId !== "ALL" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Clinic: {clinicAccounts.find((c) => c.hospitalId === selectedHospitalId)?.hospitalName || hospitalsList.find((h: any) => h._id === selectedHospitalId)?.name || selectedHospitalId}
+                      </span>
+                    )}
+                    {selectedBranch !== "ALL" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Branch: {selectedBranch}
+                      </span>
+                    )}
+                    {selectedYear !== "ALL" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Year: {selectedYear}
+                      </span>
+                    )}
+                    {selectedMonth !== "ALL" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Month: {MONTH_OPTIONS.find((m) => m.value === selectedMonth)?.label}
+                      </span>
+                    )}
+                    {statusFilter !== "ALL" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Status: {statusFilter}
+                      </span>
+                    )}
+                    {donorTypeFilter !== "all" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium capitalize text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Type: {donorTypeFilter}
+                      </span>
+                    )}
+                    {search && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Search: "{search}"
+                      </span>
+                    )}
+                    {(startDate || endDate) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-800 dark:text-slate-200 shadow-2xs">
+                        Dates: {startDate || "Start"} to {endDate || "End"}
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="text-[11px] font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Table Control Bar */}
@@ -854,10 +1368,19 @@ export function LedgerDirectory() {
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto max-h-[72vh]">
+            <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-800/95 shadow-2xs">
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[10px] whitespace-nowrap">
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2 text-center w-8" : "py-3 px-2.5 text-center w-8"}`}>
+                      <input
+                        type="checkbox"
+                        checked={clinicEntries.length > 0 && selectedIds.length === clinicEntries.length}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                        title="Select All Invoices"
+                      />
+                    </th>
                     <th className={`${tableDensity === "compact" ? "py-2 px-2 text-center w-8" : "py-3 px-2.5 text-center w-8"}`}>#</th>
                     <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Donor Name</th>
                     <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Registration No.</th>
@@ -882,13 +1405,13 @@ export function LedgerDirectory() {
                 <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
                   {loading ? (
                     <TableSkeletonRows
-                      columns={15}
+                      columns={16}
                       rows={6}
                       density={tableDensity}
                     />
                   ) : clinicEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={15} className="py-12 text-center text-slate-500">
+                      <td colSpan={16} className="py-12 text-center text-slate-500">
                         <Receipt className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                         <div className="font-semibold text-slate-700 dark:text-slate-300">No invoiced records found</div>
                         <div className="text-xs text-slate-400 mt-1">Donors will appear in the Clinic Ledger once their Tax Invoice is generated in Completed Files.</div>
@@ -905,12 +1428,26 @@ export function LedgerDirectory() {
                       const credAmt = entry.creditAmount !== undefined ? entry.creditAmount : entry.receivedAmount || 0;
                       const credDate = entry.creditDate && entry.creditDate !== "-" ? entry.creditDate : (entry.receivedDate || (isReceived ? "Cleared" : "Pending"));
                       const cellPad = tableDensity === "compact" ? "py-1.5 px-2 text-[11px]" : "py-2.5 px-2.5 text-xs";
+                      const rowId = entry._id || entry.registrationId;
+                      const isRowSelected = selectedIds.includes(rowId);
 
                       return (
                         <tr
                           key={entry.registrationId}
-                          className="group/row hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors whitespace-nowrap"
+                          className={`group/row transition-colors whitespace-nowrap ${
+                            isRowSelected
+                              ? "bg-teal-50/60 dark:bg-teal-950/30"
+                              : "hover:bg-slate-50/70 dark:hover:bg-slate-800/40"
+                          }`}
                         >
+                          <td className={`${cellPad} text-center`}>
+                            <input
+                              type="checkbox"
+                              checked={isRowSelected}
+                              onChange={() => handleToggleRow(rowId)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                            />
+                          </td>
                           <td className={`${cellPad} text-center text-slate-400 font-mono`}>
                             {entry.sNo}
                           </td>
@@ -1010,7 +1547,7 @@ export function LedgerDirectory() {
                 {clinicEntries.length > 0 && (
                   <tfoot>
                     <tr className="bg-slate-200/90 dark:bg-slate-800 border-t-2 border-slate-900 dark:border-slate-700 font-bold text-slate-900 dark:text-slate-100 text-xs whitespace-nowrap">
-                      <td colSpan={3 + (visibleClinicCols.clinicName ? 1 : 0) + (visibleClinicCols.location ? 1 : 0) + (visibleClinicCols.opuLocation ? 1 : 0) + (visibleClinicCols.opuDate ? 1 : 0) + (visibleClinicCols.invoiceDate ? 1 : 0) + (visibleClinicCols.invoiceNo ? 1 : 0)} className="py-3 px-3 uppercase tracking-wider">
+                      <td colSpan={4 + (visibleClinicCols.clinicName ? 1 : 0) + (visibleClinicCols.location ? 1 : 0) + (visibleClinicCols.opuLocation ? 1 : 0) + (visibleClinicCols.opuDate ? 1 : 0) + (visibleClinicCols.invoiceDate ? 1 : 0) + (visibleClinicCols.invoiceNo ? 1 : 0)} className="py-3 px-3 uppercase tracking-wider">
                         GRAND TOTAL ({clinicTotals.totalRecords} TRANSACTIONS)
                       </td>
                       <td className="py-3 px-2.5 text-right font-black">
@@ -1045,86 +1582,63 @@ export function LedgerDirectory() {
 
             {/* Pagination Controls for Clinic Ledger */}
             {clinicEntries.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                  <span>
-                    Showing{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {(clinicPage - 1) * clinicPageSize + 1}
-                    </span>{" "}
-                    to{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {Math.min(clinicPage * clinicPageSize, clinicEntries.length)}
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {clinicEntries.length}
-                    </span>{" "}
-                    transactions
-                  </span>
-                  <div className="flex items-center gap-1.5 ml-2">
-                    <span>Rows per page:</span>
-                    <select
-                      value={clinicPageSize}
-                      onChange={(e) => {
-                        setClinicPageSize(Number(e.target.value));
-                        setClinicPage(1);
-                      }}
-                      className="h-7 px-2 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    >
-                      {[10, 15, 25, 50, 100].map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setClinicPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={clinicPage === 1}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    <span>Previous</span>
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    {getPageNumbers(clinicPage, totalClinicPages).map((p, index) =>
-                      typeof p === "number" ? (
-                        <button
-                          key={index}
-                          onClick={() => setClinicPage(p)}
-                          className={`w-7 h-7 text-xs font-semibold rounded-lg transition-colors ${
-                            clinicPage === p
-                              ? "bg-teal-600 text-white shadow-sm"
-                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      ) : (
-                        <span key={index} className="px-1 text-slate-400 text-xs select-none">
-                          ...
-                        </span>
-                      )
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => setClinicPage((prev) => Math.min(prev + 1, totalClinicPages))}
-                    disabled={clinicPage === totalClinicPages}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+              <CustomPagination
+                currentPage={clinicPage}
+                totalPages={totalClinicPages}
+                totalCount={clinicEntries.length}
+                pageSize={clinicPageSize}
+                onPageChange={setClinicPage}
+                onPageSizeChange={(newSize) => {
+                  setClinicPageSize(newSize);
+                  setClinicPage(1);
+                }}
+                itemName="transactions"
+              />
             )}
           </div>
+
+          {/* Floating Bulk Action Bar */}
+          {selectedIds.length > 0 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 text-white backdrop-blur-md px-5 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+              <div className="flex items-center gap-2 text-xs font-medium">
+                <div className="h-6 w-6 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-[11px]">
+                  {selectedIds.length}
+                </div>
+                <span>Selected Invoices</span>
+              </div>
+
+              <div className="h-4 w-px bg-slate-700" />
+
+              <Button
+                size="sm"
+                onClick={() => handleDownloadAllPdfs()}
+                disabled={isDownloadingZip}
+                className="h-8 px-3.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs rounded-xl shadow-sm gap-1.5 cursor-pointer"
+              >
+                {isDownloadingZip ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>
+                      {downloadProgress ? `${downloadProgress.current}/${downloadProgress.total}` : "Zipping..."}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <FileArchive className="h-3.5 w-3.5" />
+                    <span>Download {selectedIds.length} Invoice PDFs (.ZIP)</span>
+                  </>
+                )}
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer px-1.5 py-1"
+              >
+                Deselect All
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1257,7 +1771,10 @@ export function LedgerDirectory() {
                 {/* Branch Filter */}
                 <select
                   value={selectedBranch}
-                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedBranch(e.target.value);
+                    setDonorPage(1);
+                  }}
                   className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
                 >
                   <option value="ALL">All Branches</option>
@@ -1268,20 +1785,61 @@ export function LedgerDirectory() {
                   ))}
                 </select>
 
+                {/* Year Filter */}
+                <select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    setDonorPage(1);
+                  }}
+                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                  title="Filter by Year"
+                >
+                  <option value="ALL">All Years</option>
+                  {availableYears.map((yr) => (
+                    <option key={yr} value={yr.toString()}>
+                      Year {yr}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Month Filter */}
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => {
+                    setSelectedMonth(e.target.value);
+                    setDonorPage(1);
+                  }}
+                  className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+                  title="Filter by Month"
+                >
+                  {MONTH_OPTIONS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+
                 {/* Date Filter */}
                 <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 h-9">
                   <span className="text-[10px] uppercase font-bold text-slate-400">From</span>
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setDonorPage(1);
+                    }}
                     className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
                   />
                   <span className="text-[10px] uppercase font-bold text-slate-400">To</span>
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setDonorPage(1);
+                    }}
                     className="bg-transparent text-xs text-slate-700 dark:text-slate-200 focus:outline-hidden"
                   />
                   {(startDate || endDate) && (
@@ -1290,8 +1848,9 @@ export function LedgerDirectory() {
                       onClick={() => {
                         setStartDate("");
                         setEndDate("");
+                        setDonorPage(1);
                       }}
-                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                      className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
                       title="Clear Dates"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -1301,7 +1860,10 @@ export function LedgerDirectory() {
 
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setDonorPage(1);
+                  }}
                   className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
                 >
                   <option value="ALL">All Payment Status</option>
@@ -1312,13 +1874,29 @@ export function LedgerDirectory() {
 
                 <select
                   value={donorTypeFilter}
-                  onChange={(e) => setDonorTypeFilter(e.target.value)}
+                  onChange={(e) => {
+                    setDonorTypeFilter(e.target.value);
+                    setDonorPage(1);
+                  }}
                   className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
                 >
                   <option value="all">All Donor Types</option>
                   <option value="egg">Egg Donors</option>
                   <option value="sperm">Sperm Donors</option>
                 </select>
+
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetFilters}
+                    className="h-9 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1 cursor-pointer"
+                    title="Reset filters"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span>Reset</span>
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1360,7 +1938,7 @@ export function LedgerDirectory() {
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto max-h-[72vh]">
+            <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-800/95 shadow-2xs">
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[11px]">
@@ -1480,84 +2058,18 @@ export function LedgerDirectory() {
 
             {/* Pagination Controls for Donor Ledger */}
             {donorEntries.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                  <span>
-                    Showing{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {(donorPage - 1) * donorPageSize + 1}
-                    </span>{" "}
-                    to{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {Math.min(donorPage * donorPageSize, donorEntries.length)}
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">
-                      {donorEntries.length}
-                    </span>{" "}
-                    disbursements
-                  </span>
-                  <div className="flex items-center gap-1.5 ml-2">
-                    <span>Rows per page:</span>
-                    <select
-                      value={donorPageSize}
-                      onChange={(e) => {
-                        setDonorPageSize(Number(e.target.value));
-                        setDonorPage(1);
-                      }}
-                      className="h-7 px-2 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    >
-                      {[10, 15, 25, 50, 100].map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setDonorPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={donorPage === 1}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    <span>Previous</span>
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    {getPageNumbers(donorPage, totalDonorPages).map((p, index) =>
-                      typeof p === "number" ? (
-                        <button
-                          key={index}
-                          onClick={() => setDonorPage(p)}
-                          className={`w-7 h-7 text-xs font-semibold rounded-lg transition-colors ${
-                            donorPage === p
-                              ? "bg-emerald-600 text-white shadow-sm"
-                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      ) : (
-                        <span key={index} className="px-1 text-slate-400 text-xs select-none">
-                          ...
-                        </span>
-                      )
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => setDonorPage((prev) => Math.min(prev + 1, totalDonorPages))}
-                    disabled={donorPage === totalDonorPages}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+              <CustomPagination
+                currentPage={donorPage}
+                totalPages={totalDonorPages}
+                totalCount={donorEntries.length}
+                pageSize={donorPageSize}
+                onPageChange={setDonorPage}
+                onPageSizeChange={(newSize) => {
+                  setDonorPageSize(newSize);
+                  setDonorPage(1);
+                }}
+                itemName="disbursements"
+              />
             )}
           </div>
         </div>

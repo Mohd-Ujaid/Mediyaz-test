@@ -77,6 +77,7 @@ import { DonorPrintModal } from "@/features/donor-registration/components/DonorP
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
 import { FloatingBulkBar } from "@/components/ui/floating-bulk-bar";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
 
 const EGG_SECTIONS = [
   { key: "registration", label: "Registration Form" },
@@ -238,7 +239,8 @@ export default function ManageRegistrationsPage() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Modal / Detail view
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
@@ -739,7 +741,13 @@ export default function ManageRegistrationsPage() {
 
   const handleRemoveForm13 = async () => {
     if (!form13Reg) return;
-    if (!confirm("Are you sure you want to remove Form 13? The registration will be marked incomplete.")) return;
+    const confirmed = await confirmAction({
+      title: "Remove Form 13",
+      message: "Are you sure you want to remove Form 13? The registration will be marked incomplete.",
+      confirmText: "Yes, Remove Form 13",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     setUploadingForm13(true);
     try {
@@ -930,7 +938,13 @@ export default function ManageRegistrationsPage() {
 
   const handleRemoveForm14 = async () => {
     if (!form14Reg) return;
-    if (!confirm("Are you sure you want to remove Form 14?")) return;
+    const confirmed = await confirmAction({
+      title: "Remove Form 14",
+      message: "Are you sure you want to remove Form 14?",
+      confirmText: "Yes, Remove Form 14",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     setUploadingForm14(true);
     try {
@@ -1102,7 +1116,7 @@ export default function ManageRegistrationsPage() {
     try {
       const data = (await getAdminRegistrationsAction({
         page: currentPage,
-        limit: 10,
+        limit: itemsPerPage,
         search,
         donorType: "egg",
         status: statusFilter || undefined,
@@ -1138,7 +1152,12 @@ export default function ManageRegistrationsPage() {
             return r;
           });
         setRegistrations(eggOnly);
-        if (data.pagination) setTotalPages(data.pagination.pages);
+        if (data.pagination) {
+          setTotalPages(data.pagination.pages || 1);
+          setTotalCount(data.pagination.total || eggOnly.length);
+        } else {
+          setTotalCount(eggOnly.length);
+        }
         if (data.statusCounts) setStatusCounts(data.statusCounts);
       } else {
         toast.error(data.error || "Failed to load registrations.");
@@ -1184,7 +1203,7 @@ export default function ManageRegistrationsPage() {
 
   useEffect(() => {
     loadRegistrations();
-  }, [search, hospitalFilter, branchFilter, statusFilter, donorTypeFilter, fromDateFilter, toDateFilter, currentPage]);
+  }, [search, hospitalFilter, branchFilter, statusFilter, donorTypeFilter, fromDateFilter, toDateFilter, currentPage, itemsPerPage]);
 
   useEffect(() => {
     loadHospitals();
@@ -1427,7 +1446,13 @@ export default function ManageRegistrationsPage() {
   // Bulk Status Change
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to change the status of ${selectedIds.length} selected applications to ${newStatus}?`)) return;
+    const confirmed = await confirmAction({
+      title: "Update Status",
+      message: `Are you sure you want to change the status of ${selectedIds.length} selected applications to ${newStatus}?`,
+      confirmText: `Yes, Set to ${newStatus}`,
+      variant: newStatus === "CANCELLED" ? "destructive" : "default",
+    });
+    if (!confirmed) return;
 
     setActionLoading(true);
     let successCount = 0;
@@ -2129,16 +2154,6 @@ export default function ManageRegistrationsPage() {
               <Building2 className="w-3.5 h-3.5" /> Assign Hospital
             </Button>
             <Button
-              onClick={() => {
-                setBulkDoctorName("");
-                setBulkCustomDoctorInput("");
-                setIsBulkAssignDoctorOpen(true);
-              }}
-              className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1 py-1 px-3 h-8 cursor-pointer shadow-xs"
-            >
-              <Stethoscope className="w-3.5 h-3.5" /> Assign Doctor
-            </Button>
-            <Button
               onClick={handleBulkPrint}
               variant="outline"
               className="rounded-xl text-xs gap-1 py-1 px-3 h-8 border-teal-200 text-teal-700 hover:bg-teal-100"
@@ -2296,7 +2311,7 @@ export default function ManageRegistrationsPage() {
         ) : paginatedRegs.length === 0 ? (
           <div className="text-center py-20 text-slate-400 text-xs">No approved donor records found.</div>
         ) : (
-          <div className="overflow-x-auto w-full max-h-[75vh]">
+          <div className="overflow-x-auto w-full">
             <table className="w-full min-w-[1280px] text-left text-xs border-collapse">
               <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                 <tr>
@@ -2393,30 +2408,23 @@ export default function ManageRegistrationsPage() {
                         </td>
                       )}
 
-                      {/* Treating Doctor */}
+                      {/* Treating Doctor (Read-only in Egg Donor Management; assigned during registration) */}
                       {visibleColumns.doctor && (
                         <td className={`${cellPad} whitespace-nowrap`}>
                           {reg.assignedDoctor ? (
-                            <button
-                              type="button"
-                              onClick={() => openAssignDoctorModal(reg)}
-                              className="font-semibold text-purple-800 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-950/60 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-purple-200 dark:border-purple-800 whitespace-nowrap cursor-pointer transition-colors"
-                              title="Click to change treating doctor"
+                            <div
+                              className="font-semibold text-purple-800 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300 px-2.5 py-1 rounded-lg text-[11px] inline-flex items-center gap-1.5 border border-purple-200 dark:border-purple-800 whitespace-nowrap select-none"
+                              title={`Treating Doctor: Dr. ${reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}`}
                             >
                               <Stethoscope className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                              <span className="truncate max-w-[150px]" title={reg.assignedDoctor}>
+                              <span className="truncate max-w-[150px]">
                                 Dr. {reg.assignedDoctor.replace(/^Dr\.?\s*/i, "")}
                               </span>
-                            </button>
+                            </div>
                           ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openAssignDoctorModal(reg)}
-                              className="h-6 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 rounded-lg py-0.5 px-2 font-medium whitespace-nowrap cursor-pointer"
-                            >
-                              + Assign Doctor
-                            </Button>
+                            <span className="text-slate-400 dark:text-slate-500 font-medium text-[11px] italic">
+                              Unassigned
+                            </span>
                           )}
                         </td>
                       )}
@@ -2726,8 +2734,14 @@ export default function ManageRegistrationsPage() {
                               <DropdownMenuSeparator />
                               {reg.status !== "CANCELLED" ? (
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    if (confirm(`Are you sure you want to cancel the registration for ${reg.personalInfo?.fullName || reg.registrationId}?`)) {
+                                  onClick={async () => {
+                                    const confirmed = await confirmAction({
+                                      title: "Cancel Registration",
+                                      message: `Are you sure you want to cancel the registration for ${reg.personalInfo?.fullName || reg.registrationId}?`,
+                                      confirmText: "Yes, Cancel Registration",
+                                      variant: "destructive",
+                                    });
+                                    if (confirmed) {
                                       handleSingleStatusChange(reg.registrationId, "CANCELLED");
                                     }
                                   }}
@@ -2737,8 +2751,14 @@ export default function ManageRegistrationsPage() {
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    if (confirm(`Re-activate / approve registration for ${reg.personalInfo?.fullName || reg.registrationId}?`)) {
+                                  onClick={async () => {
+                                    const confirmed = await confirmAction({
+                                      title: "Re-Approve Registration",
+                                      message: `Re-activate / approve registration for ${reg.personalInfo?.fullName || reg.registrationId}?`,
+                                      confirmText: "Yes, Re-Approve",
+                                      variant: "default",
+                                    });
+                                    if (confirmed) {
                                       handleSingleStatusChange(reg.registrationId, "APPROVED");
                                     }
                                   }}
@@ -2760,14 +2780,20 @@ export default function ManageRegistrationsPage() {
         )}
 
         {/* Footer controls */}
-        {!loading && registrations.length > 0 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-900">
-            <CustomPagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => setCurrentPage(p)}
-            />
-          </div>
+        {!loading && (registrations.length > 0 || totalCount > 0) && (
+          <CustomPagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={itemsPerPage}
+            onPageChange={(p) => setCurrentPage(p)}
+            onPageSizeChange={(newSize) => {
+              setItemsPerPage(newSize);
+              setCurrentPage(1);
+            }}
+            itemName="registrations"
+            loading={loading}
+          />
         )}
       </Card>
 
@@ -3836,7 +3862,13 @@ export default function ManageRegistrationsPage() {
                         size="sm"
                         variant="outline"
                         onClick={async () => {
-                          if (confirm(`Are you sure you want to cancel the registration for ${selectedReg.personalInfo?.fullName || selectedReg.registrationId}?`)) {
+                          const confirmed = await confirmAction({
+                            title: "Cancel Registration",
+                            message: `Are you sure you want to cancel the registration for ${selectedReg.personalInfo?.fullName || selectedReg.registrationId}?`,
+                            confirmText: "Yes, Cancel Registration",
+                            variant: "destructive",
+                          });
+                          if (confirmed) {
                             await handleSingleStatusChange(selectedReg.registrationId, "CANCELLED");
                             setSelectedReg((prev: any) => prev ? { ...prev, status: "CANCELLED" } : null);
                           }
@@ -3851,7 +3883,13 @@ export default function ManageRegistrationsPage() {
                         size="sm"
                         variant="outline"
                         onClick={async () => {
-                          if (confirm(`Re-activate / approve registration for ${selectedReg.personalInfo?.fullName || selectedReg.registrationId}?`)) {
+                          const confirmed = await confirmAction({
+                            title: "Re-Approve Registration",
+                            message: `Re-activate / approve registration for ${selectedReg.personalInfo?.fullName || selectedReg.registrationId}?`,
+                            confirmText: "Yes, Re-Approve",
+                            variant: "default",
+                          });
+                          if (confirmed) {
                             await handleSingleStatusChange(selectedReg.registrationId, "APPROVED");
                             setSelectedReg((prev: any) => prev ? { ...prev, status: "APPROVED" } : null);
                           }
@@ -5896,18 +5934,6 @@ export default function ManageRegistrationsPage() {
           className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1.5 h-8 font-medium shadow-xs cursor-pointer"
         >
           <Building2 className="w-3.5 h-3.5" /> Assign Hospital
-        </Button>
-        <Button
-          size="sm"
-          onClick={() => {
-            setBulkDoctorName("");
-            setBulkCustomDoctorInput("");
-            setIsBulkAssignDoctorOpen(true);
-          }}
-          disabled={actionLoading}
-          className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs gap-1.5 h-8 font-medium shadow-xs cursor-pointer"
-        >
-          <Stethoscope className="w-3.5 h-3.5" /> Assign Doctor
         </Button>
         <Button
           size="sm"

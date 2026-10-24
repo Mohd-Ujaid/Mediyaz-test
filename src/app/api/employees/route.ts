@@ -14,10 +14,10 @@ export async function GET(req: Request) {
     }
     const userRole = (session.user as any).role;
     const userPermissions = (session.user as any).permissions || [];
-    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isAuthorized = ["ADMIN", "SUPER_ADMIN", "MANAGER"].includes(userRole);
 
-    if (!isAdmin && !userPermissions.includes("MANAGE_STAFF")) {
-      return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+    if (!isAuthorized && !userPermissions.includes("MANAGE_STAFF")) {
+      return NextResponse.json({ success: false, error: "Forbidden: Staff management access required." }, { status: 403 });
     }
 
     await connectToDatabase();
@@ -88,10 +88,10 @@ export async function POST(req: Request) {
     }
     const userRole = (session.user as any).role;
     const userPermissions = (session.user as any).permissions || [];
-    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isAuthorized = ["ADMIN", "SUPER_ADMIN", "MANAGER"].includes(userRole);
 
-    if (!isAdmin && !userPermissions.includes("MANAGE_STAFF")) {
-      return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+    if (!isAuthorized && !userPermissions.includes("MANAGE_STAFF")) {
+      return NextResponse.json({ success: false, error: "Forbidden: Staff management access required." }, { status: 403 });
     }
 
     await connectToDatabase();
@@ -207,10 +207,10 @@ export async function PATCH(req: Request) {
     }
     const userRole = (session.user as any).role;
     const userPermissions = (session.user as any).permissions || [];
-    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+    const isAuthorized = ["ADMIN", "SUPER_ADMIN", "MANAGER"].includes(userRole);
 
-    if (!isAdmin && !userPermissions.includes("MANAGE_STAFF")) {
-      return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+    if (!isAuthorized && !userPermissions.includes("MANAGE_STAFF")) {
+      return NextResponse.json({ success: false, error: "Forbidden: Staff management access required." }, { status: 403 });
     }
 
     await connectToDatabase();
@@ -221,7 +221,7 @@ export async function PATCH(req: Request) {
       "name", "phone", "photo", "department", "designation",
       "qualification", "experienceYears", "salary", "shift", "status"
     ];
-    if (userRole === "SUPER_ADMIN") {
+    if (userRole === "SUPER_ADMIN" || userRole === "ADMIN") {
       allowedEmployeeKeys.push("permissions");
     }
 
@@ -248,8 +248,12 @@ export async function PATCH(req: Request) {
       if (sanitizedUpdates.status) {
         userUpdate.status = sanitizedUpdates.status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
       }
-      if (sanitizedUpdates.permissions && userRole === "SUPER_ADMIN") {
-        userUpdate.permissions = sanitizedUpdates.permissions;
+      if (sanitizedUpdates.permissions) {
+        const linkedUser = await User.findById(updatedEmployee.user);
+        // Admin CANNOT modify another Admin's permissions; Admin only modifies staff permissions
+        if (linkedUser && (linkedUser.role !== "ADMIN" || userRole === "SUPER_ADMIN")) {
+          userUpdate.permissions = sanitizedUpdates.permissions;
+        }
       }
       if (Object.keys(userUpdate).length > 0) {
         await User.findByIdAndUpdate(updatedEmployee.user, userUpdate);
@@ -276,8 +280,16 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized: Please log in." }, { status: 401 });
     }
     const userRole = (session.user as any).role;
-    if (userRole !== "ADMIN" && userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+
+    // STRICT: Only the Super Administrator has permission to toggle/delete employee status
+    if (userRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Forbidden: Only the Super Administrator has permission to delete or deactivate employee profiles. Administrators may submit a Deletion Request.",
+        },
+        { status: 403 }
+      );
     }
 
     await connectToDatabase();

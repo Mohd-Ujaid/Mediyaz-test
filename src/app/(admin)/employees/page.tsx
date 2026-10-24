@@ -33,6 +33,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CustomPagination } from "@/components/ui/custom-pagination";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { useSession } from "@/lib/auth";
+import { UnifiedDeleteModal } from "@/components/ui/unified-delete-modal";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
 
 interface EmployeeDoc {
   name: string;
@@ -69,6 +72,9 @@ interface MongoEmployee {
 }
 
 export default function AdminEmployeesPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as any)?.role === "SUPER_ADMIN";
+
   const [employees, setEmployees] = useState<MongoEmployee[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,13 +88,16 @@ export default function AdminEmployeesPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [limit] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [limit, setLimit] = useState(25);
 
   // Modal State
   const [selectedEmp, setSelectedEmp] = useState<MongoEmployee | null>(null);
+  const [deleteTargetEmployee, setDeleteTargetEmployee] = useState<MongoEmployee | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Form State
   const [editForm, setEditForm] = useState<any>({});
@@ -113,7 +122,10 @@ export default function AdminEmployeesPage() {
       const data = await res.json();
       if (data.success) {
         setEmployees(data.employees);
-        if (data.pagination) setTotalPages(data.pagination.pages);
+        if (data.pagination) {
+          setTotalPages(data.pagination.pages || 1);
+          setTotalCount(data.pagination.total || 0);
+        }
       }
     } catch (err) {
       toast.error("Failed to load staff profiles.");
@@ -124,7 +136,7 @@ export default function AdminEmployeesPage() {
 
   useEffect(() => {
     loadEmployees();
-  }, [search, designationFilter, shiftFilter, statusFilter, page]);
+  }, [search, designationFilter, shiftFilter, statusFilter, page, limit]);
 
   // Sorting
   const handleSort = (field: string) => {
@@ -164,7 +176,13 @@ export default function AdminEmployeesPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} staff records?`)) return;
+    const confirmed = await confirmAction({
+      title: "Deactivate Staff",
+      message: `Are you sure you want to delete ${selectedIds.length} staff records?`,
+      confirmText: "Yes, Deactivate Staff",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     try {
       let successCount = 0;
@@ -265,20 +283,9 @@ export default function AdminEmployeesPage() {
     }
   };
 
-  const handleDelete = async (employeeId: string) => {
-    if (!confirm("Are you sure you want to toggle status of this employee?")) return;
-    try {
-      const res = await fetch(`/api/employees?employeeId=${employeeId}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(data.message || "Employee status updated.");
-        loadEmployees();
-      } else {
-        toast.error(data.error || "Deactivation toggle failed.");
-      }
-    } catch (err) {
-      toast.error("Error executing deactivation.");
-    }
+  const handleDelete = (emp: MongoEmployee) => {
+    setDeleteTargetEmployee(emp);
+    setIsDeleteModalOpen(true);
   };
 
   // Exports
@@ -513,10 +520,11 @@ export default function AdminEmployeesPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleDelete(emp.employeeId)}
+                              onClick={() => handleDelete(emp)}
                               className="text-xs font-medium cursor-pointer flex items-center gap-2 py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/50"
                             >
-                              <Trash2 className="w-4 h-4 text-rose-600" /> Toggle Status
+                              <Trash2 className="w-4 h-4 text-rose-600" />
+                              {isSuperAdmin ? "Deactivate / Delete Employee" : "Request Deletion"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -531,11 +539,19 @@ export default function AdminEmployeesPage() {
 
         {/* Pagination */}
         {!loading && employees.length > 0 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-900 print:hidden">
+          <div className="border-t border-slate-100 dark:border-slate-900 print:hidden">
             <CustomPagination 
               currentPage={page}
               totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={limit}
               onPageChange={(p) => setPage(p)}
+              onPageSizeChange={(newLimit) => {
+                setLimit(newLimit);
+                setPage(1);
+              }}
+              itemName="employees"
+              loading={loading}
             />
           </div>
         )}
@@ -857,6 +873,20 @@ export default function AdminEmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Unified Role-Aware Delete / Deletion Request Modal */}
+      {deleteTargetEmployee && (
+        <UnifiedDeleteModal
+          open={isDeleteModalOpen}
+          onOpenChange={setIsDeleteModalOpen}
+          resourceType="EMPLOYEE"
+          resourceTitle={`Employee: ${deleteTargetEmployee.name} (${deleteTargetEmployee.designation} - ${deleteTargetEmployee.employeeId})`}
+          resourceId={deleteTargetEmployee._id}
+          deleteEndpoint={`/api/employees?employeeId=${deleteTargetEmployee.employeeId}`}
+          onSuccess={loadEmployees}
+          requireIdConfirmation={isSuperAdmin}
+        />
+      )}
 
     </div>
   );

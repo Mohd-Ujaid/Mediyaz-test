@@ -30,10 +30,13 @@ import {
   Receipt,
   Database,
   BookOpen,
-  Stethoscope
+  Stethoscope,
+  ShieldAlert,
+  KeyRound,
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { GlobalSearchModal } from "@/components/layout/GlobalSearchModal";
+import { CustomConfirmModal } from "@/components/ui/custom-confirm-modal";
 
 import {
   Sidebar,
@@ -143,8 +146,10 @@ const sidebarNavigation: SidebarGroupSection[] = [
   {
     title: "System & Security",
     items: [
+      { href: "/deletion-requests", label: "Deletion Requests", icon: ShieldAlert, requiredPermission: "REVIEW_DELETION_REQUESTS" },
       { href: "/users", label: "User & Role Management", icon: ShieldCheck, requiredPermission: "VIEW_USERS" },
       { href: "/employees", label: "Staff & Team Directory", icon: Users, requiredPermission: "VIEW_USERS" },
+      { href: "/profile", label: "Profile & Security", icon: KeyRound, requiredPermission: "VIEW_DASHBOARD" },
     ]
   },
   
@@ -256,7 +261,15 @@ export default function AdminLayoutClient({
         router.push("/login");
       } else {
         const role = (session?.user as any)?.role;
-        const isAllowedRole = ["ADMIN", "SUPER_ADMIN"].includes(role);
+        const isAllowedRole = [
+          "SUPER_ADMIN",
+          "ADMIN",
+          "MANAGER",
+          "EMPLOYEE",
+          "DOCTOR",
+          "STAFF",
+          "RECEPTIONIST",
+        ].includes(role);
         if (!isAllowedRole) {
           router.push("/login");
         }
@@ -273,21 +286,59 @@ export default function AdminLayoutClient({
     return <>{children}</>;
   }
 
-  const userRole = (session?.user as any)?.role || "ADMIN";
-  const isAllowedRole = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+  const userRole = (session?.user as any)?.role || "EMPLOYEE";
+  const isAllowedRole = [
+    "SUPER_ADMIN",
+    "ADMIN",
+    "MANAGER",
+    "EMPLOYEE",
+    "DOCTOR",
+    "STAFF",
+    "RECEPTIONIST",
+  ].includes(userRole);
   
   if (!session || !isAllowedRole) {
     return null;
   }
 
   const userPermissions = (session?.user as any)?.permissions || [];
-  const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
+  const isSuperAdminUser = userRole === "SUPER_ADMIN";
+  const isAdminUser = userRole === "ADMIN";
 
   const filteredLinks = sidebarNavigation.map(group => ({
     ...group,
-    items: group.items.filter(item => 
-      isAdmin || item.requiredPermission === "VIEW_DASHBOARD" || userPermissions.includes(item.requiredPermission)
-    )
+    items: group.items.filter(item => {
+      if (isSuperAdminUser) return true;
+      if (item.requiredPermission === "REVIEW_DELETION_REQUESTS") return false;
+      if (item.requiredPermission === "VIEW_USERS" && !isAdminUser && !isSuperAdminUser) return false;
+      if (userRole === "EMPLOYEE" || userRole === "DOCTOR" || userRole === "STAFF" || userRole === "RECEPTIONIST") {
+        // Clinical staff only see Dashboard, Registrations, Completed files, Hospitals
+        return [
+          "/dashboard",
+          "/donor-registrations/egg",
+          "/donor-registrations/sperm",
+          "/manage-registrations",
+          "/manage-sperm-registrations",
+          "/completed-files/egg",
+          "/completed-files/sperm",
+          "/hospitals",
+          "/profile",
+        ].includes(item.href);
+      }
+      if (userRole === "MANAGER") {
+        // Manager sees operations, staff/employees, registrations, and clinic performance
+        return ![
+          "/users",
+          "/ledger",
+          "/blog",
+        ].includes(item.href);
+      }
+      return (
+        isAdminUser ||
+        item.requiredPermission === "VIEW_DASHBOARD" ||
+        userPermissions.includes(item.requiredPermission)
+      );
+    })
   })).filter(group => group.items.length > 0);
 
   const basePath = pathname.startsWith("/admin") ? "/admin" : "";
@@ -496,9 +547,23 @@ export default function AdminLayoutClient({
                       {session?.user?.email || "admin@mediyaz.org"}
                     </p>
                     <div className="mt-1.5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-[#285b63] border border-teal-200/70">
-                        {userRole === "SUPER_ADMIN" ? "Super Admin" : userRole === "ADMIN" ? "Admin" : userRole === "DOCTOR" ? "Doctor" : "Employee"}
-                      </span>
+                      {userRole === "SUPER_ADMIN" ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                          🛡️ Super Admin
+                        </span>
+                      ) : userRole === "ADMIN" ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Admin
+                        </span>
+                      ) : userRole === "MANAGER" ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                          Operations Manager
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-teal-50 text-[#285b63] border border-teal-200/70">
+                          {userRole === "DOCTOR" ? "Doctor" : "Clinical Staff"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -555,6 +620,9 @@ export default function AdminLayoutClient({
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
         />
+
+        {/* Global Custom Confirm Modal */}
+        <CustomConfirmModal />
       </SidebarInset>
     </SidebarProvider>
   );

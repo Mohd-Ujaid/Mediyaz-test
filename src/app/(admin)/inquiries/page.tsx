@@ -37,6 +37,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { useSession } from "@/lib/auth";
+import { UnifiedDeleteModal } from "@/components/ui/unified-delete-modal";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
 
 const STATUS_FLOW = [
   "New Inquiry",
@@ -52,6 +55,10 @@ export default function AdminInquiriesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inquiryIdParam = searchParams.get("inquiryId");
+
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as any)?.role === "SUPER_ADMIN";
+
   const [inquiries, setInquiries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -66,8 +73,10 @@ export default function AdminInquiriesPage() {
 
   // Modals state
   const [selectedInquiry, setSelectedInquiry] = useState<any | null>(null);
+  const [deleteTargetInquiry, setDeleteTargetInquiry] = useState<any | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Status update details
@@ -156,7 +165,13 @@ export default function AdminInquiriesPage() {
   };
 
   const handleConvert = async (inquiry: any) => {
-    if (!confirm(`Are you sure you want to convert ${inquiry.fullName}'s inquiry into a full donor registration profile?`)) {
+    const confirmed = await confirmAction({
+      title: "Convert Inquiry",
+      message: `Are you sure you want to convert ${inquiry.fullName}'s inquiry into a full donor registration profile?`,
+      confirmText: "Yes, Convert to Registration",
+      variant: "default",
+    });
+    if (!confirmed) {
       return;
     }
     setActionLoading(true);
@@ -179,20 +194,9 @@ export default function AdminInquiriesPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to permanently delete this donor inquiry?")) return;
-    try {
-      const res = await fetch(`/api/donor-queries/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Inquiry deleted successfully.");
-        loadInquiries();
-      } else {
-        toast.error(data.error || "Failed to delete inquiry.");
-      }
-    } catch (err) {
-      toast.error("Network error deleting inquiry.");
-    }
+  const handleDelete = (inq: any) => {
+    setDeleteTargetInquiry(inq);
+    setIsDeleteModalOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -447,11 +451,11 @@ export default function AdminInquiriesPage() {
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => handleDelete(inq._id)}
+                                onClick={() => handleDelete(inq)}
                                 className="cursor-pointer gap-2 text-xs font-semibold py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/50"
                               >
                                 <Trash2 className="w-4 h-4 text-rose-600" />
-                                Delete Inquiry
+                                {isSuperAdmin ? "Delete Inquiry (Permanent)" : "Request Deletion"}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -469,6 +473,7 @@ export default function AdminInquiriesPage() {
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={(p) => setCurrentPage(p)}
+              itemName="inquiries"
             />
           )}
         </CardContent>
@@ -725,6 +730,19 @@ export default function AdminInquiriesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Unified Role-Aware Delete / Deletion Request Modal */}
+      {deleteTargetInquiry && (
+        <UnifiedDeleteModal
+          open={isDeleteModalOpen}
+          onOpenChange={setIsDeleteModalOpen}
+          resourceType="INQUIRY"
+          resourceTitle={`Inquiry: ${deleteTargetInquiry.name} (${deleteTargetInquiry.phone || deleteTargetInquiry.email || deleteTargetInquiry.interest || "Donor Inquiry"})`}
+          resourceId={deleteTargetInquiry._id}
+          deleteEndpoint={`/api/donor-queries/${deleteTargetInquiry._id}`}
+          onSuccess={loadInquiries}
+        />
+      )}
 
     </div>
   );

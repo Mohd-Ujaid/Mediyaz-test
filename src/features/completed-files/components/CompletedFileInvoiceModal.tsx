@@ -126,6 +126,7 @@ export function CompletedFileInvoiceModal({
   const [serviceCharge, setServiceCharge] = useState(defaultServiceCharge);
   const [donorReimbursement, setDonorReimbursement] =
     useState(defaultReimbursement);
+  const [branchName, setBranchName] = useState("");
 
   const [activeTab, setActiveTab] = useState<"settings" | "preview">("preview");
   const [isDownloading, setIsDownloading] = useState(false);
@@ -169,6 +170,17 @@ export function CompletedFileInvoiceModal({
           h?.name ||
           "Mediworld Fertility Centre"
       );
+
+      const branchVal = (
+        registration.assignedBranch ||
+        registration.branchName ||
+        registration.clinicDeal?.assignedBranch ||
+        h?.branches?.[0]?.branchName ||
+        registration.opuLocation ||
+        registration.pickupLocation ||
+        (h?.city ? `${h.city} Branch` : "")
+      );
+      setBranchName(branchVal);
 
       const addr = h
         ? [
@@ -359,6 +371,7 @@ export function CompletedFileInvoiceModal({
           hospitalName,
           hospitalGstin,
           hospitalAddress,
+          branchName,
           pickupDate,
           pickupLocation,
           saleType,
@@ -696,6 +709,16 @@ export function CompletedFileInvoiceModal({
                         {hospitalAddress}
                       </div>
                     </div>
+                    {Boolean(branchName) && (
+                      <div className="grid grid-cols-12 border-b border-slate-400">
+                        <div className="col-span-4 bg-slate-50 font-bold p-1 border-r border-slate-400">
+                          Branch :
+                        </div>
+                        <div className="col-span-8 p-1 font-semibold text-slate-800">
+                          {branchName}
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-12 border-b border-slate-400">
                       <div className="col-span-4 bg-slate-50 font-bold p-1 border-r border-slate-400">
                         {pickupLabel}

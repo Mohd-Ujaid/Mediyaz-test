@@ -51,6 +51,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 import { INDIAN_STATES, getCitiesForState } from "@/config/indiaLocations";
+import { useSession } from "@/lib/auth";
+import { UnifiedDeleteModal } from "@/components/ui/unified-delete-modal";
 
 export interface ArtDonorItem {
   _id: string;
@@ -218,6 +220,9 @@ const EMPTY_EGG_FORM_DATA = {
 };
 
 export default function AdminEggDonorsPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as any)?.role === "SUPER_ADMIN";
+
   const [donors, setDonors] = useState<ArtDonorItem[]>([]);
   const [stats, setStats] = useState({ total: 0, available: 0, quarantine: 0, allocated: 0 });
   const [loading, setLoading] = useState(true);
@@ -1870,28 +1875,19 @@ export default function AdminEggDonorsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ================= DELETE CONFIRMATION DIALOG ================= */}
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="max-w-md p-6 rounded-3xl border-0 shadow-2xl">
-          <DialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center mb-3">
-              <AlertTriangle className="h-6 w-6" />
-            </div>
-            <DialogTitle className="text-xl font-bold">Delete Egg Donor Profile?</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground mt-2 leading-relaxed">
-              Permanently delete donor <strong className="text-foreground font-mono">{activeDonor?.donorCode}</strong> from the Egg Donor database.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex items-center gap-3 mt-5">
-            <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)} className="rounded-xl h-11 text-xs font-semibold flex-1">
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteDonor} disabled={submitting} className="rounded-xl h-11 text-xs font-bold flex-1 shadow-md">
-              {submitting ? "Deleting..." : "Confirm Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ================= UNIFIED ROLE-AWARE DELETE / DELETION REQUEST MODAL ================= */}
+      {activeDonor && (
+        <UnifiedDeleteModal
+          open={isDeleteOpen}
+          onOpenChange={setIsDeleteOpen}
+          resourceType="DONOR"
+          resourceTitle={`Egg Donor ${activeDonor.donorCode} (Blood Group ${activeDonor.bloodType || "N/A"})`}
+          resourceId={activeDonor._id}
+          deleteEndpoint={`/api/art-donors/egg/${activeDonor._id}`}
+          onSuccess={fetchEggDonors}
+          requireIdConfirmation={isSuperAdmin}
+        />
+      )}
 
       {/* ================= VIEW DOSSIER DIALOG ================= */}
       {activeDonor && (

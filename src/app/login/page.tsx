@@ -56,29 +56,52 @@ export default function AdminLoginPage() {
       });
 
       if (result.error) {
-        setError(result.error.message || "Invalid administrator email or password.");
+        setError(result.error.message || "Invalid email or password.");
         setLoading(false);
         return;
       }
 
-      // 2. Read role directly from sign-in response data
+
+      // 2. Read user & role
       const user = result.data?.user;
       if (user) {
         const role = (user as any).role;
-        if (role === "ADMIN" || role === "SUPER_ADMIN") {
+
+        // Super Admin ISOLATION: Super Admin MUST authenticate via /secure/login
+        if (role === "SUPER_ADMIN") {
+          await signOut();
+          setError(
+            "Security Notice: Super Administrator credentials detected. Top-level authority must sign in through the Dedicated Super Admin Secure Console."
+          );
+          setLoading(false);
+          return;
+        }
+
+        const allowedStaffRoles = [
+          "ADMIN",
+          "MANAGER",
+          "EMPLOYEE",
+          "DOCTOR",
+          "STAFF",
+          "RECEPTIONIST",
+        ];
+
+        if (allowedStaffRoles.includes(role)) {
           setSuccess(true);
           setTimeout(() => {
             window.location.replace("/dashboard");
           }, 600);
         } else {
-          // Access Denied: Sign them out immediately
           await signOut();
-          setError("Access Denied: This console is strictly restricted to Administrators. Clinical personnel must use employee credentials.");
+          setError("Access Denied: You do not have active staff privileges for this portal.");
           setLoading(false);
         }
       } else {
-        setError("Unable to establish secure administration session.");
-        setLoading(false);
+        // Fallback: If session established without user in response
+        setSuccess(true);
+        setTimeout(() => {
+          window.location.replace("/dashboard");
+        }, 600);
       }
     } catch {
       setError("An unexpected network error occurred. Please verify your connection.");
@@ -109,8 +132,11 @@ export default function AdminLoginPage() {
 
           <div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-              Administrator Sign In
+              Operations Portal Sign In
             </h2>
+            <p className="text-xs text-slate-500 mt-1 font-medium">
+              Administrator, Manager & Clinical Staff Authentication
+            </p>
           </div>
         </div>
 
@@ -136,7 +162,7 @@ export default function AdminLoginPage() {
                   <Mail className="w-4 h-4" />
                 </div>
                 <Input
-                  placeholder="Enter You Email"
+                  placeholder="admin@mediyaz.org"
                   type="email"
                   autoComplete="email"
                   {...form.register("email")}
@@ -170,7 +196,7 @@ export default function AdminLoginPage() {
                 </div>
                 <Input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Enter You Password"
+                  placeholder="••••••••••••"
                   autoComplete="current-password"
                   {...form.register("password")}
                   className="pl-10 pr-10 bg-slate-50/70 dark:bg-slate-950/70 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl h-11 text-xs focus-visible:ring-2 focus-visible:ring-[#285b63] transition-all"
@@ -228,12 +254,31 @@ export default function AdminLoginPage() {
                 </>
               ) : (
                 <>
-                  <span>Access </span>
-                  {/* <ArrowRight className="w-4 h-4" /> */}
+                  <span>Sign In to Operations Portal</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
                 </>
               )}
             </Button>
+
+            <div className="pt-3 text-center border-t border-slate-100 dark:border-slate-800">
+              <p className="text-xs text-slate-500">
+                Need an Administrator or Staff account?{" "}
+                <Link href="/signup" className="font-semibold text-[#285b63] hover:underline">
+                  Sign Up
+                </Link>
+              </p>
+            </div>
           </form>
+        </div>
+
+        <div className="text-center pt-2">
+          <Link
+            href="/secure/login"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors py-1 px-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+            <span>Dedicated Super Admin Secure Console</span>
+          </Link>
         </div>
 
       </div>

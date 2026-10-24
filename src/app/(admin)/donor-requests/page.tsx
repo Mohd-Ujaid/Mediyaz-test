@@ -430,13 +430,12 @@ export default function AdminDonorRequestsPage() {
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t dark:border-slate-800">
-            <CustomPagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => setCurrentPage(p)}
-            />
-          </div>
+          <CustomPagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={(p) => setCurrentPage(p)}
+            itemName="requests"
+          />
         </Card>
       )}
 

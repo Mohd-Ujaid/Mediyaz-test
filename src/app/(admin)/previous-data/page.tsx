@@ -41,8 +41,14 @@ import {
 } from "@/features/previous-data/actions/previous-data.actions";
 import { PreviousDonorFormDialog } from "@/features/previous-data/components/PreviousDonorFormDialog";
 import { PreviousDonorViewDialog } from "@/features/previous-data/components/PreviousDonorViewDialog";
+import { useSession } from "@/lib/auth";
+import { UnifiedDeleteModal } from "@/components/ui/unified-delete-modal";
+import { CustomPagination } from "@/components/ui/custom-pagination";
 
 export default function PreviousDataPage() {
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as any)?.role === "SUPER_ADMIN";
+
   const [activeTab, setActiveTab] = useState<"all" | "egg" | "sperm">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -57,6 +63,8 @@ export default function PreviousDataPage() {
   const [recordToEdit, setRecordToEdit] = useState<any | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [recordToView, setRecordToView] = useState<any | null>(null);
+  const [deleteTargetRecord, setDeleteTargetRecord] = useState<any | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
 
   const fetchRecords = useCallback(async () => {
@@ -95,26 +103,9 @@ export default function PreviousDataPage() {
     setTimeout(() => setCopiedAadhaar(null), 2000);
   };
 
-  const handleDelete = async (record: any) => {
-    const confirmName = record.personalInfo?.fullName || record.recordCode || "this record";
-    if (!window.confirm(`Are you sure you want to permanently delete previous record for ${confirmName}?`)) {
-      return;
-    }
-
-    setDeleteLoadingId(record._id);
-    try {
-      const res = await deletePreviousDonorAction(record._id);
-      if (res.success) {
-        toast.success("Record deleted successfully.");
-        fetchRecords();
-      } else {
-        toast.error(res.error || "Failed to delete record.");
-      }
-    } catch {
-      toast.error("Failed to delete record.");
-    } finally {
-      setDeleteLoadingId(null);
-    }
+  const handleDelete = (record: any) => {
+    setDeleteTargetRecord(record);
+    setIsDeleteModalOpen(true);
   };
 
   const handleExportCSV = () => {
@@ -571,7 +562,7 @@ export default function PreviousDataPage() {
                             disabled={deleteLoadingId === record._id}
                             onClick={() => handleDelete(record)}
                             className="h-7 w-7 text-rose-600 hover:text-rose-700"
-                            title="Delete Record"
+                            title={isSuperAdmin ? "Permanently Delete Record" : "Request Record Deletion"}
                           >
                             {deleteLoadingId === record._id ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -590,32 +581,16 @@ export default function PreviousDataPage() {
         </div>
 
         {/* Pagination Bar */}
-        {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-xs text-muted-foreground">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagination.page <= 1 || loading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="text-xs"
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={pagination.page >= pagination.totalPages || loading}
-                onClick={() => setPage((p) => p + 1)}
-                className="text-xs"
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+        {!loading && (records.length > 0 || pagination.total > 0) && (
+          <CustomPagination
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            totalCount={pagination.total}
+            pageSize={pagination.limit}
+            onPageChange={(p) => setPage(p)}
+            itemName="records"
+            loading={loading}
+          />
         )}
       </Card>
 
@@ -638,6 +613,20 @@ export default function PreviousDataPage() {
           setFormDialogOpen(true);
         }}
       />
+
+      {/* Unified Role-Aware Delete / Deletion Request Modal */}
+      {deleteTargetRecord && (
+        <UnifiedDeleteModal
+          open={isDeleteModalOpen}
+          onOpenChange={setIsDeleteModalOpen}
+          resourceType="PREVIOUS_DATA"
+          resourceTitle={`Record: ${deleteTargetRecord.recordCode} (${deleteTargetRecord.personalInfo?.fullName || "Donor"})`}
+          resourceId={deleteTargetRecord._id}
+          deleteEndpoint={`/api/previous-donors/${deleteTargetRecord._id}`}
+          onSuccess={fetchRecords}
+          requireIdConfirmation={isSuperAdmin}
+        />
+      )}
     </div>
   );
 }

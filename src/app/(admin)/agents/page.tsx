@@ -683,14 +683,13 @@ export default function AdminAgentsPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100">
-            <CustomPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </div>
+        {!loading && agents.length > 0 && (
+          <CustomPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            itemName="agents"
+          />
         )}
       </Card>
 

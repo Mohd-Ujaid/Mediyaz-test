@@ -38,6 +38,7 @@ import { CompletedFileInvoiceModal } from "./CompletedFileInvoiceModal";
 import { formatDotDate } from "@/lib/invoice-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CustomPagination } from "@/components/ui/custom-pagination";
 import {
   Dialog,
   DialogContent,
@@ -145,7 +146,7 @@ export function CompletedFilesDirectory({
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -1212,7 +1213,7 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
 
       {/* Main Table */}
       <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-        <div className="overflow-x-auto max-h-[72vh] overflow-y-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="sticky top-0 z-20 backdrop-blur-md bg-muted/95 border-b text-muted-foreground font-bold uppercase tracking-wider text-[11px] shadow-2xs">
@@ -1633,39 +1634,18 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
         </div>
 
         {/* Pagination Footer */}
-        <div className="p-4 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <div>
-            Showing <span className="font-bold text-foreground">{registrations.length}</span> of{" "}
-            <span className="font-bold text-foreground">{totalCount}</span> completed records
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1 || loading}
-              className="rounded-lg h-8 px-2.5 text-xs gap-1"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              Previous
-            </Button>
-            <span className="px-2 font-medium">
-              Page <span className="font-bold text-foreground">{currentPage}</span> of{" "}
-              <span className="font-bold text-foreground">{totalPages}</span>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages || loading}
-              className="rounded-lg h-8 px-2.5 text-xs gap-1"
-            >
-              Next
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </div>
+        {totalCount > 0 && (
+          <CustomPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setItemsPerPage}
+            itemName="completed records"
+            loading={loading}
+          />
+        )}
       </div>
 
       {/* Modal 1: HOSPITAL PAYMENT STATUS */}

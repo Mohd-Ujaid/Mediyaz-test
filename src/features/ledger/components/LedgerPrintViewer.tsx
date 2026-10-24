@@ -28,6 +28,8 @@ interface LedgerPrintViewerProps {
   branch?: string;
   startDate?: string;
   endDate?: string;
+  year?: string;
+  month?: string;
 }
 
 export default function LedgerPrintViewer({
@@ -39,6 +41,8 @@ export default function LedgerPrintViewer({
   branch,
   startDate,
   endDate,
+  year,
+  month,
 }: LedgerPrintViewerProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
@@ -69,6 +73,8 @@ export default function LedgerPrintViewer({
         if (branch && branch !== "ALL") params.append("branch", branch);
         if (startDate) params.append("startDate", startDate);
         if (endDate) params.append("endDate", endDate);
+        if (year && year !== "ALL") params.append("year", year);
+        if (month && month !== "ALL") params.append("month", month);
 
         const url = `/api/ledger/pdf?${params.toString()}`;
         const res = await fetch(url);

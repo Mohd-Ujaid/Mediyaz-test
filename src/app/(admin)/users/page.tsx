@@ -25,9 +25,12 @@ import {
   MoreHorizontal,
   KeyRound,
   EyeOff,
-  Copy
+  Copy,
+  Send,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +39,10 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { UnifiedDeleteModal } from "@/components/ui/unified-delete-modal";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
+import { PermissionSelector, DEFAULT_ROLE_PERMS } from "./PermissionSelector";
+import { CustomPagination } from "@/components/ui/custom-pagination";
 
 interface LoginRecord {
   date: string;
@@ -79,13 +86,31 @@ export default function AdminUsersPage() {
   const [sortField, setSortField] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit, setLimit] = useState(25);
+
+  const { data: session } = useSession();
+  const currentUserRole = (session?.user as any)?.role;
+  const isSuperAdmin = currentUserRole === "SUPER_ADMIN";
+  const isAdmin = currentUserRole === "ADMIN";
+  const canManagePermissions = isSuperAdmin || isAdmin;
+
+  // Invite Modal State
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    email: "",
+    role: "MANAGER",
+    designation: "Staff",
+    department: "Clinical Operations",
+  });
+  const [inviting, setInviting] = useState(false);
 
   // Modal State
   const [selectedUser, setSelectedUser] = useState<MongoUser | null>(null);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<MongoUser | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Form State
   const [editForm, setEditForm] = useState<any>({});
@@ -94,9 +119,9 @@ export default function AdminUsersPage() {
     email: "",
     password: "",
     phone: "",
-    role: "ADMIN",
+    role: "MANAGER",
     department: "Administration",
-    permissions: "VIEW_DASHBOARD, VIEW_REGISTRATIONS, VIEW_REG_CHECKS"
+    permissions: DEFAULT_ROLE_PERMS["MANAGER"] || ["VIEW_DASHBOARD", "VIEW_REGISTRATIONS"],
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
@@ -177,7 +202,13 @@ export default function AdminUsersPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} users?`)) return;
+    const confirmed = await confirmAction({
+      title: "Delete Users",
+      message: `Are you sure you want to delete ${selectedIds.length} users?`,
+      confirmText: "Yes, Delete Users",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     try {
       let successCount = 0;
@@ -217,6 +248,15 @@ export default function AdminUsersPage() {
 
   // CRUD actions
   const handleEditOpen = (user: MongoUser) => {
+    let perms: string[] = [];
+    if (Array.isArray(user.permissions)) {
+      perms = [...user.permissions];
+    } else if (typeof user.permissions === "string") {
+      perms = String(user.permissions).split(",").map((p: string) => p.trim()).filter(Boolean);
+    } else {
+      perms = DEFAULT_ROLE_PERMS[user.role] || ["VIEW_DASHBOARD"];
+    }
+
     setEditForm({
       userId: user._id,
       name: user.name,
@@ -224,8 +264,9 @@ export default function AdminUsersPage() {
       password: "",
       phone: user.phone || "",
       role: user.role,
+      targetRole: user.role,
       department: user.department || "General",
-      permissions: user.permissions ? user.permissions.join(", ") : "READ_PORTAL"
+      permissions: perms,
     });
     setShowEditPassword(false);
     setIsEditOpen(true);
@@ -241,7 +282,7 @@ export default function AdminUsersPage() {
         phone: editForm.phone,
         role: editForm.role,
         department: editForm.department,
-        permissions: editForm.permissions ? editForm.permissions.split(",").map((p: string) => p.trim()) : []
+        permissions: Array.isArray(editForm.permissions) ? editForm.permissions : [],
       };
       if (editForm.password && editForm.password.trim().length >= 6) {
         payload.password = editForm.password.trim();
@@ -278,7 +319,7 @@ export default function AdminUsersPage() {
           phone: createForm.phone,
           role: createForm.role,
           department: createForm.department,
-          permissions: createForm.permissions ? createForm.permissions.split(",").map((p: string) => p.trim()) : ["READ_PORTAL"]
+          permissions: Array.isArray(createForm.permissions) ? createForm.permissions : ["VIEW_DASHBOARD"],
         })
       });
       const data = await res.json();
@@ -296,7 +337,7 @@ export default function AdminUsersPage() {
           phone: "",
           role: "ADMIN",
           department: "Administration",
-          permissions: "VIEW_DASHBOARD, VIEW_REGISTRATIONS, VIEW_REG_CHECKS"
+          permissions: DEFAULT_ROLE_PERMS["ADMIN"] || ["VIEW_DASHBOARD"],
         });
         loadUsers();
       } else {
@@ -307,20 +348,38 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleDelete = async (userId: string) => {
-    if (!confirm("Are you sure you want to permanently delete this user account?")) return;
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviting(true);
     try {
-      const res = await fetch(`/api/users?userId=${userId}`, { method: "DELETE" });
+      const res = await fetch("/api/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inviteForm),
+      });
       const data = await res.json();
       if (data.success) {
-        toast.success("User deleted successfully.");
-        loadUsers();
+        toast.success(data.message || "Invitation sent successfully!");
+        setIsInviteOpen(false);
+        setInviteForm({
+          email: "",
+          role: isSuperAdmin ? "ADMIN" : "MANAGER",
+          designation: "Staff",
+          department: "Clinical Operations",
+        });
       } else {
-        toast.error(data.error || "Failed to delete user.");
+        toast.error(data.error || "Failed to send invitation.");
       }
-    } catch (err) {
-      toast.error("Error executing deletion.");
+    } catch {
+      toast.error("Network error sending invitation.");
+    } finally {
+      setInviting(false);
     }
+  };
+
+  const handleDelete = (targetUser: MongoUser) => {
+    setDeleteTargetUser(targetUser);
+    setIsDeleteModalOpen(true);
   };
 
   // Exports
@@ -367,7 +426,10 @@ export default function AdminUsersPage() {
           <Button onClick={loadUsers} variant="outline" className="rounded-xl text-xs gap-1 border-slate-200">
             <RefreshCw className="w-3.5 h-3.5" /> Refresh Accounts
           </Button>
-          <Button onClick={() => setIsCreateOpen(true)} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs gap-1.5 font-bold shadow-md shadow-blue-600/20">
+          <Button onClick={() => setIsInviteOpen(true)} variant="outline" className="rounded-xl text-xs gap-1.5 font-bold border-teal-200 text-[#285b63] hover:bg-teal-50">
+            <Send className="w-3.5 h-3.5" /> Invite Staff
+          </Button>
+          <Button onClick={() => setIsCreateOpen(true)} className="rounded-xl bg-[#285b63] hover:bg-[#1d464d] text-white text-xs gap-1.5 font-bold shadow-md shadow-teal-900/10">
             <UserPlus className="w-4 h-4" /> Add User Account
           </Button>
         </div>
@@ -386,9 +448,11 @@ export default function AdminUsersPage() {
             <Button size="sm" onClick={() => handleBulkStatus("SUSPENDED")} variant="outline" className="h-8 rounded-lg text-amber-600 border-amber-200 bg-amber-500/5 hover:bg-amber-500/10 text-xs">
               Bulk Suspend
             </Button>
-            <Button size="sm" onClick={handleBulkDelete} className="h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs gap-1">
-              <Trash2 className="w-3.5 h-3.5" /> Delete Selected
-            </Button>
+            {isSuperAdmin && (
+              <Button size="sm" onClick={handleBulkDelete} className="h-8 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs gap-1">
+                <Trash2 className="w-3.5 h-3.5" /> Delete Selected
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -554,11 +618,11 @@ export default function AdminUsersPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleDelete(user._id)}
+                              onClick={() => handleDelete(user)}
                               className="cursor-pointer gap-2 text-xs font-semibold py-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/50"
                             >
                               <Trash2 className="w-4 h-4 text-rose-600" />
-                              Delete User
+                              {isSuperAdmin ? "Delete User (Permanent)" : "Request Deletion"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -572,30 +636,19 @@ export default function AdminUsersPage() {
         )}
 
         {/* Pagination */}
-        {!loading && pageCount > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-900 flex items-center justify-between print:hidden">
-            <Button 
-              size="sm" 
-              variant="outline" 
-              onClick={() => setPage(p => Math.max(p - 1, 1))} 
-              disabled={page === 1}
-              className="rounded-xl h-8 text-xs gap-1"
-            >
-              <ChevronLeft className="w-4 h-4" /> Previous
-            </Button>
-            <div className="text-xs text-slate-500">
-              Page {page} of {pageCount}
-            </div>
-            <Button 
-              size="sm" 
-              variant="outline" 
-              onClick={() => setPage(p => Math.min(p + 1, pageCount))} 
-              disabled={page === pageCount}
-              className="rounded-xl h-8 text-xs gap-1"
-            >
-              Next <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+        {!loading && sortedUsers.length > 0 && (
+          <CustomPagination
+            currentPage={page}
+            totalPages={Math.max(1, pageCount)}
+            totalCount={sortedUsers.length}
+            pageSize={limit}
+            onPageChange={setPage}
+            onPageSizeChange={(newLimit) => {
+              setLimit(newLimit);
+              setPage(1);
+            }}
+            itemName="users"
+          />
         )}
       </Card>
 
@@ -661,18 +714,50 @@ export default function AdminUsersPage() {
                       <p className="font-bold text-blue-600 mt-0.5">{selectedUser.role}</p>
                     </div>
                     <div>
-                      <span className="text-slate-400">Access Permissions:</span>
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {selectedUser.permissions && selectedUser.permissions.length > 0 ? (
-                          selectedUser.permissions.map((p) => (
-                            <span key={p} className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-bold text-[9px]">
-                              {p}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-400 italic">No custom permissions.</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Access Permissions:</span>
+                        {selectedUser.role === "ADMIN" && (
+                          <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300">
+                            Full Operations Authority
+                          </span>
                         )}
                       </div>
+
+                      {selectedUser.role === "SUPER_ADMIN" ? (
+                        <div className="mt-2">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 font-bold text-xs">
+                            <Shield className="w-3.5 h-3.5 text-amber-600" />
+                            Full Root Authority (*) — System Administration & Direct Record Deletions
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-1 mt-1.5 max-h-36 overflow-y-auto pr-1">
+                            {(selectedUser.role === "ADMIN"
+                              ? (selectedUser.permissions && selectedUser.permissions.length > 5
+                                  ? selectedUser.permissions
+                                  : DEFAULT_ROLE_PERMS.ADMIN)
+                              : (selectedUser.permissions || [])
+                            ).map((p) => (
+                              <span
+                                key={p}
+                                className={`px-2 py-0.5 rounded font-bold text-[9px] ${
+                                  selectedUser.role === "ADMIN"
+                                    ? "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200/80 dark:border-teal-850"
+                                    : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                }`}
+                              >
+                                {p}
+                              </span>
+                            ))}
+                          </div>
+                          {selectedUser.role === "ADMIN" && (
+                            <p className="text-[10px] text-slate-400 mt-2 italic">
+                              * All operational modules enabled by default. Permanent record deletion is exclusively reserved for Super Admin.
+                            </p>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -733,7 +818,7 @@ export default function AdminUsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="rounded-2xl max-w-md bg-white dark:bg-slate-900 border dark:border-slate-800 p-6">
+        <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border dark:border-slate-800 p-6">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">Edit User Details</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">Update account credentials or security roles.</DialogDescription>
@@ -787,13 +872,21 @@ export default function AdminUsersPage() {
               <div className="space-y-1">
                 <label className="font-semibold text-slate-700 dark:text-slate-300">Role</label>
                 <select 
-                  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 focus:outline-none"
+                  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 focus:outline-none disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:opacity-75 disabled:cursor-not-allowed"
                   value={editForm.role || ""}
+                  disabled={!isSuperAdmin && (editForm.targetRole === "ADMIN" || editForm.targetRole === "SUPER_ADMIN" || !canManagePermissions)}
                   onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
                 >
-                  {["SUPER_ADMIN", "ADMIN", "DOCTOR", "STAFF", "RECEPTIONIST", "DONOR", "RECIPIENT"].map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
+                  {(editForm.targetRole === "ADMIN" || editForm.targetRole === "SUPER_ADMIN") && !isSuperAdmin ? (
+                    <option value={editForm.targetRole}>{editForm.targetRole} (Admin - Protected)</option>
+                  ) : (
+                    (isSuperAdmin 
+                      ? ["SUPER_ADMIN", "ADMIN", "MANAGER", "EMPLOYEE", "DOCTOR", "STAFF", "RECEPTIONIST"] 
+                      : ["MANAGER", "EMPLOYEE", "DOCTOR", "STAFF", "RECEPTIONIST"]
+                    ).map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="space-y-1">
@@ -801,13 +894,25 @@ export default function AdminUsersPage() {
                 <Input value={editForm.department || ""} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })} />
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Access Permissions (Comma Separated)</label>
-              <Input value={editForm.permissions || ""} onChange={(e) => setEditForm({ ...editForm, permissions: e.target.value })} />
+            <div className="pt-1">
+              <PermissionSelector
+                selectedPermissions={Array.isArray(editForm.permissions) ? editForm.permissions : []}
+                onChange={(newPerms) => setEditForm({ ...editForm, permissions: newPerms })}
+                role={editForm.role || "STAFF"}
+                isSuperAdmin={isSuperAdmin}
+                disabled={!isSuperAdmin && (editForm.targetRole === "ADMIN" || editForm.targetRole === "SUPER_ADMIN" || !canManagePermissions)}
+                disabledMessage={
+                  !isSuperAdmin && (editForm.targetRole === "ADMIN" || editForm.targetRole === "SUPER_ADMIN")
+                    ? "Administrator Authority Restriction: Administrators cannot modify another Administrator's role or permissions. Only the Super Administrator has authority to change Administrator permissions."
+                    : !canManagePermissions
+                    ? "Staff Restricted: Staff accounts do not have permission to modify role access levels."
+                    : undefined
+                }
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-800">
               <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} className="rounded-xl text-xs">Cancel</Button>
-              <Button type="submit" className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs">Save Account Changes</Button>
+              <Button type="submit" className="rounded-xl bg-[#285b63] hover:bg-[#1d464d] text-white text-xs">Save Account Changes</Button>
             </div>
           </form>
         </DialogContent>
@@ -815,7 +920,7 @@ export default function AdminUsersPage() {
 
       {/* Add User Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="rounded-2xl max-w-md bg-white dark:bg-slate-900 border dark:border-slate-800 p-6">
+        <DialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border dark:border-slate-800 p-6">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">Register Admin / Staff User</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
@@ -873,9 +978,19 @@ export default function AdminUsersPage() {
                 <select 
                   className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 focus:outline-none font-medium"
                   value={createForm.role}
-                  onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setCreateForm({
+                      ...createForm,
+                      role: newRole,
+                      permissions: DEFAULT_ROLE_PERMS[newRole] || createForm.permissions,
+                    });
+                  }}
                 >
-                  {["SUPER_ADMIN", "ADMIN", "DOCTOR", "STAFF", "RECEPTIONIST", "DONOR", "RECIPIENT"].map(r => (
+                  {(isSuperAdmin 
+                    ? ["ADMIN", "MANAGER", "EMPLOYEE", "DOCTOR", "STAFF", "RECEPTIONIST"] 
+                    : ["MANAGER", "EMPLOYEE", "DOCTOR", "STAFF", "RECEPTIONIST"]
+                  ).map(r => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
@@ -885,9 +1000,13 @@ export default function AdminUsersPage() {
                 <Input placeholder="e.g. Clinical Operations" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="font-semibold">Access Permissions</label>
-              <Input placeholder="VIEW_DASHBOARD, VIEW_REGISTRATIONS (or * for Super Admin)" value={createForm.permissions} onChange={(e) => setCreateForm({ ...createForm, permissions: e.target.value })} />
+            <div className="pt-1">
+              <PermissionSelector
+                selectedPermissions={Array.isArray(createForm.permissions) ? createForm.permissions : []}
+                onChange={(newPerms) => setCreateForm({ ...createForm, permissions: newPerms })}
+                role={createForm.role || "MANAGER"}
+                isSuperAdmin={isSuperAdmin}
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-800">
               <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="rounded-xl text-xs">Cancel</Button>
@@ -898,6 +1017,89 @@ export default function AdminUsersPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Invite Staff Dialog */}
+      <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+        <DialogContent className="rounded-2xl max-w-md bg-white dark:bg-slate-900 border dark:border-slate-800 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Send className="w-5 h-5 text-[#285b63]" />
+              Invite Team Member
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Send a cryptographically signed invitation link with role pre-configuration. The recipient will set their password to activate their account.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleInviteSubmit} className="space-y-4 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold">Recipient Email Address</label>
+              <Input
+                type="email"
+                placeholder="staff.member@mediyaz.org"
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="font-semibold">Assigned Role</label>
+                <select
+                  className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 focus:outline-none font-medium"
+                  value={inviteForm.role}
+                  onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                >
+                  {(isSuperAdmin ? ["ADMIN", "MANAGER", "EMPLOYEE"] : ["MANAGER", "EMPLOYEE"]).map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="font-semibold">Designation</label>
+                <Input
+                  placeholder="e.g. Doctor, Lab Tech"
+                  value={inviteForm.designation}
+                  onChange={(e) => setInviteForm({ ...inviteForm, designation: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="font-semibold">Department</label>
+              <Input
+                placeholder="Clinical Operations"
+                value={inviteForm.department}
+                onChange={(e) => setInviteForm({ ...inviteForm, department: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t dark:border-slate-800">
+              <Button type="button" variant="outline" onClick={() => setIsInviteOpen(false)} className="rounded-xl text-xs">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={inviting}
+                className="rounded-xl bg-[#285b63] hover:bg-[#1d464d] text-white text-xs font-bold"
+              >
+                {inviting ? "Sending..." : "Send Invitation"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unified Role-Aware Delete / Deletion Request Modal */}
+      {deleteTargetUser && (
+        <UnifiedDeleteModal
+          open={isDeleteModalOpen}
+          onOpenChange={setIsDeleteModalOpen}
+          resourceType="USER"
+          resourceTitle={`${deleteTargetUser.name} (${deleteTargetUser.email} - ${deleteTargetUser.role})`}
+          resourceId={deleteTargetUser._id}
+          deleteEndpoint={`/api/users?userId=${deleteTargetUser._id}`}
+          onSuccess={loadUsers}
+          requireIdConfirmation={isSuperAdmin}
+        />
+      )}
 
     </div>
   );

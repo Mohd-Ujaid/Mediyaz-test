@@ -55,6 +55,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { confirmAction } from "@/components/ui/custom-confirm-modal";
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
@@ -508,7 +509,13 @@ export default function HospitalManagementPage() {
   };
 
   const handleModalDeleteBranch = async (branchId: string) => {
-    if (!confirm("Are you sure you want to delete this branch?")) return;
+    const confirmed = await confirmAction({
+      title: "Delete Branch",
+      message: "Are you sure you want to delete this branch?",
+      confirmText: "Yes, Delete Branch",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
     if (!branchModalHospital) return;
 
     setIsBranchActionLoading(true);
@@ -796,7 +803,13 @@ data.hospitals?.forEach((h: any, index: number) => {
   };
 
   const handleSoftDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to soft delete this hospital profile? It will be archived and hidden from general assignments.")) return;
+    const confirmed = await confirmAction({
+      title: "Archive Hospital",
+      message: "Are you sure you want to soft delete this hospital profile? It will be archived and hidden from general assignments.",
+      confirmText: "Yes, Archive Hospital",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`/api/hospitals/${id}`, {
         method: "DELETE"
@@ -1109,7 +1122,13 @@ data.hospitals?.forEach((h: any, index: number) => {
   };
 
   const handleDeleteDoctor = async (doc: any) => {
-    if (!confirm(`Are you sure you want to remove ${doc.name} from ${doc.hospital.name}?`)) return;
+    const confirmed = await confirmAction({
+      title: "Remove Doctor",
+      message: `Are you sure you want to remove ${doc.name} from ${doc.hospital.name}?`,
+      confirmText: "Yes, Remove Doctor",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     try {
       const targetHosp = hospitals.find((h) => h._id === doc.hospital._id);
@@ -1745,13 +1764,12 @@ data.hospitals?.forEach((h: any, index: number) => {
           </div>
         )}
         {!loading && hospitals.length > 0 && (
-          <div className="p-4 border-t dark:border-slate-800">
-            <CustomPagination 
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => setCurrentPage(p)}
-            />
-          </div>
+          <CustomPagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={(p) => setCurrentPage(p)}
+            itemName="hospitals"
+          />
         )}
         </Card>
         </>

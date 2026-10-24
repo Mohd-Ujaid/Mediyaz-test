@@ -5,6 +5,7 @@ import { Employee } from "@/models/Employee";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import mongoose from "mongoose";
+import { ROLE_PERMISSIONS } from "@/lib/rbac/permissions";
 
 export async function GET(req: Request) {
   try {
@@ -43,7 +44,12 @@ export async function GET(req: Request) {
       ];
     }
 
-    if (role) query.role = role;
+    if (role) {
+      query.role = role;
+    } else if (userRole !== "SUPER_ADMIN") {
+      // Non-super-admins cannot view or access the Super Admin record
+      query.role = { $ne: "SUPER_ADMIN" };
+    }
     if (status) query.status = status;
     if (department) query.department = department;
 
@@ -123,7 +129,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: "Failed to create user authentication login." }, { status: 500 });
     }
 
-    const perms = assignedRole === "SUPER_ADMIN" ? ["*"] : (permissions || ["READ_PORTAL"]);
+    const perms =
+      assignedRole === "SUPER_ADMIN"
+        ? ["*"]
+        : assignedRole === "ADMIN"
+        ? (permissions && permissions.length > 0 ? permissions : ROLE_PERMISSIONS[UserRole.ADMIN])
+        : (permissions || ["READ_PORTAL"]);
 
     const user = await User.findByIdAndUpdate(
       authResult.user.id,
@@ -168,16 +179,70 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
     }
 
+    // Target user check
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
+    }
+
+    // RBAC: An Admin CANNOT modify or alter the Super Administrator
+    if (targetUser.role === "SUPER_ADMIN" && userRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Administrators cannot modify the Super Administrator." },
+        { status: 403 }
+      );
+    }
+
+    // RBAC: An Admin CANNOT modify another Admin's role or permissions (Admin can ONLY modify staff permissions)
+    if (targetUser.role === "ADMIN" && userRole !== "SUPER_ADMIN") {
+      if (updateFields.role !== undefined || updateFields.permissions !== undefined) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: "Forbidden: Administrators cannot modify another Administrator's role or permissions. Only the Super Administrator can manage Administrator credentials." 
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // RBAC: Non-Super-Admins CANNOT elevate anyone to ADMIN or SUPER_ADMIN
+    if (userRole !== "SUPER_ADMIN" && updateFields.role) {
+      if (updateFields.role === "ADMIN" || updateFields.role === "SUPER_ADMIN") {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: Administrators can only manage staff roles and cannot elevate accounts to Administrator." },
+          { status: 403 }
+        );
+      }
+    }
+
     // Whitelist allowable fields to prevent mass assignment and unauthorized privilege escalation
     const allowedKeys = ["name", "phone", "department", "status"];
     if (userRole === "SUPER_ADMIN") {
       allowedKeys.push("role", "permissions");
+    } else if (userRole === "ADMIN") {
+      // Admin can only update role and permissions for non-admin staff
+      if (targetUser.role !== "ADMIN" && targetUser.role !== "SUPER_ADMIN") {
+        allowedKeys.push("role", "permissions");
+      }
     }
 
     const sanitizedUpdate: any = {};
     for (const key of allowedKeys) {
       if (updateFields[key] !== undefined) {
-        sanitizedUpdate[key] = updateFields[key];
+        if (key === "permissions") {
+          // Normalize permissions array
+          if (Array.isArray(updateFields.permissions)) {
+            sanitizedUpdate.permissions = updateFields.permissions;
+          } else if (typeof updateFields.permissions === "string") {
+            sanitizedUpdate.permissions = updateFields.permissions
+              .split(",")
+              .map((p: string) => p.trim())
+              .filter(Boolean);
+          }
+        } else {
+          sanitizedUpdate[key] = updateFields[key];
+        }
       }
     }
 
@@ -186,10 +251,6 @@ export async function PATCH(req: Request) {
       { $set: sanitizedUpdate },
       { new: true }
     ).select("-password");
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
-    }
 
     // Update password if provided
     if (password && String(password).trim().length >= 6 && userRole === "SUPER_ADMIN") {
@@ -221,8 +282,16 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized: Please log in." }, { status: 401 });
     }
     const userRole = (session.user as any).role;
-    if (userRole !== "ADMIN" && userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+
+    // STRICT: Only the Super Administrator has permission to delete users from the system
+    if (userRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Forbidden: Only the Super Administrator has permission to delete users from the system.",
+        },
+        { status: 403 }
+      );
     }
 
     await connectToDatabase();
@@ -233,22 +302,17 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, error: "User ID is required." }, { status: 400 });
     }
 
-    // Protect against self-deletion
+    // Protect against self-deletion of root Super Admin
     if ((session.user as any).id === userId) {
-      return NextResponse.json({ success: false, error: "Cannot delete your own active administrator account." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Cannot delete your own active Super Administrator account." },
+        { status: 400 }
+      );
     }
 
-    // Target user authorization check: Non-SUPER_ADMIN cannot delete another ADMIN or SUPER_ADMIN
     const targetUser = await User.findById(userId);
     if (!targetUser) {
       return NextResponse.json({ success: false, error: "User not found." }, { status: 404 });
-    }
-
-    if (
-      (targetUser.role === "ADMIN" || targetUser.role === "SUPER_ADMIN") &&
-      userRole !== "SUPER_ADMIN"
-    ) {
-      return NextResponse.json({ success: false, error: "Only Super Admins can delete administrative accounts." }, { status: 403 });
     }
 
     await User.findByIdAndDelete(userId);
@@ -264,7 +328,7 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "User and authentication credentials deleted successfully!"
+      message: "User and authentication credentials deleted successfully!",
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

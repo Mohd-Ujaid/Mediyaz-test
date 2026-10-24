@@ -103,6 +103,7 @@ export default function AdminEggDonorRegistrationsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Modal / Detail view
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
@@ -251,7 +252,7 @@ export default function AdminEggDonorRegistrationsPage() {
     try {
       const params = new URLSearchParams({
         page: currentPage.toString(),
-        limit: "10",
+        limit: itemsPerPage.toString(),
         tab: activeTab,
       });
       if (search.trim()) params.append("search", search.trim());
@@ -278,7 +279,7 @@ export default function AdminEggDonorRegistrationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, search, statusFilter, bloodGroupFilter, activeTab]);
+  }, [currentPage, itemsPerPage, search, statusFilter, bloodGroupFilter, activeTab]);
 
   const handleTabChange = (tab: EggRegTab) => {
     setActiveTab(tab);
@@ -1740,13 +1741,18 @@ export default function AdminEggDonorRegistrationsPage() {
           </div>
         )}
         {!loading && registrations.length > 0 && (
-          <div className="p-4 border-t">
-            <CustomPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={(p) => setCurrentPage(p)}
-            />
-          </div>
+          <CustomPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={itemsPerPage}
+            onPageChange={(p) => setCurrentPage(p)}
+            onPageSizeChange={(newSize) => {
+              setItemsPerPage(newSize);
+              setCurrentPage(1);
+            }}
+            itemName="egg registrations"
+          />
         )}
       </Card>
 

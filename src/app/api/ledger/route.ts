@@ -8,6 +8,41 @@ import { headers } from "next/headers";
 import mongoose from "mongoose";
 import { formatDotDate } from "@/lib/invoice-utils";
 
+function parseYearAndMonth(dateVal: any, fallbackDate: any = null): { year: number | null; month: number | null } {
+  const tryParse = (d: any): { year: number | null; month: number | null } => {
+    if (!d) return { year: null, month: null };
+    if (typeof d === "string") {
+      const trimmed = d.trim();
+      if (trimmed.includes(".")) {
+        const parts = trimmed.split(".");
+        if (parts.length === 3) {
+          const month = parseInt(parts[1], 10);
+          const year = parseInt(parts[2], 10);
+          if (!isNaN(year) && !isNaN(month)) return { year, month };
+        }
+      }
+      if (trimmed.includes("-")) {
+        const parts = trimmed.split("-");
+        if (parts.length >= 3) {
+          const year = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10);
+          if (!isNaN(year) && !isNaN(month)) return { year, month };
+        }
+      }
+    }
+    const dt = new Date(d);
+    if (!isNaN(dt.getTime())) {
+      return { year: dt.getFullYear(), month: dt.getMonth() + 1 };
+    }
+    return { year: null, month: null };
+  };
+
+  const res = tryParse(dateVal);
+  if (res.year && res.month) return res;
+  if (fallbackDate) return tryParse(fallbackDate);
+  return { year: null, month: null };
+}
+
 export async function GET(req: Request) {
   try {
     const reqHeaders = await headers();
@@ -36,6 +71,8 @@ export async function GET(req: Request) {
     const branchParam = searchParams.get("branch") || "ALL";
     const startDateParam = searchParams.get("startDate") || "";
     const endDateParam = searchParams.get("endDate") || "";
+    const yearParam = searchParams.get("year") || "ALL";
+    const monthParam = searchParams.get("month") || "ALL";
 
     const baseQuery: any = {
       status: { $in: ["FILE_COMPLETED", "COMPLETED", "APPROVED"] },
@@ -79,9 +116,9 @@ export async function GET(req: Request) {
     }
 
     const ledgerFields =
-      "registrationId donorId donorType status personalInfo.fullName contactInfo.mobileNumber assignedHospital clinicDeal donorDeal isInvoiceGenerated invoiceNumber invoiceDate pickupDate isDonorPaid paidAt createdAt updatedAt";
+      "_id registrationId donorId donorType status personalInfo.fullName contactInfo.mobileNumber assignedHospital assignedBranch assignedBranchId pickupLocation opuLocation clinicDeal donorDeal isInvoiceGenerated invoiceNumber invoiceDate pickupDate isDonorPaid paidAt createdAt updatedAt";
     const hospitalFields =
-      "name shortName code city state eggDonorDealPrice eggProfileDonorDealPrice profiledonorDealPrice donorDealPrice spermDonorDealPrice spermProfileDonorDealPrice";
+      "name shortName code city state address addressLine1 gstNumber branches eggDonorDealPrice eggProfileDonorDealPrice profiledonorDealPrice donorDealPrice spermDonorDealPrice spermProfileDonorDealPrice";
 
     // Fetch records
     let rawRecords: any[] = [];
@@ -225,7 +262,14 @@ export async function GET(req: Request) {
         ? formatDotDate(r.supplyDate)
         : (r.pickupDate ? formatDotDate(r.pickupDate) : "-");
 
+      const assignedBranchStr = r.assignedBranch || clinicDeal.assignedBranch || hosp?.branches?.[0]?.branchName || "";
+      const { year: parsedYear, month: parsedMonth } = parseYearAndMonth(
+        clinicDeal.invoiceDate || r.invoiceDate,
+        r.pickupDate || r.createdAt
+      );
+
       return {
+        _id: r._id?.toString() || r.registrationId,
         sNo: sNoCounter++,
         donorName: r.personalInfo?.fullName || "Donor",
         registrationId: r.registrationId,
@@ -243,6 +287,13 @@ export async function GET(req: Request) {
         invoiceNumber,
         amount: dealPrice,
         dealPrice,
+        serviceCharge,
+        donorReimbursement: Math.max(0, dealPrice - serviceCharge),
+        assignedHospital: hosp,
+        assignedBranch: assignedBranchStr,
+        assignedBranchId: r.assignedBranchId || "",
+        parsedYear,
+        parsedMonth,
         tdsPercentage,
         tdsAmount,
         gstAmount,
@@ -302,8 +353,13 @@ export async function GET(req: Request) {
 
       const dateStr = r.pickupDate ? formatDotDate(r.pickupDate) : formatDotDate(r.createdAt || new Date());
       const paidAtStr = donorDeal.paidAt || r.paidAt ? formatDotDate(donorDeal.paidAt || r.paidAt) : undefined;
+      const { year: parsedYear, month: parsedMonth } = parseYearAndMonth(
+        r.pickupDate,
+        r.createdAt
+      );
 
       return {
+        _id: r._id?.toString() || r.registrationId,
         sNo: donorSNoCounter++,
         registrationId: r.registrationId,
         donorId: r.donorId || r.registrationId,
@@ -320,6 +376,8 @@ export async function GET(req: Request) {
         date: dateStr,
         paidAt: paidAtStr,
         paymentRef: donorDeal.paymentReference || "",
+        parsedYear,
+        parsedMonth,
       };
     });
 
@@ -337,12 +395,25 @@ export async function GET(req: Request) {
     if (branchParam && branchParam !== "ALL") {
       const bLower = branchParam.toLowerCase().trim();
       filteredClinicEntries = filteredClinicEntries.filter((e) =>
+        (e.assignedBranch && e.assignedBranch.toLowerCase().includes(bLower)) ||
         (e.donorOpuLocation && e.donorOpuLocation.toLowerCase().includes(bLower)) ||
         (e.opuLocation && e.opuLocation.toLowerCase().includes(bLower)) ||
         (e.location && e.location.toLowerCase().includes(bLower)) ||
         (e.hospitalLocation && e.hospitalLocation.toLowerCase().includes(bLower)) ||
         (e.hospitalCity && e.hospitalCity.toLowerCase().includes(bLower))
       );
+    }
+
+    // Filter by Year if selected
+    if (yearParam && yearParam !== "ALL") {
+      const targetYear = parseInt(yearParam, 10);
+      filteredClinicEntries = filteredClinicEntries.filter((e) => e.parsedYear === targetYear);
+    }
+
+    // Filter by Month if selected
+    if (monthParam && monthParam !== "ALL") {
+      const targetMonth = parseInt(monthParam, 10);
+      filteredClinicEntries = filteredClinicEntries.filter((e) => e.parsedMonth === targetMonth);
     }
 
     // Filter by date range if provided
@@ -383,31 +454,30 @@ export async function GET(req: Request) {
       filteredDonorEntries = donorEntries.filter((e) => e.paymentStatus === "PARTIALLY_PAID");
     }
 
-    // Filter donor by date if provided
-    if (startDateParam || endDateParam) {
-      const parseEntryTime = (dStr?: string) => {
-        if (!dStr || dStr === "-") return null;
-        if (dStr.includes(".")) {
-          const parts = dStr.split(".");
-          if (parts.length === 3) {
-            return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
-          }
-        }
-        const t = new Date(dStr).getTime();
-        return isNaN(t) ? null : t;
-      };
-      const startMs = startDateParam ? new Date(startDateParam).setHours(0, 0, 0, 0) : null;
-      const endMs = endDateParam ? new Date(endDateParam).setHours(23, 59, 59, 999) : null;
-
-      filteredDonorEntries = filteredDonorEntries.filter((e) => {
-        const t = parseEntryTime(e.date);
-        if (!t) return true;
-        if (startMs && t < startMs) return false;
-        if (endMs && t > endMs) return false;
-        return true;
-      });
+    // Filter donor by Year if selected
+    if (yearParam && yearParam !== "ALL") {
+      const targetYear = parseInt(yearParam, 10);
+      filteredDonorEntries = filteredDonorEntries.filter((e) => e.parsedYear === targetYear);
     }
-    filteredDonorEntries = filteredDonorEntries.map((e, idx) => ({ ...e, sNo: idx + 1 }));
+
+    // Filter donor by Month if selected
+    if (monthParam && monthParam !== "ALL") {
+      const targetMonth = parseInt(monthParam, 10);
+      filteredDonorEntries = filteredDonorEntries.filter((e) => e.parsedMonth === targetMonth);
+    }
+
+    // Calculate Available Years dynamically
+    const yearsSet = new Set<number>();
+    clinicEntries.forEach((e) => {
+      if (e.parsedYear) yearsSet.add(e.parsedYear);
+    });
+    donorEntries.forEach((e) => {
+      if (e.parsedYear) yearsSet.add(e.parsedYear);
+    });
+    if (yearsSet.size === 0) {
+      yearsSet.add(new Date().getFullYear());
+    }
+    const availableYears = Array.from(yearsSet).sort((a, b) => b - a);
 
     // Totals calculations
     const totalClinicDeal = filteredClinicEntries.reduce((sum, e) => sum + (e.dealPrice || e.amount || 0), 0);
@@ -502,6 +572,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       hospitals: allHospitals,
+      availableYears,
       clinicLedger: {
         entries: filteredClinicEntries,
         totals: clinicTotals,
