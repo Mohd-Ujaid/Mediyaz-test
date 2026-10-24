@@ -4,7 +4,12 @@ import { EggDonorRegistration } from "@/models/EggDonorRegistration";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import { Hospital } from "@/models/Hospital";
-import { computeEggDonorManagementStatus, mergeWithDotNotation } from "@/features/donor-registration/utils/egg-donor-status";
+import {
+  computeEggDonorManagementStatus,
+  mergeWithDotNotation,
+  hasUploadedViralMarkersReport,
+  hasUploadedBloodReport,
+} from "@/features/donor-registration/utils/egg-donor-status";
 import mongoose from "mongoose";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {

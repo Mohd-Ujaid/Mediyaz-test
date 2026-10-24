@@ -1,0 +1,1081 @@
+[
+  {
+    "_id": "6acf7af2f85b780b5161601e",
+    "donorCode": "MED-ED-2104",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 26,
+    "bloodType": "B+",
+    "rhFactor": "Positive",
+    "heightCm": 165,
+    "heightFormatted": "5'5\" (165 cm)",
+    "weightKg": 55,
+    "bmi": 20.2,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Wavy",
+    "skinTone": "Wheatish",
+    "bodyBuild": "Slender / Athletic",
+    "ethnicity": "North Indian",
+    "ancestryRegion": "Delhi / Punjab",
+    "religion": "Hindu",
+    "motherTongue": "Hindi",
+    "languages": [
+      "Hindi",
+      "English",
+      "Punjabi"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "M.Tech in Data Science",
+    "profession": "Senior AI Analytics Engineer",
+    "provenFertility": "Mother of 1 healthy daughter (4 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Classical Kathak Dance",
+      "Debating",
+      "Badminton"
+    ],
+    "hobbies": [
+      "Photography",
+      "Hiking",
+      "Reading Historical Biographies"
+    ],
+    "donorStatement": "Having experienced the immense love and joy of raising my own healthy daughter, I feel deeply fulfilled to be able to help an aspiring family realize their dream of parenthood.",
+    "avatarColor": "#285b63",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.4% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "No structural or numerical aberrations detected"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "No hereditary disorders; lived to age 86 and 88.",
+      "paternalGrandparents": "Good cardiovascular health; lived to age 82.",
+      "parents": "Both parents active and healthy; mother age 55, father age 58.",
+      "siblings": "One younger brother (age 24), software developer, excellent health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-DEL-00412"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.250Z",
+    "updatedAt": "2026-10-14T12:52:02.250Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b5161601f",
+    "donorCode": "MED-ED-2189",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 28,
+    "bloodType": "O+",
+    "rhFactor": "Positive",
+    "heightCm": 168,
+    "heightFormatted": "5'6\" (168 cm)",
+    "weightKg": 58,
+    "bmi": 20.5,
+    "eyeColor": "Hazel",
+    "hairColor": "Dark Brown",
+    "hairTexture": "Straight",
+    "skinTone": "Fair",
+    "bodyBuild": "Medium / Elegant",
+    "ethnicity": "West Indian",
+    "ancestryRegion": "Maharashtra / Konkan",
+    "religion": "Hindu",
+    "motherTongue": "Marathi",
+    "languages": [
+      "Marathi",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Bachelor's Degree",
+    "degree": "B.Arch (Bachelor of Architecture)",
+    "profession": "Urban Planning & Sustainable Architect",
+    "provenFertility": "Mother of 1 healthy son (3.5 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Watercolor Architectural Sketching",
+      "Swimming",
+      "Flute"
+    ],
+    "hobbies": [
+      "Pottery",
+      "Heritage Architecture Walks",
+      "Marathon Running"
+    ],
+    "donorStatement": "Life is built around bringing warmth and security into homes. Giving back through this altruistic process is my humble way of spreading life and unconditional love.",
+    "avatarColor": "#ff7468",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.1% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "No structural translocations or aneuploidies"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Long-lived lineage with no known familial genetic conditions.",
+      "paternalGrandparents": "No history of metabolic syndromes or chronic health problems.",
+      "parents": "Both parents active; father retired civil engineer, mother high-school educator.",
+      "siblings": "One older sister, doctor (pediatrician), no health concerns."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-MAH-00891"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.251Z",
+    "updatedAt": "2026-10-14T12:52:02.251Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616020",
+    "donorCode": "MED-ED-2240",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 25,
+    "bloodType": "A+",
+    "rhFactor": "Positive",
+    "heightCm": 162,
+    "heightFormatted": "5'4\" (162 cm)",
+    "weightKg": 52,
+    "bmi": 19.8,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Wavy",
+    "skinTone": "Medium",
+    "bodyBuild": "Petite / Athletic",
+    "ethnicity": "South Indian",
+    "ancestryRegion": "Karnataka / Bangalore",
+    "religion": "Hindu",
+    "motherTongue": "Kannada",
+    "languages": [
+      "Kannada",
+      "English",
+      "Tamil",
+      "Hindi"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "M.Sc in Molecular Biotechnology",
+    "profession": "Genomics Research Specialist",
+    "provenFertility": "Mother of 1 healthy boy (4 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Carnatic Classical Vocalist",
+      "Tennis",
+      "Chess"
+    ],
+    "hobbies": [
+      "Scientific Literature",
+      "Yoga",
+      "Birdwatching"
+    ],
+    "donorStatement": "Working in biomedical science, I witness every day how reproductive medicine bridges science and humanity. Assisting another woman to experience motherhood is an honor.",
+    "avatarColor": "#1b4c54",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.3% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Normal female chromosomal complement"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Lived to late 80s; highly energetic and active lifestyles.",
+      "paternalGrandparents": "No history of early-onset cardiac conditions or malignancies.",
+      "parents": "Both living in good health; mother botanist, father retired bank manager.",
+      "siblings": "No siblings (only child); comprehensive multigenerational pedigree verified."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-KAR-01124"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.251Z",
+    "updatedAt": "2026-10-14T12:52:02.251Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616021",
+    "donorCode": "MED-ED-2305",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Pending Cryo-Hold Verification",
+    "age": 27,
+    "bloodType": "AB+",
+    "rhFactor": "Positive",
+    "heightCm": 172,
+    "heightFormatted": "5'8\" (172 cm)",
+    "weightKg": 62,
+    "bmi": 21,
+    "eyeColor": "Light Brown",
+    "hairColor": "Dark Brown",
+    "hairTexture": "Curly",
+    "skinTone": "Fair",
+    "bodyBuild": "Tall / Athletic",
+    "ethnicity": "North Indian",
+    "ancestryRegion": "Kashmir / Himachal Pradesh",
+    "religion": "Sikh",
+    "motherTongue": "Punjabi",
+    "languages": [
+      "Punjabi",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "MBA in Healthcare Management",
+    "profession": "Healthcare Operations Director",
+    "provenFertility": "Mother of 1 healthy daughter (3 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Equestrian Sports",
+      "Painting",
+      "Guitar"
+    ],
+    "hobbies": [
+      "Wilderness Trekking",
+      "Gardening",
+      "Classical Cinema"
+    ],
+    "donorStatement": "I believe every loving family deserves the opportunity to share warmth and laughter. Donating is an altruistic commitment to bringing pure happiness into the world.",
+    "avatarColor": "#597e85",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.6% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Normal cytogenetic banding pattern"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Longevity trait; grandfather 91 (retired military), grandmother 87.",
+      "paternalGrandparents": "No known genetic or autoimmune illnesses.",
+      "parents": "Mother age 56, father age 60; active lifestyles, marathon runners.",
+      "siblings": "Two brothers, both engineers, excellent physical health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-PB-00305"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.251Z",
+    "updatedAt": "2026-10-14T12:52:02.251Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616022",
+    "donorCode": "MED-ED-2371",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 24,
+    "bloodType": "O-",
+    "rhFactor": "Negative",
+    "heightCm": 160,
+    "heightFormatted": "5'3\" (160 cm)",
+    "weightKg": 50,
+    "bmi": 19.5,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Straight",
+    "skinTone": "Olive / Wheatish",
+    "bodyBuild": "Slender",
+    "ethnicity": "East Indian",
+    "ancestryRegion": "West Bengal / Kolkata",
+    "religion": "Hindu",
+    "motherTongue": "Bengali",
+    "languages": [
+      "Bengali",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "M.A. in English Literature",
+    "profession": "Content Strategist & Editorial Author",
+    "provenFertility": "Mother of 1 healthy child (3 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Creative Writing",
+      "Rabindra Sangeet Vocalist",
+      "Violin"
+    ],
+    "hobbies": [
+      "Creative Writing",
+      "Culinary Arts",
+      "Book Clubs"
+    ],
+    "donorStatement": "Words can heal hearts, but the gift of family creates an entirely new future. I am blessed to contribute to another family's beautiful beginning.",
+    "avatarColor": "#8e6e53",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.2% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Standard chromosomal configuration"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Lived to 84 and 89; no chronic neuro-degenerative illnesses.",
+      "paternalGrandparents": "Academic scholars, excellent health history.",
+      "parents": "Parents living in Kolkata; mother college professor, father chemist.",
+      "siblings": "One sister (age 29), architect in Pune, excellent health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-WB-00714"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.251Z",
+    "updatedAt": "2026-10-14T12:52:02.251Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616023",
+    "donorCode": "MED-ED-2419",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 29,
+    "bloodType": "B-",
+    "rhFactor": "Negative",
+    "heightCm": 167,
+    "heightFormatted": "5'6\" (167 cm)",
+    "weightKg": 57,
+    "bmi": 20.4,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Wavy",
+    "skinTone": "Wheatish",
+    "bodyBuild": "Athletic / Toned",
+    "ethnicity": "South Indian",
+    "ancestryRegion": "Tamil Nadu / Chennai",
+    "religion": "Christian",
+    "motherTongue": "Tamil",
+    "languages": [
+      "Tamil",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Doctorate",
+    "degree": "Ph.D. in Biochemistry",
+    "profession": "Senior Bio-Pharmaceutical Scientist",
+    "provenFertility": "Mother of 1 healthy boy (4.5 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Bharatanatyam Dance",
+      "Violin",
+      "Triathlons"
+    ],
+    "hobbies": [
+      "Long-distance Running",
+      "Scuba Diving",
+      "Nature Conservation"
+    ],
+    "donorStatement": "To give another human being the chance to hold their newborn is the most transformative feeling. I participate with profound gratitude and hope for your family.",
+    "avatarColor": "#225661",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.0% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Normal G-banded female karyotype"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "No hereditary cardiac or metabolic diseases across lineage.",
+      "paternalGrandparents": "Lived healthy, long lives beyond 85 years.",
+      "parents": "Mother high-school principal, father civil engineer; both healthy.",
+      "siblings": "One brother, practicing cardiologist in London, zero health conditions."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-TN-00912"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.251Z",
+    "updatedAt": "2026-10-14T12:52:02.251Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616024",
+    "donorCode": "MED-SD-1092",
+    "gameteType": "sperm",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Quarantine Cleared)",
+    "age": 27,
+    "bloodType": "O+",
+    "rhFactor": "Positive",
+    "heightCm": 180,
+    "heightFormatted": "5'11\" (180 cm)",
+    "weightKg": 74,
+    "bmi": 22.8,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Straight",
+    "skinTone": "Wheatish",
+    "bodyBuild": "Athletic",
+    "ethnicity": "North Indian",
+    "ancestryRegion": "Haryana / NCR",
+    "religion": "Hindu",
+    "motherTongue": "Hindi",
+    "languages": [
+      "Hindi",
+      "English"
+    ],
+    "educationLevel": "Bachelor's Degree",
+    "degree": "B.Tech in Mechanical Engineering",
+    "profession": "Robotics Design Engineer",
+    "provenFertility": "Healthy Semen Analysis: Motility > 65%, Morphology > 12% Strict Kruger",
+    "livingChildren": 0,
+    "abortion": 0,
+    "talents": [
+      "Cricket (State Level Player)",
+      "Guitar",
+      "Mechanical Modeling"
+    ],
+    "hobbies": [
+      "Cycling",
+      "Astrophotography",
+      "Woodworking"
+    ],
+    "donorStatement": "Health, optimism, and kindness are meant to be shared. Helping deserving couples start a thriving family is something I am proud to support with clinical integrity.",
+    "avatarColor": "#1d3840",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.3% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XY (Normal Male Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Normal male chromosomal complement"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Active agricultural background, lived to 90+ years.",
+      "paternalGrandparents": "Military background, excellent longevity and heart health.",
+      "parents": "Both parents active; father retired government officer, mother homemaker.",
+      "siblings": "Two sisters, both postgraduates, no known medical issues."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-HR-00109"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.251Z",
+    "updatedAt": "2026-10-14T12:52:02.251Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616025",
+    "donorCode": "MED-SD-1144",
+    "gameteType": "sperm",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Quarantine Cleared)",
+    "age": 29,
+    "bloodType": "A+",
+    "rhFactor": "Positive",
+    "heightCm": 183,
+    "heightFormatted": "6'0\" (183 cm)",
+    "weightKg": 78,
+    "bmi": 23.3,
+    "eyeColor": "Hazel",
+    "hairColor": "Dark Brown",
+    "hairTexture": "Wavy",
+    "skinTone": "Fair",
+    "bodyBuild": "Tall / Athletic",
+    "ethnicity": "West Indian",
+    "ancestryRegion": "Gujarat / Ahmedabad",
+    "religion": "Jain",
+    "motherTongue": "Gujarati",
+    "languages": [
+      "Gujarati",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "Chartered Accountant (CA) & M.Com",
+    "profession": "Senior Investment Banker",
+    "provenFertility": "High Cryo-Survival: Post-Thaw Motile Count > 32 Million/mL",
+    "livingChildren": 0,
+    "abortion": 0,
+    "talents": [
+      "Table Tennis",
+      "Piano",
+      "Financial Analysis"
+    ],
+    "hobbies": [
+      "Squash",
+      "Travel",
+      "Philanthropic Mentoring"
+    ],
+    "donorStatement": "Family is the foundational rock of society. Providing an opportunity for intended parents to welcome their bundle of joy is deeply meaningful to me.",
+    "avatarColor": "#285b63",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.1% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XY (Normal Male Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Standard 46,XY male chromosomal structure"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Lived past 85 years; robust health with no chronic ailments.",
+      "paternalGrandparents": "Commercial business leaders, long life expectancy.",
+      "parents": "Both parents active; father textile entrepreneur, mother community organizer.",
+      "siblings": "One younger brother, software engineer, zero chronic health conditions."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-GJ-00114"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.252Z",
+    "updatedAt": "2026-10-14T12:52:02.252Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616026",
+    "donorCode": "MED-SD-1205",
+    "gameteType": "sperm",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Quarantine Cleared)",
+    "age": 26,
+    "bloodType": "B+",
+    "rhFactor": "Positive",
+    "heightCm": 178,
+    "heightFormatted": "5'10\" (178 cm)",
+    "weightKg": 71,
+    "bmi": 22.4,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Straight",
+    "skinTone": "Wheatish",
+    "bodyBuild": "Athletic / Lean",
+    "ethnicity": "South Indian",
+    "ancestryRegion": "Kerala / Kochi",
+    "religion": "Christian",
+    "motherTongue": "Malayalam",
+    "languages": [
+      "Malayalam",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Doctorate",
+    "degree": "MBBS, MD (General Medicine)",
+    "profession": "Internal Medicine Specialist Physician",
+    "provenFertility": "Post-Thaw Progressive Motility: > 60%",
+    "livingChildren": 0,
+    "abortion": 0,
+    "talents": [
+      "Football (Striker)",
+      "Violin",
+      "Public Health Research"
+    ],
+    "hobbies": [
+      "Open Water Swimming",
+      "Reading Medical History",
+      "Cycling"
+    ],
+    "donorStatement": "As a physician, I recognize how difficult the fertility journey can be for families. Being able to offer genetic health and safety is an extension of my life's oath.",
+    "avatarColor": "#20464f",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.2% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XY (Normal Male Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Normal G-banded karyotype without translocations"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Generations of educators and doctors, no hereditary diseases.",
+      "paternalGrandparents": "Grandfather lived to 92, grandmother lived to 89.",
+      "parents": "Both parents active; father professor of biology, mother school counselor.",
+      "siblings": "One brother, practicing anesthesiologist, perfect health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-KER-00205"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.252Z",
+    "updatedAt": "2026-10-14T12:52:02.252Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616027",
+    "donorCode": "MED-ED-2488",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 26,
+    "bloodType": "A-",
+    "rhFactor": "Negative",
+    "heightCm": 166,
+    "heightFormatted": "5'5\" (166 cm)",
+    "weightKg": 56,
+    "bmi": 20.3,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Straight",
+    "skinTone": "Fair",
+    "bodyBuild": "Slender",
+    "ethnicity": "North Indian",
+    "ancestryRegion": "Rajasthan / Jaipur",
+    "religion": "Hindu",
+    "motherTongue": "Hindi",
+    "languages": [
+      "Hindi",
+      "English",
+      "Marwari"
+    ],
+    "educationLevel": "Bachelor's Degree",
+    "degree": "B.Des in Fashion & Textile Design",
+    "profession": "Sustainable Textile Designer",
+    "provenFertility": "Mother of 1 healthy child (3 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Textile Weaving",
+      "Sitar Player",
+      "Yoga"
+    ],
+    "hobbies": [
+      "Sketching",
+      "Culinary Exploration",
+      "Yoga"
+    ],
+    "donorStatement": "Creating beauty and nurturing new beginnings is what brings meaning to existence. I hope my contribution brings endless joy to your household.",
+    "avatarColor": "#c2544a",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.4% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Normal female chromosomal constitution"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "No history of metabolic or oncological predispositions.",
+      "paternalGrandparents": "Lived active lives past 85 years in Jaipur.",
+      "parents": "Both parents active; father handicrafts exporter, mother educator.",
+      "siblings": "One older brother, mechanical engineer, excellent health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-RAJ-00488"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.252Z",
+    "updatedAt": "2026-10-14T12:52:02.252Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616028",
+    "donorCode": "MED-SD-1277",
+    "gameteType": "sperm",
+    "availability": "quarantine",
+    "availabilityLabel": "Pending Cryo-Hold Verification",
+    "age": 28,
+    "bloodType": "O-",
+    "rhFactor": "Negative",
+    "heightCm": 182,
+    "heightFormatted": "5'11\" (182 cm)",
+    "weightKg": 76,
+    "bmi": 22.9,
+    "eyeColor": "Light Brown",
+    "hairColor": "Dark Brown",
+    "hairTexture": "Wavy",
+    "skinTone": "Fair",
+    "bodyBuild": "Athletic",
+    "ethnicity": "North Indian",
+    "ancestryRegion": "Uttarakhand / Dehradun",
+    "religion": "Hindu",
+    "motherTongue": "Hindi",
+    "languages": [
+      "Hindi",
+      "English"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "M.Sc in Environmental Science & Forestry",
+    "profession": "Ecological Project Coordinator",
+    "provenFertility": "Laboratory Sperm Count: > 85 Million/mL, Strict Normal Morphology > 14%",
+    "livingChildren": 0,
+    "abortion": 0,
+    "talents": [
+      "Mountaineering",
+      "Badminton",
+      "Classical Flute"
+    ],
+    "hobbies": [
+      "Trail Running",
+      "Environmental Conservation",
+      "Wildlife Photography"
+    ],
+    "donorStatement": "Nature teaches us about interconnectedness. Donating is an altruistic gesture to help an aspiring couple build their family on a foundation of health and love.",
+    "avatarColor": "#32626b",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.3% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XY (Normal Male Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Standard 46,XY karyotype without alterations"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "Active Himalayan hill ancestry, lived to 90 and 94.",
+      "paternalGrandparents": "No history of early cardiovascular mortality.",
+      "parents": "Both parents active; father retired school principal, mother botanist.",
+      "siblings": "One brother, civil servant in New Delhi, excellent physical health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-UK-00277"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.252Z",
+    "updatedAt": "2026-10-14T12:52:02.252Z"
+  },
+  {
+    "_id": "6acf7af2f85b780b51616029",
+    "donorCode": "MED-ED-2533",
+    "gameteType": "egg",
+    "availability": "available",
+    "availabilityLabel": "Available Immediately (Vitrified)",
+    "age": 27,
+    "bloodType": "B+",
+    "rhFactor": "Positive",
+    "heightCm": 164,
+    "heightFormatted": "5'4\" (164 cm)",
+    "weightKg": 54,
+    "bmi": 20.1,
+    "eyeColor": "Dark Brown",
+    "hairColor": "Black",
+    "hairTexture": "Wavy",
+    "skinTone": "Wheatish",
+    "bodyBuild": "Medium",
+    "ethnicity": "South Indian",
+    "ancestryRegion": "Andhra Pradesh / Hyderabad",
+    "religion": "Hindu",
+    "motherTongue": "Telugu",
+    "languages": [
+      "Telugu",
+      "English",
+      "Hindi"
+    ],
+    "educationLevel": "Master's Degree",
+    "degree": "M.Pharm in Pharmacology",
+    "profession": "Clinical Drug Safety Specialist",
+    "provenFertility": "Mother of 1 healthy daughter (4 years old)",
+    "livingChildren": 1,
+    "abortion": 0,
+    "talents": [
+      "Kuchipudi Classical Dance",
+      "Veena Player",
+      "Badminton"
+    ],
+    "hobbies": [
+      "Classical Music",
+      "Baking",
+      "Volunteering for Literacy"
+    ],
+    "donorStatement": "Children bring unconditional warmth and life to a home. As a mother, I want to empower another family to feel that very same joy and completion.",
+    "avatarColor": "#285b63",
+    "viralMarkers": {
+      "hiv": "Non-Reactive",
+      "hbsAg": "Non-Reactive",
+      "hcv": "Non-Reactive",
+      "vdrl": "Non-Reactive"
+    },
+    "geneticScreenings": {
+      "thalassemia": {
+        "status": "Negative",
+        "method": "Automated Cation-Exchange HPLC",
+        "hba2Fraction": "2.1% (Normal Reference: <3.5%)"
+      },
+      "karyotype": {
+        "result": "46,XX (Normal Female Karyotype)",
+        "bands": "550-Band Resolution",
+        "resolution": "Standard 46,XX female karyotype"
+      },
+      "sma": "Non-Carrier",
+      "cysticFibrosis": "Non-Carrier",
+      "g6pd": "Normal",
+      "infectiousSerology": {
+        "hiv": "Non-Reactive",
+        "hbsAg": "Non-Reactive",
+        "hcv": "Non-Reactive",
+        "vdrl": "Non-Reactive",
+        "chlamydiaPcr": "Negative",
+        "cmv": "IgG Positive, IgM Negative (Low Risk)"
+      }
+    },
+    "familyPedigree": {
+      "maternalGrandparents": "No known genetic or chronic metabolic illnesses.",
+      "paternalGrandparents": "Lived past 86 years in robust health.",
+      "parents": "Both parents active; father chartered accountant, mother bank manager.",
+      "siblings": "One brother, software architect in Hyderabad, excellent health."
+    },
+    "statutoryCompliance": {
+      "artActRegistered": true,
+      "rule13InsuranceActive": true,
+      "lifetimeDonationLimitCompliant": true,
+      "registryToken": "REG-2026-IND-AP-00533"
+    },
+    "__v": 0,
+    "createdAt": "2026-10-14T12:52:02.252Z",
+    "updatedAt": "2026-10-14T12:52:02.252Z"
+  }
+]

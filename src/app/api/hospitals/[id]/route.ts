@@ -13,7 +13,10 @@ export async function PUT(
   try {
     const reqHeaders = await headers();
     const session = await auth.api.getSession({ headers: reqHeaders });
-    if (!session || !["ADMIN", "SUPER_ADMIN"].includes((session.user as any).role)) {
+    const userRole = (session?.user as any)?.role;
+    const userPermissions = (session?.user as any)?.permissions || [];
+    const isAuthorized = session && (["ADMIN", "SUPER_ADMIN"].includes(userRole) || userPermissions.includes("MANAGE_HOSPITALS"));
+    if (!isAuthorized) {
       return NextResponse.json({ success: false, error: "Unauthorized. Admin access required." }, { status: 401 });
     }
 

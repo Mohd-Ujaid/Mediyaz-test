@@ -5,7 +5,12 @@ import { SpermDonorRegistration } from "@/models/SpermDonorRegistration";
 import { auth } from "@/server/auth";
 import { headers } from "next/headers";
 import { Hospital } from "@/models/Hospital";
-import { computeSpermDonorManagementStatus, mergeWithDotNotation } from "@/features/donor-registration/utils/sperm-donor-status";
+import {
+  computeSpermDonorManagementStatus,
+  mergeWithDotNotation,
+  hasUploadedViralMarkersReport,
+  hasUploadedBloodReport,
+} from "@/features/donor-registration/utils/sperm-donor-status";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -72,7 +77,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
     }
 
-    await connectToDatabase();
+    await connectToDatabase();  
     const body = await req.json();
 
     let existing = await SpermDonorRegistration.findOne({

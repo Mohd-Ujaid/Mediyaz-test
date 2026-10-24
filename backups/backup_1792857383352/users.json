@@ -1,0 +1,70 @@
+[
+  {
+    "_id": "6acf6bfb7bdb03bab4a52a9b",
+    "name": "Mediyaz Super Admin",
+    "email": "admin@mediyaz.com",
+    "emailVerified": true,
+    "createdAt": "2026-10-14T11:48:11.870Z",
+    "updatedAt": "2026-10-14T12:18:31.379Z",
+    "role": "SUPER_ADMIN",
+    "status": "ACTIVE",
+    "department": "Administration",
+    "permissions": [
+      "*"
+    ],
+    "twoFactorEnabled": false
+  },
+  {
+    "_id": "6ad3c96824d59f320d2d3b82",
+    "name": "Mediyaz Operations Admin",
+    "email": "staff.admin@mediyaz.com",
+    "emailVerified": true,
+    "createdAt": "2026-10-17T19:15:52.104Z",
+    "updatedAt": "2026-10-23T14:16:43.513Z",
+    "role": "ADMIN",
+    "status": "ACTIVE",
+    "department": "Management",
+    "permissions": [
+      "VIEW_DASHBOARD",
+      "VIEW_ANALYTICS",
+      "VIEW_REGISTRATIONS",
+      "CREATE_REGISTRATIONS",
+      "EDIT_REGISTRATIONS",
+      "APPROVE_REGISTRATIONS",
+      "ASSIGN_REGISTRATIONS",
+      "EXPORT_REGISTRATIONS",
+      "VIEW_HOSPITALS",
+      "MANAGE_HOSPITALS",
+      "VIEW_INVOICES",
+      "MANAGE_INVOICES",
+      "VIEW_LEDGER",
+      "MANAGE_LEDGER",
+      "VIEW_EMPLOYEES",
+      "MANAGE_EMPLOYEES",
+      "VIEW_USERS",
+      "MANAGE_USERS",
+      "MANAGE_CMS",
+      "VIEW_REG_CHECKS"
+    ],
+    "twoFactorEnabled": false
+  },
+  {
+    "_id": "6adc75637e9cf0af8a9533fd",
+    "name": "Vandana Kapoor",
+    "email": "vandana.kapoor149@gmail.com",
+    "phone": "9638410725",
+    "role": "DONOR",
+    "status": "ACTIVE",
+    "emailVerified": true,
+    "twoFactorEnabled": false,
+    "department": "General",
+    "permissions": [
+      "READ_PORTAL"
+    ],
+    "loginHistory": [],
+    "activityLogs": [],
+    "createdAt": "2026-10-24T09:07:47.858Z",
+    "updatedAt": "2026-10-24T09:07:47.858Z",
+    "__v": 0
+  }
+]

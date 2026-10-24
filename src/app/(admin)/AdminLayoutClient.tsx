@@ -108,21 +108,21 @@ const sidebarNavigation: SidebarGroupSection[] = [
   {
     title: "Registration Management",
     items: [
-      { href: "/manage-registrations", label: "Egg Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS", badgeKey: "eggReview" },
-      { href: "/manage-sperm-registrations", label: "Sperm Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS", badgeKey: "spermReview" },
+      { href: "/manage-registrations", label: "Egg Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
+      { href: "/manage-sperm-registrations", label: "Sperm Donor Management", icon: ShieldCheck, requiredPermission: "VIEW_REG_CHECKS" },
     ]
   },
   {
     title: "Completed Files",
     items: [
-      { href: "/completed-files/egg", label: "Egg Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "completedFilesEgg" },
-      { href: "/completed-files/sperm", label: "Sperm Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "completedFilesSperm" },
+      { href: "/completed-files/egg", label: "Egg Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS" },
+      { href: "/completed-files/sperm", label: "Sperm Donor Files", icon: FileCheck, requiredPermission: "VIEW_REGISTRATIONS" },
     ]
   },
   {
     title: "Billing & Accounts",
     items: [
-      { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS", badgeKey: "pendingInvoices" },
+      { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/reports/finance", label: "Tax & Financial Audits", icon: BarChart3, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/ledger", label: "Accounts Ledger (Laser)", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
     ]
@@ -211,7 +211,6 @@ export default function AdminLayoutClient({
   const router = useRouter();
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [badgeCounts, setBadgeCounts] = useState<Record<string, number>>({});
 
   // Keyboard shortcut for Global Search (Ctrl+K or Cmd+K)
   useEffect(() => {
@@ -224,38 +223,6 @@ export default function AdminLayoutClient({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  // Fetch sidebar badge counts via ultra-lightweight endpoint
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchBadgeCounts() {
-      try {
-        const res = await fetch("/api/stats/badges");
-        const data = await res.json();
-        if (isMounted && data.success && data.badges) {
-          setBadgeCounts({
-            pendingInvoices: data.badges.pendingInvoices || 0,
-            eggReview: data.badges.eggReview || 0,
-            spermReview: data.badges.spermReview || 0,
-            completedFilesEgg: data.badges.completedFilesEgg || 0,
-            completedFilesSperm: data.badges.completedFilesSperm || 0,
-          });
-        }
-      } catch {
-        // Non-fatal network fallback
-      }
-    }
-
-    if (session) {
-      fetchBadgeCounts();
-      // Periodically refresh badge counts every 60 seconds without hammering on route transitions
-      const interval = setInterval(fetchBadgeCounts, 60 * 1000);
-      return () => {
-        isMounted = false;
-        clearInterval(interval);
-      };
-    }
-  }, [session]);
 
   useEffect(() => {
     if (pathname && pathname !== "/admin" && pathname !== "/login") {
@@ -397,7 +364,6 @@ export default function AdminLayoutClient({
                   {group.items.map((item) => {
                     const isActive = pathname === (basePath + item.href) || pathname === item.href;
                     const IconComponent = item.icon;
-                    const count = item.badgeKey ? badgeCounts[item.badgeKey] || 0 : 0;
 
                     return (
                       <SidebarMenuItem key={item.href}>
@@ -417,21 +383,6 @@ export default function AdminLayoutClient({
                                 }`}
                               />
                               <span className="truncate whitespace-nowrap group-data-[collapsible=icon]:hidden flex-1">{item.label}</span>
-                              {count > 0 && (
-                                <span
-                                  className={`group-data-[collapsible=icon]:hidden px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                                    isActive
-                                      ? "bg-white text-[#285b63]"
-                                      : item.badgeKey === "pendingInvoices"
-                                      ? "bg-rose-100 text-rose-700"
-                                      : item.badgeKey?.includes("Review")
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-teal-100 text-teal-800"
-                                  }`}
-                                >
-                                  {count}
-                                </span>
-                              )}
                             </Link>
                           }
                         />

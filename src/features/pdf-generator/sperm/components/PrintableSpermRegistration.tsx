@@ -11,6 +11,10 @@ import {
   Font,
 } from "@react-pdf/renderer";
 import AffidavitPdf from "./PrintableSpermAffidavit";
+import {
+  hasUploadedViralMarkersReport,
+  hasUploadedBloodReport,
+} from "@/features/donor-registration/utils/sperm-donor-status";
 
 const PdfImage = Image as unknown as React.ComponentType<any>;
 
@@ -367,8 +371,27 @@ const PrintableDonorRegistration = ({
       ...overrides.consent,
     };
 
-  const showSection = (key: string) =>
-    !sections || sections.length === 0 || sections.includes(key);
+  const isCertificateIssued = Boolean(
+    registration?.certificateIssued === true ||
+    registration?.isCertificateIssued === true ||
+    mergedRegistration?.certificateIssued === true ||
+    mergedRegistration?.isCertificateIssued === true ||
+    overrides?.certificateIssued === true
+  );
+
+  const showSection = (key: string) => {
+    if (key === "certificate") {
+      if (sections && sections.length > 0) {
+        return (
+          sections.includes("certificate") ||
+          sections.includes("cert") ||
+          sections.includes("rule10")
+        );
+      }
+      return isCertificateIssued;
+    }
+    return !sections || sections.length === 0 || sections.includes(key);
+  };
   const showAttachment = (key: string) =>
     !sections ||
     sections.length === 0 ||

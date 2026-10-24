@@ -1,0 +1,20 @@
+[
+  {
+    "_id": "6ad08de1fe52184902d4a0f8",
+    "title": "New Egg Donor Registration",
+    "message": "A new female oocyte donor registration (MED-ED-2026-42635110) has been submitted by Nshsh.",
+    "type": "REGISTRATION",
+    "referenceId": "MED-ED-2026-42635110",
+    "targetRoles": [
+      "ADMIN",
+      "SUPER_ADMIN"
+    ],
+    "readBy": [
+      "6acf6bfb7bdb03bab4a52a9b",
+      "6ad3c96824d59f320d2d3b82"
+    ],
+    "createdAt": "2026-10-15T08:25:05.271Z",
+    "updatedAt": "2026-10-24T09:27:33.431Z",
+    "__v": 0
+  }
+]

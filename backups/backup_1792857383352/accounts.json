@@ -1,0 +1,20 @@
+[
+  {
+    "_id": "6acf731781798864ed3b95f6",
+    "accountId": "6acf6bfb7bdb03bab4a52a9b",
+    "providerId": "credential",
+    "userId": "6acf6bfb7bdb03bab4a52a9b",
+    "password": "a201e7e021d88206cfabd3db303e468e:6c451726fae396bce70fb370a75d3f611b1361a6c2e6a677516ae62b3b565d0e5e4c34340129adfe617e135532b0ceec1656169bb5928f53ad406d60b010f479",
+    "createdAt": "2026-10-14T12:18:31.328Z",
+    "updatedAt": "2026-10-14T12:18:31.328Z"
+  },
+  {
+    "_id": "6ad3c96824d59f320d2d3b83",
+    "accountId": "6ad3c96824d59f320d2d3b82",
+    "providerId": "credential",
+    "userId": "6ad3c96824d59f320d2d3b82",
+    "password": "58f813399810ddbedd96ccbc24d00a58:3eb76a0db11e2ce54348825eedbc97a78d5cba21718a5d9f3479902337bd7a996f2f714c617d0902efaff521bdd7b1d4a509f88c0731aacb84f114c3db7c80af",
+    "createdAt": "2026-10-17T19:15:52.176Z",
+    "updatedAt": "2026-10-17T19:15:52.176Z"
+  }
+]

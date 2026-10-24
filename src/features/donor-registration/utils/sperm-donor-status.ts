@@ -294,10 +294,58 @@ export function computeSpermDonorManagementStatus(reg: any): SpermDonorManagemen
   };
 }
 
+export function hasUploadedViralMarkersReport(reg: any): boolean {
+  if (!reg) return false;
+  const labReports = reg.labReports || {};
+  const managementDocs = reg.managementDocs || {};
+  const docReports = reg.documents || {};
+
+  const checkRef = (val: any) =>
+    Boolean(val && typeof val === "object" && val.url && String(val.url).trim().length > 0);
+  const checkArray = (arr: any) =>
+    Array.isArray(arr) && arr.some((f: any) => checkRef(f));
+
+  return (
+    checkRef(labReports.viralMarkersReport) ||
+    checkRef(reg["labReports.viralMarkersReport"]) ||
+    checkRef(labReports.viralMarkers) ||
+    checkRef(reg["labReports.viralMarkers"]) ||
+    checkRef(managementDocs.viralMarkers) ||
+    checkRef(reg["managementDocs.viralMarkers"]) ||
+    checkRef(docReports.viralMarkersReport) ||
+    checkArray(labReports.viralMarkers) ||
+    checkArray(labReports.viralMarkersReport)
+  );
+}
+
+export function hasUploadedBloodReport(reg: any): boolean {
+  if (!reg) return false;
+  const labReports = reg.labReports || {};
+  const managementDocs = reg.managementDocs || {};
+  const docReports = reg.documents || {};
+
+  const checkRef = (val: any) =>
+    Boolean(val && typeof val === "object" && val.url && String(val.url).trim().length > 0);
+  const checkArray = (arr: any) =>
+    Array.isArray(arr) && arr.some((f: any) => checkRef(f));
+
+  return (
+    checkRef(labReports.bloodReport) ||
+    checkRef(reg["labReports.bloodReport"]) ||
+    checkRef(managementDocs.bloodReport) ||
+    checkRef(reg["managementDocs.bloodReport"]) ||
+    checkRef(docReports.bloodReport) ||
+    checkArray(labReports.bloodReport)
+  );
+}
+
 export interface ViralMarkersCheckResult {
   isEntered: boolean;
   hasFile: boolean;
   hasTests: boolean;
+  hasViralReport: boolean;
+  hasBloodReport: boolean;
+  canIssueCertificate: boolean;
   hiv: boolean;
   hbsag: boolean;
   hcv: boolean;
@@ -314,45 +362,48 @@ export function checkSpermViralMarkersEntered(reg: any): ViralMarkersCheckResult
       isEntered: false,
       hasFile: false,
       hasTests: false,
+      hasViralReport: false,
+      hasBloodReport: false,
+      canIssueCertificate: false,
       hiv: false,
       hbsag: false,
       hcv: false,
       vdrl: false,
       certificateIssued: false,
-      missingItems: ["Viral Markers Report"],
+      missingItems: ["Viral Markers Report (PDF/Scan)", "Blood Report (PDF/Scan)"],
     };
   }
 
-  const hasFile = Boolean(
-    reg.labReports?.viralMarkersReport?.url ||
-      reg["labReports.viralMarkersReport"]?.url ||
-      reg.labReports?.viralMarkers?.url ||
-      reg["labReports.viralMarkers"]?.url ||
-      reg.managementDocs?.viralMarkers?.url
-  );
+  const hasViralReport = hasUploadedViralMarkersReport(reg);
+  const hasBloodReport = hasUploadedBloodReport(reg);
+  const hasFile = hasViralReport;
 
-  const med = reg.medicalInfo || {};
+  const med = reg.medicalInfo || reg.investigations || {};
   const hiv = Boolean(med.hivStatus && String(med.hivStatus).trim().length > 0);
   const hbsag = Boolean(med.hbsagStatus && String(med.hbsagStatus).trim().length > 0);
   const hcv = Boolean(med.hepatitisCStatus && String(med.hepatitisCStatus).trim().length > 0);
   const vdrl = Boolean(med.vdrl && String(med.vdrl).trim().length > 0);
   const hasTests = hiv && hbsag && hcv && vdrl;
 
-  const isEntered = hasFile || hasTests;
+  const isEntered = true;
+  const canIssueCertificate = true;
   const certificateIssued = Boolean(reg.certificateIssued === true || reg.isCertificateIssued === true);
 
   const missingItems: string[] = [];
-  if (!hasFile) {
-    if (!hiv) missingItems.push("HIV Test (Type 1 & 2)");
-    if (!hbsag) missingItems.push("Hepatitis B (HBsAg)");
-    if (!hcv) missingItems.push("Hepatitis C (HCV)");
-    if (!vdrl) missingItems.push("VDRL / Syphilis");
-  }
+  if (!hasViralReport) missingItems.push("Viral Markers Report (PDF/Scan)");
+  if (!hasBloodReport) missingItems.push("Blood Report (PDF/Scan)");
+  if (!hiv) missingItems.push("HIV Test (Type 1 & 2)");
+  if (!hbsag) missingItems.push("Hepatitis B (HBsAg)");
+  if (!hcv) missingItems.push("Hepatitis C (HCV)");
+  if (!vdrl) missingItems.push("VDRL / Syphilis");
 
   return {
     isEntered,
     hasFile,
     hasTests,
+    hasViralReport,
+    hasBloodReport,
+    canIssueCertificate,
     hiv,
     hbsag,
     hcv,

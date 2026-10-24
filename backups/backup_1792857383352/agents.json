@@ -1,0 +1,322 @@
+[
+  {
+    "_id": "6acf760fdaae6b00efb5cf46",
+    "agentCode": "SUNITA25",
+    "referName": "SUNITA25",
+    "fullName": "Sunita Mehra",
+    "mobileNumber": "9289281774",
+    "email": "sunita25@partners.mediyaz.org",
+    "agencyName": "Sunita Fertility Care",
+    "city": "New Delhi",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010013801840",
+      "ifscCode": "HDFC0001234",
+      "upiId": "sunita25@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 14,
+      "totalSpermDonors": 4,
+      "approvedDonors": 12,
+      "totalEarnings": 78000,
+      "pendingPayout": 23400,
+      "paidPayout": 54600
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf47",
+    "agentCode": "RAHULIVF",
+    "referName": "RAHULIVF",
+    "fullName": "Rahul Verma",
+    "mobileNumber": "9902134442",
+    "email": "rahulivf@partners.mediyaz.org",
+    "agencyName": "Rahul Fertility Care",
+    "city": "Gurugram",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010086047242",
+      "ifscCode": "HDFC0001234",
+      "upiId": "rahulivf@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 5,
+      "totalSpermDonors": 6,
+      "approvedDonors": 9,
+      "totalEarnings": 37000,
+      "pendingPayout": 11100,
+      "paidPayout": 25900
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf48",
+    "agentCode": "AARTICARE",
+    "referName": "AARTICARE",
+    "fullName": "Aarti Gupta",
+    "mobileNumber": "9878235637",
+    "email": "aarticare@partners.mediyaz.org",
+    "agencyName": "Aarti Fertility Care",
+    "city": "Jaipur",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010058033874",
+      "ifscCode": "HDFC0001234",
+      "upiId": "aarticare@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 8,
+      "totalSpermDonors": 7,
+      "approvedDonors": 6,
+      "totalEarnings": 54000,
+      "pendingPayout": 16200,
+      "paidPayout": 37800
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf49",
+    "agentCode": "DRMALIK",
+    "referName": "DRMALIK",
+    "fullName": "Dr. Sandeep Malik",
+    "mobileNumber": "9964323146",
+    "email": "drmalik@partners.mediyaz.org",
+    "agencyName": "Dr. Fertility Care",
+    "city": "Chandigarh",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010028595007",
+      "ifscCode": "HDFC0001234",
+      "upiId": "drmalik@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 9,
+      "totalSpermDonors": 5,
+      "approvedDonors": 7,
+      "totalEarnings": 55000,
+      "pendingPayout": 16500,
+      "paidPayout": 38500
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf4a",
+    "agentCode": "MEENAJOSHI",
+    "referName": "MEENAJOSHI",
+    "fullName": "Meena Joshi",
+    "mobileNumber": "9352858874",
+    "email": "meenajoshi@partners.mediyaz.org",
+    "agencyName": "Meena Fertility Care",
+    "city": "Lucknow",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010090747093",
+      "ifscCode": "HDFC0001234",
+      "upiId": "meenajoshi@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 5,
+      "totalSpermDonors": 9,
+      "approvedDonors": 8,
+      "totalEarnings": 43000,
+      "pendingPayout": 12900,
+      "paidPayout": 30100
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf4b",
+    "agentCode": "KUNALFERT",
+    "referName": "KUNALFERT",
+    "fullName": "Kunal Deshmukh",
+    "mobileNumber": "9349170446",
+    "email": "kunalfert@partners.mediyaz.org",
+    "agencyName": "Kunal Fertility Care",
+    "city": "Pune",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010025895720",
+      "ifscCode": "HDFC0001234",
+      "upiId": "kunalfert@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 7,
+      "totalSpermDonors": 6,
+      "approvedDonors": 10,
+      "totalEarnings": 47000,
+      "pendingPayout": 14100,
+      "paidPayout": 32900
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf4c",
+    "agentCode": "POOJAHUB",
+    "referName": "POOJAHUB",
+    "fullName": "Pooja Trivedi",
+    "mobileNumber": "9596801103",
+    "email": "poojahub@partners.mediyaz.org",
+    "agencyName": "Pooja Fertility Care",
+    "city": "Ahmedabad",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010045991798",
+      "ifscCode": "HDFC0001234",
+      "upiId": "poojahub@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 5,
+      "totalSpermDonors": 9,
+      "approvedDonors": 6,
+      "totalEarnings": 43000,
+      "pendingPayout": 12900,
+      "paidPayout": 30100
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf4d",
+    "agentCode": "VIKRAMS",
+    "referName": "VIKRAMS",
+    "fullName": "Vikram Sethi",
+    "mobileNumber": "9904073268",
+    "email": "vikrams@partners.mediyaz.org",
+    "agencyName": "Vikram Fertility Care",
+    "city": "Mumbai",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010077716349",
+      "ifscCode": "HDFC0001234",
+      "upiId": "vikrams@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 10,
+      "totalSpermDonors": 7,
+      "approvedDonors": 9,
+      "totalEarnings": 64000,
+      "pendingPayout": 19200,
+      "paidPayout": 44800
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf4e",
+    "agentCode": "SHWETABANK",
+    "referName": "SHWETABANK",
+    "fullName": "Shweta Kulkarni",
+    "mobileNumber": "9877068135",
+    "email": "shwetabank@partners.mediyaz.org",
+    "agencyName": "Shweta Fertility Care",
+    "city": "Bengaluru",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010081804342",
+      "ifscCode": "HDFC0001234",
+      "upiId": "shwetabank@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 9,
+      "totalSpermDonors": 4,
+      "approvedDonors": 6,
+      "totalEarnings": 53000,
+      "pendingPayout": 15900,
+      "paidPayout": 37100
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  },
+  {
+    "_id": "6acf760fdaae6b00efb5cf4f",
+    "agentCode": "DEEPAKCARE",
+    "referName": "DEEPAKCARE",
+    "fullName": "Deepak Choudhary",
+    "mobileNumber": "9796796471",
+    "email": "deepakcare@partners.mediyaz.org",
+    "agencyName": "Deepak Fertility Care",
+    "city": "Noida",
+    "state": "India",
+    "status": "ACTIVE",
+    "commissionRates": {
+      "eggDonorCommission": 5000,
+      "spermDonorCommission": 2000
+    },
+    "bankDetails": {
+      "bankName": "HDFC Bank",
+      "accountNumber": "5010088626670",
+      "ifscCode": "HDFC0001234",
+      "upiId": "deepakcare@hdfcbank"
+    },
+    "stats": {
+      "totalEggDonors": 7,
+      "totalSpermDonors": 6,
+      "approvedDonors": 10,
+      "totalEarnings": 47000,
+      "pendingPayout": 14100,
+      "paidPayout": 32900
+    },
+    "createdAt": "2024-11-01T09:00:00.000Z",
+    "updatedAt": "2024-11-01T09:00:00.000Z"
+  }
+]

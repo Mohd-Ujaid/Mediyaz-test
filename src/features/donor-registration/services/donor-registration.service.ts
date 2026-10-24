@@ -6,7 +6,11 @@ import { Notification } from "@/models/Notification";
 import { Hospital } from "@/models/Hospital";
 import { Agent } from "@/models/Agent";
 import { computeEggDonorManagementStatus, mergeWithDotNotation } from "../utils/egg-donor-status";
-import { computeSpermDonorManagementStatus } from "../utils/sperm-donor-status";
+import {
+  computeSpermDonorManagementStatus,
+  hasUploadedViralMarkersReport,
+  hasUploadedBloodReport,
+} from "../utils/sperm-donor-status";
 
 function generateRegistrationId(donorType: string): string {
   const prefix = donorType === "egg" ? "MED-ED" : "MED-SD";

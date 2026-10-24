@@ -4251,52 +4251,41 @@ export default function ManageRegistrationsPage() {
                           );
                         }
 
-                        if (viralCheck.isEntered) {
-                          return (
-                            <div className="p-3 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                                <div>
-                                  <span className="font-bold text-xs text-amber-900 dark:text-amber-200">
-                                    Viral Markers Entered • Certificate (Rule 10) Ready to Issue
-                                  </span>
-                                  <p className="text-[10px] text-amber-800 dark:text-amber-300">
-                                    Viral markers are present. Click Issue Certificate to enable Rule 10 certification for printing.
-                                  </p>
-                                </div>
-                              </div>
-                              <Button
-                                size="sm"
-                                onClick={async () => {
-                                  try {
-                                    const regId = selectedReg.registrationId || selectedReg._id;
-                                    await patchAdminRegistrationFieldsAction(regId, {
-                                      certificateIssued: true,
-                                      certificateIssuedAt: new Date(),
-                                      certificateIssuedBy: "Admin",
-                                    });
-                                    const updated = { ...selectedReg, certificateIssued: true, certificateIssuedAt: new Date() };
-                                    setSelectedReg(updated);
-                                    setRegistrations((prev: any[]) => prev.map((r) => r.registrationId === regId ? { ...r, certificateIssued: true } : r));
-                                    toast.success("Certificate in term of Rule 10 issued successfully!");
-                                  } catch (e: any) {
-                                    toast.error("Failed to issue certificate: " + (e as any)?.message);
-                                  }
-                                }}
-                                className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg gap-1 font-bold shadow-xs shrink-0"
-                              >
-                                <Check className="w-3.5 h-3.5" /> Issue Certificate (Rule 10)
-                              </Button>
-                            </div>
-                          );
-                        }
-
                         return (
-                          <div className="p-2.5 rounded-xl border border-dashed text-[11px] text-muted-foreground flex items-center gap-2 bg-muted/20">
-                            <AlertCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            <span>
-                              Enter/upload Viral Markers Report (HIV, HBsAg, HCV, VDRL) to enable Certificate (Rule 10) issuance.
-                            </span>
+                          <div className="p-3 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/40 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                              <div>
+                                <span className="font-bold text-xs text-amber-900 dark:text-amber-200">
+                                  Certificate (Rule 10) Ready to Issue
+                                </span>
+                                <p className="text-[10px] text-amber-800 dark:text-amber-300">
+                                  Click Issue Certificate to enable Rule 10 certification for printing.
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const regId = selectedReg.registrationId || selectedReg._id;
+                                  await patchAdminRegistrationFieldsAction(regId, {
+                                    certificateIssued: true,
+                                    certificateIssuedAt: new Date(),
+                                    certificateIssuedBy: "Admin",
+                                  });
+                                  const updated = { ...selectedReg, certificateIssued: true, certificateIssuedAt: new Date() };
+                                  setSelectedReg(updated);
+                                  setRegistrations((prev: any[]) => prev.map((r) => r.registrationId === regId ? { ...r, certificateIssued: true } : r));
+                                  toast.success("Certificate in term of Rule 10 issued successfully!");
+                                } catch (e: any) {
+                                  toast.error("Failed to issue certificate: " + (e as any)?.message);
+                                }
+                              }}
+                              className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg gap-1 font-bold shadow-xs shrink-0"
+                            >
+                              <Check className="w-3.5 h-3.5" /> Issue Certificate (Rule 10)
+                            </Button>
                           </div>
                         );
                       })()}

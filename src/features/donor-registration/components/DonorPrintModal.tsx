@@ -73,17 +73,10 @@ export function DonorPrintModal({
   const handleToggleSection = (key: string) => {
     // If certificate is not issued, prevent selecting it
     if (key === "certificate" && !isCertIssued) {
-      if (viralCheck.isEntered) {
-        toast.warning(
-          "You haven't issued the certificate yet. Click 'Issue Certificate Now' above to issue it.",
-          { duration: 4500 }
-        );
-      } else {
-        toast.error(
-          "You haven't issued the certificate. Please enter/upload all viral marker reports first.",
-          { duration: 4500 }
-        );
-      }
+      toast.warning(
+        "You haven't issued the certificate yet. Click 'Issue Certificate Now' above to issue it.",
+        { duration: 4500 }
+      );
       return;
     }
 
@@ -110,11 +103,6 @@ export function DonorPrintModal({
 
   // Issue Certificate (Rule 10) action
   const handleIssueCertificate = async () => {
-    if (!viralCheck.isEntered) {
-      toast.error("Cannot issue certificate: Viral marker reports are missing.");
-      return;
-    }
-
     setIssuingCert(true);
     try {
       const regId = currentReg.registrationId || currentReg._id;
@@ -183,7 +171,7 @@ export function DonorPrintModal({
 
     const useHeader = forceWithHeader !== undefined ? forceWithHeader : withHeader;
 
-    // Filter out certificate if not issued
+    // Filter out certificate if not issued or reports missing
     let effectiveSections = [...selectedSections];
     if (effectiveSections.length > 0 && !isCertIssued) {
       effectiveSections = effectiveSections.filter((s) => s !== "certificate");
@@ -232,7 +220,7 @@ export function DonorPrintModal({
         </DialogHeader>
 
         <div className="space-y-5 pt-2 text-xs">
-          {/* Viral Marker & Certificate Notice / Action Bar */}
+          {/* Rule 10 Statutory Certificate Action Bar */}
           {!isCertIssued && (
             <div className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/40 space-y-2">
               <div className="flex items-start justify-between gap-3">
@@ -240,38 +228,27 @@ export function DonorPrintModal({
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-bold text-amber-900 dark:text-amber-200 text-xs">
-                      Certificate (Rule 10) Not Issued
+                      Certificate (Rule 10) Not Issued Yet
                     </h4>
                     <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5 leading-relaxed">
-                      {viralCheck.isEntered ? (
-                        <>
-                          All viral marker reports (HIV, HBV, HCV, VDRL) are entered.
-                          You can now issue the statutory certificate under Rule 10 of ART Rules, 2022.
-                        </>
-                      ) : (
-                        <>
-                          Viral marker reports are not completely entered yet. Please upload the viral markers PDF report or fill screening test results to issue the certificate.
-                        </>
-                      )}
+                      Click &quot;Issue Certificate Now&quot; to officially issue and unlock the Rule 10 statutory certification for printing and generation.
                     </p>
                   </div>
                 </div>
 
-                {viralCheck.isEntered && (
-                  <Button
-                    size="sm"
-                    disabled={issuingCert}
-                    onClick={handleIssueCertificate}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs h-8 px-3 shrink-0 gap-1.5 shadow-sm"
-                  >
-                    {issuingCert ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Award className="w-3.5 h-3.5" />
-                    )}
-                    Issue Certificate Now
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  disabled={issuingCert}
+                  onClick={handleIssueCertificate}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs h-8 px-3 shrink-0 gap-1.5 shadow-sm"
+                >
+                  {issuingCert ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Award className="w-3.5 h-3.5" />
+                  )}
+                  Issue Certificate Now
+                </Button>
               </div>
             </div>
           )}

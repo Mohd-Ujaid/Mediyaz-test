@@ -81,6 +81,7 @@ import { CustomPagination } from "@/components/ui/custom-pagination";
 import { InAppDocumentViewer } from "@/components/ui/in-app-document-viewer";
 import { SpermDonorPrintModal } from "@/features/donor-registration/components/SpermDonorPrintModal";
 import { DataTableSkeleton } from "@/components/ui/data-table-skeleton";
+import { checkSpermViralMarkersEntered } from "@/features/donor-registration/utils/sperm-donor-status";
 
 const DOCUMENTS_CONFIG = [
   { key: "passportPhoto", label: "Photo", accept: ".png,.jpg,.jpeg,.webp", folder: "profile-images" },

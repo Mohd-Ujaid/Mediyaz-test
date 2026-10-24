@@ -440,24 +440,8 @@ export default function HospitalManagementPage() {
       toast.error("Branch name is required.");
       return;
     }
-    if (!modalBranchForm.registrationNumber?.trim()) {
-      toast.error("Branch registration number is required.");
-      return;
-    }
-    if (!modalBranchForm.contactPerson?.trim()) {
-      toast.error("Branch contact person is required.");
-      return;
-    }
-    if (!modalBranchForm.mobileNumber?.trim()) {
-      toast.error("Branch contact phone is required.");
-      return;
-    }
-    if (!modalBranchForm.email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(modalBranchForm.email?.trim())) {
-      toast.error("Valid branch email address is required.");
-      return;
-    }
-    if (!modalBranchForm.addressLine1?.trim() || !modalBranchForm.state?.trim() || !modalBranchForm.city?.trim() || !modalBranchForm.pincode?.trim()) {
-      toast.error("Complete branch address (Address Line 1, State, City, Pincode) is required.");
+    if (modalBranchForm.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(modalBranchForm.email.trim())) {
+      toast.error("Please enter a valid branch email address.");
       return;
     }
     if (!branchModalHospital) return;
@@ -621,31 +605,13 @@ export default function HospitalManagementPage() {
       // if (organFilter) query += `&organ=${organFilter}`;
 
       const res = await fetch(query);
-      console.log("------",res);
       const data = await res.json();
-
-      // gtemp
-      console.log("HOSPITAL API RESPONSE:", data);
-console.log("HOSPITALS:", data.hospitals);
-
-data.hospitals?.forEach((h: any, index: number) => {
-  console.log(`Hospital ${index}:`, h);
-
-  console.log("hospitalType:", h.hospitalType, typeof h.hospitalType);
-  console.log("contactPerson:", h.contactPerson, typeof h.contactPerson);
-  console.log("email:", h.email, typeof h.email);
-  console.log("address:", h.address, typeof h.address);
-});
-      // gtemp
-
-
-
-
-
-
 
       if (data.success) {
         setHospitals(data.hospitals || []);
+        if (data.stats) {
+          setStats(data.stats);
+        }
         if (data.pagination) {
           setTotalPages(data.pagination.pages);
         }
@@ -723,16 +689,11 @@ data.hospitals?.forEach((h: any, index: number) => {
       const data = await res.json();
       
       if (data.success) {
-        const createdHosp = data.hospital;
-        toast.success(selectedHospital ? "Hospital details updated successfully." : "Hospital created successfully! Now add branches for this hospital.");
+        toast.success(selectedHospital ? "Hospital details updated successfully." : "Hospital registered successfully in directory!");
         setIsFormOpen(false);
         resetForm();
         setSelectedHospital(null);
         await loadHospitals();
-        if (!selectedHospital && createdHosp) {
-          openBranchManager(createdHosp);
-          setIsModalAddingBranch(true);
-        }
       } else {
         toast.error(data.error || "Operation failed.");
       }
@@ -2096,14 +2057,186 @@ data.hospitals?.forEach((h: any, index: number) => {
                     <option value="Other Option">Other Option</option>
                   </select>
                 </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    <span>ART Registration No.</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formFields.registrationNumber || ""}
+                    onChange={(e) => setFormFields({ ...formFields, registrationNumber: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono"
+                    placeholder="e.g. ART-BANK-DE-2023-1001"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    <span>GSTIN (Tax ID)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formFields.gstNumber || ""}
+                    onChange={(e) => setFormFields({ ...formFields, gstNumber: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono"
+                    placeholder="e.g. 09AAACH5422A1Z9"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* 2. INVOICING & TAX SETTINGS */}
+            {/* 2. PRIMARY CONTACT & MEDICAL IN-CHARGE */}
+            <div className="space-y-3 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800">
+                <Users className="w-3.5 h-3.5" />
+                <span>2. Primary Contact &amp; Medical In-Charge</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Contact Person / In-Charge</label>
+                  <input
+                    type="text"
+                    value={formFields.contactPerson || ""}
+                    onChange={(e) => setFormFields({ ...formFields, contactPerson: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. Dr. Anita Gupta"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Mobile Phone</label>
+                  <input
+                    type="text"
+                    value={formFields.mobileNumber || ""}
+                    onChange={(e) => setFormFields({ ...formFields, mobileNumber: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. +91 96939 28745"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Clinical Email</label>
+                  <input
+                    type="email"
+                    value={formFields.email || ""}
+                    onChange={(e) => setFormFields({ ...formFields, email: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. artdesk@clinic.com"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Treating / Consultant Doctor</label>
+                  <input
+                    type="text"
+                    value={formFields.doctorName || ""}
+                    onChange={(e) => setFormFields({ ...formFields, doctorName: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. Dr. R. K. Singhal"
+                  />
+                </div>
+
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Default Pickup / OPU Location</label>
+                  <input
+                    type="text"
+                    value={formFields.pickupLocation || ""}
+                    onChange={(e) => setFormFields({ ...formFields, pickupLocation: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. Main IVF Operation Theatre, Ground Floor"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. PRIMARY LOCATION & ADDRESS */}
+            <div className="space-y-3 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>3. Primary Location &amp; Address</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Address Line 1</label>
+                  <input
+                    type="text"
+                    value={formFields.addressLine1 || ""}
+                    onChange={(e) => setFormFields({ ...formFields, addressLine1: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. Suite 100, Healthcare Boulevard"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Address Line 2 / Area</label>
+                  <input
+                    type="text"
+                    value={formFields.addressLine2 || ""}
+                    onChange={(e) => setFormFields({ ...formFields, addressLine2: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. Near Metro Station"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">State</label>
+                  <select
+                    value={formFields.state || ""}
+                    onChange={(e) => setFormFields({ ...formFields, state: e.target.value, city: "" })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                  >
+                    <option value="">Select State</option>
+                    {INDIAN_STATES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">City</label>
+                  {formFields.state && STATE_CITIES[formFields.state] ? (
+                    <select
+                      value={formFields.city || ""}
+                      onChange={(e) => setFormFields({ ...formFields, city: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                    >
+                      <option value="">Select City</option>
+                      {STATE_CITIES[formFields.state].map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formFields.city || ""}
+                      onChange={(e) => setFormFields({ ...formFields, city: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      placeholder="e.g. New Delhi"
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">Pincode</label>
+                  <input
+                    type="text"
+                    value={formFields.pincode || ""}
+                    onChange={(e) => setFormFields({ ...formFields, pincode: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 font-mono"
+                    placeholder="e.g. 110001"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. INVOICING & TAX SETTINGS */}
             <div className="space-y-3 pt-1">
               <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5 pb-1 border-b border-slate-100 dark:border-slate-800">
                 <FileText className="w-3.5 h-3.5" />
-                <span>2. Invoicing & Tax Settings</span>
+                <span>4. Invoicing &amp; Tax Settings</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -2144,7 +2277,7 @@ data.hospitals?.forEach((h: any, index: number) => {
               <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
                 <span className="flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5" />
-                  <span>3. ART Bank Donor Deals & Service Charge</span>
+                  <span>5. ART Bank Donor Deals &amp; Service Charge</span>
                 </span>
                 <span className="text-[10px] text-slate-400 font-normal">Parent Hospital Level</span>
               </div>

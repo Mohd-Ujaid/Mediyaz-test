@@ -11,6 +11,10 @@ import {
   Font,
 } from "@react-pdf/renderer";
 import EggAffidavit from "./PrintableEggAffidavit";
+import {
+  hasUploadedViralMarkersReport,
+  hasUploadedBloodReport,
+} from "@/features/donor-registration/utils/egg-donor-status";
 
 const PdfImage = Image as unknown as React.ComponentType<any>;
 
@@ -477,16 +481,26 @@ const PrintableEggRegistration = ({
     overrides?.certificateIssued === true
   );
 
+  const hasViralReport = hasUploadedViralMarkersReport(mergedRegistration);
+  const hasBloodReport = hasUploadedBloodReport(mergedRegistration);
+  const canRenderCertificate = isCertificateIssued;
+
   const showSection = (key: string) => {
+    if (key === "certificate") {
+      if (sections && sections.length > 0) {
+        return (
+          sections.includes("certificate") ||
+          sections.includes("cert") ||
+          sections.includes("rule10")
+        );
+      }
+      return isCertificateIssued;
+    }
     if (!sections || sections.length === 0) {
-      // Complete Registration / "by all":
-      // Certificate (Rule 10) is ONLY included if certificate is issued!
-      if (key === "certificate") return isCertificateIssued;
       return true;
     }
     // Specific sections selected ("single single"):
     if (sections.includes(key)) {
-      if (key === "certificate") return isCertificateIssued;
       return true;
     }
     // Key aliases
@@ -494,7 +508,6 @@ const PrintableEggRegistration = ({
     if (key === "contract" && sections.includes("terms_contract")) return true;
     if (key === "profile" && (sections.includes("info_form") || sections.includes("profile_form") || sections.includes("info"))) return true;
     if (key === "form14a" && (sections.includes("consent") || sections.includes("consent_form") || sections.includes("form14A"))) return true;
-    if (key === "certificate" && (sections.includes("cert") || sections.includes("rule10"))) return isCertificateIssued;
     if (key === "affidavit" && sections.includes("egg_affidavit")) return true;
     if (key === "aadhaar" && (sections.includes("aadhaar_card") || sections.includes("id_proof"))) return true;
     return false;
@@ -1711,7 +1724,7 @@ const PrintableEggRegistration = ({
       {/* ========================================== */}
       {/* EGG - PAGE 5: CERTIFICATE */}
       {/* ========================================== */}
-      {showSection("certificate") && isCertificateIssued && (
+      {showSection("certificate") && (
       <Page size="A4" style={[styles.page,{ paddingTop: 70, paddingBottom: 70 } ]}>
         {withHeader && (
           <Image

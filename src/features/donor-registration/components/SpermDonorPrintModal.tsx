@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SPERM_SECTIONS } from "@/features/pdf-generator/sperm/types";
+import { checkSpermViralMarkersEntered } from "@/features/donor-registration/utils/sperm-donor-status";
 
 interface SpermDonorPrintModalProps {
   isOpen: boolean;
@@ -61,36 +62,18 @@ export function SpermDonorPrintModal({
 
   if (!currentReg) return null;
 
-  // Check viral markers and certificate
-  const hasViralFile = Boolean(
-    currentReg.labReports?.viralMarkersReport?.url ||
-      (Array.isArray(currentReg.labReports?.viralMarkers) &&
-        currentReg.labReports?.viralMarkers.some((f: any) => Boolean(f?.url))) ||
-      currentReg.labReports?.viralMarkers?.url
-  );
-  const inv = currentReg.investigations || currentReg.medicalInfo || {};
-  const hiv = Boolean(inv.hivStatus && String(inv.hivStatus).trim().length > 0);
-  const hbsag = Boolean(inv.hbsagStatus && String(inv.hbsagStatus).trim().length > 0);
-  const hcv = Boolean(inv.hepatitisCStatus && String(inv.hepatitisCStatus).trim().length > 0);
-  const vdrl = Boolean(inv.vdrl && String(inv.vdrl).trim().length > 0);
-  const hasTests = hiv && hbsag && hcv && vdrl;
-  const isViralEntered = hasViralFile || hasTests;
-  const isCertIssued = Boolean(currentReg.certificateIssued === true || currentReg.isCertificateIssued === true);
+  // Check viral markers, blood report and certificate
+  const viralCheck = checkSpermViralMarkersEntered(currentReg);
+  const isCertIssued = viralCheck.certificateIssued;
+  const canIssueCert = viralCheck.canIssueCertificate;
 
   // Handle section toggle ("single single" selection vs "all")
   const handleToggleSection = (key: string) => {
     if (key === "certificate" && !isCertIssued) {
-      if (isViralEntered) {
-        toast.warning(
-          "You haven't issued the certificate yet. Click 'Issue Certificate Now' above to issue it.",
-          { duration: 4500 }
-        );
-      } else {
-        toast.error(
-          "You haven't issued the certificate. Please enter/upload all viral marker reports first.",
-          { duration: 4500 }
-        );
-      }
+      toast.warning(
+        "You haven't issued the certificate yet. Click 'Issue Certificate Now' above to issue it.",
+        { duration: 4500 }
+      );
       return;
     }
 
@@ -210,7 +193,7 @@ export function SpermDonorPrintModal({
         </DialogHeader>
 
         <div className="space-y-5 pt-2 text-xs">
-          {/* Viral Marker & Certificate Notice / Action Bar */}
+          {/* Rule 10 Statutory Certificate Action Bar */}
           {!isCertIssued && (
             <div className="p-3.5 rounded-2xl border border-amber-300 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/40 space-y-2">
               <div className="flex items-start justify-between gap-3">
@@ -218,38 +201,27 @@ export function SpermDonorPrintModal({
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-bold text-amber-900 dark:text-amber-200 text-xs">
-                      Certificate (Rule 10) Not Issued
+                      Certificate (Rule 10) Not Issued Yet
                     </h4>
                     <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5 leading-relaxed">
-                      {isViralEntered ? (
-                        <>
-                          All viral marker reports (HIV, HBV, HCV, VDRL) are entered.
-                          You can now issue the statutory certificate under Rule 10 of ART Rules, 2022.
-                        </>
-                      ) : (
-                        <>
-                          Viral marker reports are not completely entered yet. Please upload the viral markers PDF report or fill screening test results to issue the certificate.
-                        </>
-                      )}
+                      Click &quot;Issue Certificate Now&quot; to officially issue and unlock the Rule 10 statutory certification for printing and generation.
                     </p>
                   </div>
                 </div>
 
-                {isViralEntered && (
-                  <Button
-                    size="sm"
-                    disabled={issuingCert}
-                    onClick={handleIssueCertificate}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs h-8 px-3 shrink-0 gap-1.5 shadow-sm"
-                  >
-                    {issuingCert ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Award className="w-3.5 h-3.5" />
-                    )}
-                    Issue Certificate Now
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  disabled={issuingCert}
+                  onClick={handleIssueCertificate}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs h-8 px-3 shrink-0 gap-1.5 shadow-sm"
+                >
+                  {issuingCert ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Award className="w-3.5 h-3.5" />
+                  )}
+                  Issue Certificate Now
+                </Button>
               </div>
             </div>
           )}
