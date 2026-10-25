@@ -176,10 +176,10 @@ export async function POST(req: Request) {
       specializations,
       branches = [],
       doctors = [],
-      eggDonorDealPrice = 65000,
-      eggProfileDonorDealPrice = 85000,
-      spermDonorDealPrice = 15000,
-      spermProfileDonorDealPrice = 25000,
+      eggDonorDealPrice,
+      eggProfileDonorDealPrice,
+      spermDonorDealPrice,
+      spermProfileDonorDealPrice,
       serviceCharge = 5000,
       donorDealPrice,
       profiledonorDealPrice,
@@ -188,12 +188,14 @@ export async function POST(req: Request) {
     } = body;
 
     // Validate inputs - Clinic Entity
-    if (!name || !shortName || !hospitalType) {
+    if (!name || !hospitalType) {
       return NextResponse.json(
-        { success: false, error: "Hospital Name, Short Name, and Hospital Type are required." },
+        { success: false, error: "Hospital Name and Hospital Type are required." },
         { status: 400 }
       );
     }
+
+    const finalShortName = (shortName || name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()).trim();
 
     const primaryBranch = Array.isArray(branches) && branches.length > 0
       ? (branches.find((b: any) => b.isMainBranch) || branches[0])
@@ -214,10 +216,18 @@ export async function POST(req: Request) {
     const finalCountry = country || primaryBranch?.country || "India";
     const finalPincode = pincode || primaryBranch?.pincode || "";
 
-    const finalEggNormal = Number(eggDonorDealPrice ?? (donorDealPrice ?? 65000));
-    const finalEggProfile = Number(eggProfileDonorDealPrice ?? (profiledonorDealPrice ?? 85000));
-    const finalSpermNormal = Number(spermDonorDealPrice ?? 15000);
-    const finalSpermProfile = Number(spermProfileDonorDealPrice ?? 25000);
+    const finalEggNormal = eggDonorDealPrice !== undefined && eggDonorDealPrice !== "" && !isNaN(Number(eggDonorDealPrice))
+      ? Number(eggDonorDealPrice)
+      : (donorDealPrice !== undefined && donorDealPrice !== "" && !isNaN(Number(donorDealPrice)) ? Number(donorDealPrice) : 0);
+    const finalEggProfile = eggProfileDonorDealPrice !== undefined && eggProfileDonorDealPrice !== "" && !isNaN(Number(eggProfileDonorDealPrice))
+      ? Number(eggProfileDonorDealPrice)
+      : (profiledonorDealPrice !== undefined && profiledonorDealPrice !== "" && !isNaN(Number(profiledonorDealPrice)) ? Number(profiledonorDealPrice) : 0);
+    const finalSpermNormal = spermDonorDealPrice !== undefined && spermDonorDealPrice !== "" && !isNaN(Number(spermDonorDealPrice))
+      ? Number(spermDonorDealPrice)
+      : 0;
+    const finalSpermProfile = spermProfileDonorDealPrice !== undefined && spermProfileDonorDealPrice !== "" && !isNaN(Number(spermProfileDonorDealPrice))
+      ? Number(spermProfileDonorDealPrice)
+      : 0;
     const finalServiceCharge = Number(serviceCharge ?? 5000);
     const finalTdsPct = Number(tdsPercentage ?? 2);
 
@@ -238,11 +248,26 @@ export async function POST(req: Request) {
       changedAt: new Date()
     };
 
+    const sanitizedBranches = (Array.isArray(branches) ? branches : []).map((b: any) => {
+      const clean = { ...b };
+      if (!clean._id || typeof clean._id !== "string" || !clean._id.match(/^[0-9a-fA-F]{24}$/)) {
+        delete clean._id;
+      }
+      return clean;
+    });
+
+    if (sanitizedBranches.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "At least 1 branch is required to register a hospital/clinic." },
+        { status: 400 }
+      );
+    }
+
     const hospital = await Hospital.create({
       name,
       address,
       contactInfo,
-      shortName,
+      shortName: finalShortName,
       registrationNumber: finalRegNo,
       gstNumber: finalGst,
       doctorName: finalDoctor,
@@ -262,7 +287,7 @@ export async function POST(req: Request) {
       pincode: finalPincode,
       hospitalType,
       specializations: specializations || [],
-      branches: Array.isArray(branches) ? branches : [],
+      branches: sanitizedBranches,
       doctors: Array.isArray(doctors) ? doctors : [],
       eggDonorDealPrice: finalEggNormal,
       eggProfileDonorDealPrice: finalEggProfile,

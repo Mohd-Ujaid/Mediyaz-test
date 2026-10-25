@@ -282,6 +282,10 @@ export function CompletedFileInvoiceModal({
   // Save invoice details to database and activate donor in ledger
   const saveInvoiceToDb = async (silent = false): Promise<boolean> => {
     if (!registration) return false;
+    if (hosp?.wantInvoice === false || registration?.clinicDeal?.billingMode === "NO_INVOICE") {
+      if (!silent) toast.error("This clinic is configured as 'Without Invoice'. Tax invoices cannot be generated for this clinic.");
+      return false;
+    }
     setIsSaving(true);
     try {
       const gstVal = isInterState ? igstAmount : cgstAmount + sgstAmount;

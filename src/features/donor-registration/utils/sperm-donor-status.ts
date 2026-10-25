@@ -299,7 +299,7 @@ export function hasUploadedViralMarkersReport(reg: any): boolean {
   const labReports = reg.labReports || {};
   const managementDocs = reg.managementDocs || {};
   const docReports = reg.documents || {};
-
+  
   const checkRef = (val: any) =>
     Boolean(val && typeof val === "object" && val.url && String(val.url).trim().length > 0);
   const checkArray = (arr: any) =>

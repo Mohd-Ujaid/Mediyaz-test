@@ -114,6 +114,7 @@ export async function GET(req: Request) {
     const startDateParam = searchParams.get("startDate") || "";
     const endDateParam = searchParams.get("endDate") || "";
     const billingModeFilter = (searchParams.get("mode") || searchParams.get("billingMode") || "ALL").toUpperCase(); // ALL | AWAITING | INVOICED | NO_INVOICE
+    const clinicInvoiceType = (searchParams.get("clinicInvoiceType") || searchParams.get("clinicInvoice") || "ALL").toUpperCase(); // ALL | WITH_INVOICE | WITHOUT_INVOICE
     const paymentStatusFilter = searchParams.get("status") || "ALL"; // ALL | PAID | PENDING | PARTIALLY_RECEIVED
     const donorTypeParam = searchParams.get("donorType") || "all"; // all | egg | sperm
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
@@ -192,15 +193,15 @@ export async function GET(req: Request) {
         const invoiceNumber = (clinicDeal.invoiceNumber || r.invoiceNumber || "").trim();
         const hasInvoice = Boolean(invoiceNumber || clinicDeal.isInvoiceGenerated || r.isInvoiceGenerated);
 
-        // Determine billingMode:
-        // Explicitly set > has actual invoice -> INVOICED > clinic does not want invoice -> NO_INVOICE > else AWAITING
+        // Determine billingMode based strictly on clinic's wantInvoice configuration:
+        // - Clinic does not want invoice -> strictly NO_INVOICE (Direct Bill)
+        // - Clinic wants invoice + invoice generated -> INVOICED
+        // - Clinic wants invoice + invoice pending -> AWAITING
         let billingMode: "AWAITING" | "INVOICED" | "NO_INVOICE" = "AWAITING";
-        if (clinicDeal.billingMode) {
-          billingMode = clinicDeal.billingMode;
+        if (!branchWantInvoice) {
+          billingMode = "NO_INVOICE";
         } else if (hasInvoice) {
           billingMode = "INVOICED";
-        } else if (!branchWantInvoice) {
-          billingMode = "NO_INVOICE";
         } else {
           billingMode = "AWAITING";
         }
@@ -412,6 +413,7 @@ export async function GET(req: Request) {
           hospitalCode: hCode,
           city: hCity,
           state: hState,
+          wantInvoice: hosp?.wantInvoice !== false,
           branches: [],
           totalCount: 0,
           awaitingCount: 0,
@@ -454,11 +456,50 @@ export async function GET(req: Request) {
       }
     });
 
+    // Merge registered hospitals that may not have records yet into clinicMap
+    allHospitals.forEach((h: any) => {
+      const hId = h._id?.toString();
+      if (!hId) return;
+      if (!clinicMap[hId]) {
+        clinicMap[hId] = {
+          hospitalId: hId,
+          hospitalName: h.name,
+          hospitalCode: h.shortName || "",
+          city: h.city || "",
+          state: h.state || "",
+          wantInvoice: h.wantInvoice !== false,
+          branches: (Array.isArray(h.branches) ? h.branches : []).map((b: any) => ({
+            branchId: b._id?.toString() || b.branchName,
+            branchName: b.branchName || b.name,
+            city: b.city || h.city || "",
+          })),
+          totalCount: 0,
+          awaitingCount: 0,
+          invoicedCount: 0,
+          noInvoiceCount: 0,
+          paidCount: 0,
+          pendingCount: 0,
+          partialCount: 0,
+          totalBilled: 0,
+          totalReceived: 0,
+          totalTds: 0,
+          totalGst: 0,
+          totalPending: 0,
+        };
+      } else {
+        clinicMap[hId].wantInvoice = h.wantInvoice !== false;
+      }
+    });
+
     const clinicBreakdown = Object.values(clinicMap).map((c: any) => ({
       ...c,
+      wantInvoice: c.wantInvoice !== false,
       collectionRate: c.totalBilled > 0 ? Math.round((c.totalReceived / c.totalBilled) * 100) : 0,
     }));
-    clinicBreakdown.sort((a: any, b: any) => b.totalBilled - a.totalBilled);
+    clinicBreakdown.sort((a: any, b: any) => {
+      if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
+      return a.hospitalName.localeCompare(b.hospitalName);
+    });
 
     // Apply Active Filters
     let filteredItems = allItems;
@@ -466,6 +507,13 @@ export async function GET(req: Request) {
     // Billing Mode Filter
     if (billingModeFilter && billingModeFilter !== "ALL") {
       filteredItems = filteredItems.filter((i) => i.billingMode === billingModeFilter);
+    }
+
+    // Clinic Invoice Type Filter (WITH_INVOICE vs WITHOUT_INVOICE)
+    if (clinicInvoiceType === "WITH_INVOICE") {
+      filteredItems = filteredItems.filter((i) => i.assignedHospital?.wantInvoice !== false);
+    } else if (clinicInvoiceType === "WITHOUT_INVOICE") {
+      filteredItems = filteredItems.filter((i) => i.assignedHospital?.wantInvoice === false);
     }
 
     // Search Query
@@ -583,6 +631,9 @@ export async function GET(req: Request) {
     const paidPercentage =
       filterBilled > 0 ? Math.round((filterReceived / filterBilled) * 100) : 0;
 
+    const withInvoiceClinicsCount = clinicBreakdown.filter((c: any) => c.wantInvoice !== false).length;
+    const withoutInvoiceClinicsCount = clinicBreakdown.filter((c: any) => c.wantInvoice === false).length;
+
     return NextResponse.json({
       success: true,
       stats: {
@@ -599,6 +650,8 @@ export async function GET(req: Request) {
         totalGstAmount: filterGst,
         totalPendingAmount: filterPending,
         paidPercentage,
+        withInvoiceClinicsCount,
+        withoutInvoiceClinicsCount,
       },
       clinicBreakdown,
       availableYears,
@@ -663,6 +716,26 @@ export async function PATCH(req: Request) {
 
       if (!["AWAITING", "INVOICED", "NO_INVOICE"].includes(billingMode)) {
         return NextResponse.json({ success: false, error: "Invalid billingMode" }, { status: 400 });
+      }
+
+      // If attempting to switch to AWAITING or INVOICED, verify that none belong to clinics configured as Without Invoice
+      if (billingMode !== "NO_INVOICE") {
+        const [eggDocs, spermDocs] = await Promise.all([
+          EggDonorRegistration.find({ registrationId: { $in: ids } }).populate("assignedHospital", "wantInvoice name").lean(),
+          SpermDonorRegistration.find({ registrationId: { $in: ids } }).populate("assignedHospital", "wantInvoice name").lean(),
+        ]);
+        const allDocs = [...eggDocs, ...spermDocs];
+        const nonInvClinicRecord = allDocs.find((d: any) => d.assignedHospital && d.assignedHospital.wantInvoice === false);
+        if (nonInvClinicRecord) {
+          const cName = (nonInvClinicRecord as any).assignedHospital?.name || "This clinic";
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Clinic '${cName}' does not accept tax invoices. Invoices cannot be generated.`,
+            },
+            { status: 400 }
+          );
+        }
       }
 
       const updateData: any = {

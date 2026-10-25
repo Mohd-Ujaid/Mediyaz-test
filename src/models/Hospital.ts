@@ -64,7 +64,7 @@ export interface IHospital extends Document {
   status: "ACTIVE" | "INACTIVE" | "SUSPENDED" | "ARCHIVED";
 
   // Basic Information
-  shortName: string;
+  shortName?: string;
   registrationNumber?: string;
   gstNumber?: string;
   doctorName?: string;
@@ -179,7 +179,7 @@ const HospitalSchema = new Schema<IHospital>(
     status: { type: String, enum: ["ACTIVE", "INACTIVE", "SUSPENDED", "ARCHIVED"], default: "ACTIVE" },
 
     // Basic
-    shortName: { type: String, required: true },
+    shortName: { type: String, default: "" },
     registrationNumber: { type: String, default: "" },
     gstNumber: { type: String, default: "" },
     doctorName: { type: String, default: "" },
@@ -258,8 +258,29 @@ HospitalSchema.pre("save", function () {
     if (primaryDoc) this.doctorName = primaryDoc.name;
   }
 
-  this.address = `${this.addressLine1 || ""}, ${this.addressLine2 || ""}, ${this.city || ""}, ${this.state || ""} - ${this.pincode || ""}, ${this.country || "India"}`.replace(/^[,\s]+|[,\s]+$/g, "").replace(/\s*,\s*,/g, ",");
-  this.contactInfo = `${this.contactPerson || ""} (${this.email || ""}, Mob: ${this.mobileNumber || ""})`;
+  // Ensure shortName is populated
+  if (!this.shortName && this.name) {
+    this.shortName = this.name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase();
+  }
+
+  // Address formatting
+  const addrParts = [this.addressLine1, this.addressLine2, this.city, this.state].filter(Boolean);
+  const pinPart = this.pincode ? `- ${this.pincode}` : "";
+  const countryPart = this.country || "India";
+  this.address = addrParts.length > 0
+    ? `${addrParts.join(", ")} ${pinPart}, ${countryPart}`.replace(/\s*,\s*,/g, ", ").replace(/^[,\s]+|[,\s]+$/g, "").trim()
+    : "";
+
+  // Contact info formatting
+  const contactParts: string[] = [];
+  if (this.contactPerson) contactParts.push(this.contactPerson);
+  const subContact: string[] = [];
+  if (this.email) subContact.push(this.email);
+  if (this.mobileNumber) subContact.push(`Mob: ${this.mobileNumber}`);
+  if (subContact.length > 0) {
+    contactParts.push(`(${subContact.join(", ")})`);
+  }
+  this.contactInfo = contactParts.join(" ").trim();
 
   // Keep legacy fields synchronized
   if (this.eggDonorDealPrice !== undefined && this.eggDonorDealPrice !== null) {

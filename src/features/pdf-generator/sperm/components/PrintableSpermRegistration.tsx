@@ -487,8 +487,10 @@ const PrintableDonorRegistration = ({
     ""
   ).trim();
 
+  const isGenericBranch = !branchName || ["main", "main center", "single center", "default"].includes(branchName.toLowerCase());
+
   const clinicName =
-    branchName && !baseClinic.toLowerCase().includes(branchName.toLowerCase())
+    branchName && !isGenericBranch && !baseClinic.toLowerCase().includes(branchName.toLowerCase())
       ? `${baseClinic} (${branchName})`
       : baseClinic;
 

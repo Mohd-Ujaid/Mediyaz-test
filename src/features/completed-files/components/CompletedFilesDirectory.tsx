@@ -544,6 +544,10 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
 
   // Open Invoice Generator & Dispatch Modal (or View Mode if already generated)
   const handleOpenInvoiceModal = async (reg: any, readOnly = false) => {
+    if (!readOnly && (reg.assignedHospital?.wantInvoice === false || reg.clinicDeal?.billingMode === "NO_INVOICE")) {
+      toast.error("This clinic is configured as 'Without Invoice'. Tax invoices cannot be generated for this clinic.");
+      return;
+    }
     setSelectedReg(reg);
     setInvoiceModalReadOnly(readOnly);
     setIsInvoiceModalOpen(true);
@@ -1426,7 +1430,15 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
 
                           {/* Invoice Status & Generation Indicator */}
                           <div className="mt-1.5">
-                            {reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
+                            {reg.assignedHospital?.wantInvoice === false || reg.clinicDeal?.billingMode === "NO_INVOICE" ? (
+                              <span
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200"
+                                title="Clinic configured without invoice. Direct billing applies."
+                              >
+                                <FileText className="w-2.5 h-2.5 text-purple-600" />
+                                Without Invoice (Direct Bill)
+                              </span>
+                            ) : reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
                               <button
                                 type="button"
                                 onClick={() => handleOpenInvoiceModal(reg, true)}
@@ -1601,7 +1613,7 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                                 View Complete File
                               </DropdownMenuItem>
                               {/* Consolidated Invoice Action (Single pathway for invoice & payment) */}
-                              {reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
+                              {reg.assignedHospital?.wantInvoice === false || reg.clinicDeal?.billingMode === "NO_INVOICE" ? null : reg.clinicDeal?.invoiceNumber || reg.invoiceNumber || reg.clinicDeal?.isInvoiceGenerated || reg.isInvoiceGenerated ? (
                                 <DropdownMenuItem
                                   onClick={() => handleOpenInvoiceModal(reg, true)}
                                   className="cursor-pointer gap-2 text-xs font-semibold py-2 text-indigo-600 focus:text-indigo-700"
@@ -2359,7 +2371,11 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-teal-800 dark:text-teal-300">ART Clinic Deal</span>
                         <div className="flex items-center gap-1.5">
-                          {selectedReg.clinicDeal?.invoiceNumber || selectedReg.invoiceNumber || selectedReg.clinicDeal?.isInvoiceGenerated || selectedReg.isInvoiceGenerated ? (
+                          {selectedReg.assignedHospital?.wantInvoice === false || selectedReg.clinicDeal?.billingMode === "NO_INVOICE" ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                              Without Invoice (Direct Bill)
+                            </span>
+                          ) : selectedReg.clinicDeal?.invoiceNumber || selectedReg.invoiceNumber || selectedReg.clinicDeal?.isInvoiceGenerated || selectedReg.isInvoiceGenerated ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -2454,17 +2470,19 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setIsDetailModalOpen(false);
-                        handleOpenInvoiceModal(selectedReg);
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs h-9 px-3 gap-1.5 shadow-sm font-semibold"
-                    >
-                      <Receipt className="w-3.5 h-3.5" />
-                      Generate / Send Invoice
-                    </Button>
+                    {selectedReg.assignedHospital?.wantInvoice !== false && selectedReg.clinicDeal?.billingMode !== "NO_INVOICE" && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setIsDetailModalOpen(false);
+                          handleOpenInvoiceModal(selectedReg);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs h-9 px-3 gap-1.5 shadow-sm font-semibold"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                        Generate / Send Invoice
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       onClick={() => handlePrintRegistration(selectedReg)}

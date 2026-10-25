@@ -117,8 +117,15 @@ export async function PUT(
     if (country !== undefined) hospital.country = country;
     if (pincode !== undefined) hospital.pincode = pincode;
     if (hospitalType !== undefined) hospital.hospitalType = hospitalType;
-    if (specializations !== undefined) hospital.specializations = specializations;
-    if (branches !== undefined) hospital.branches = Array.isArray(branches) ? branches : [];
+    if (branches !== undefined) {
+      hospital.branches = (Array.isArray(branches) ? branches : []).map((b: any) => {
+        const clean = { ...b };
+        if (!clean._id || typeof clean._id !== "string" || !clean._id.match(/^[0-9a-fA-F]{24}$/)) {
+          delete clean._id;
+        }
+        return clean;
+      });
+    }
     if (doctors !== undefined) hospital.doctors = Array.isArray(doctors) ? doctors : [];
 
     if (effectiveEggNormal !== undefined) {

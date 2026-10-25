@@ -67,6 +67,7 @@ import { TableSkeletonRows } from "@/components/ui/data-table-skeleton";
 import { RecordClinicPaymentModal } from "./RecordClinicPaymentModal";
 import { DonorPaymentHistoryModal } from "./DonorPaymentHistoryModal";
 import { ClinicTransactionsTab } from "./ClinicTransactionsTab";
+import { DownloadInvoicesModal } from "./DownloadInvoicesModal";
 
 const formatInr = (amount: number) => {
   return "₹" + (amount || 0).toLocaleString("en-IN");
@@ -169,6 +170,9 @@ export function InvoiceTrackerDirectory() {
   // Billing Mode Sub-Tab: "ALL" | "AWAITING" | "INVOICED" | "NO_INVOICE"
   const [modeTab, setModeTab] = useState<"ALL" | "AWAITING" | "INVOICED" | "NO_INVOICE">("ALL");
 
+  // Clinic Invoice Category Filter: "ALL" | "WITH_INVOICE" | "WITHOUT_INVOICE"
+  const [clinicInvoiceFilter, setClinicInvoiceFilter] = useState<"ALL" | "WITH_INVOICE" | "WITHOUT_INVOICE">("ALL");
+
   // Filters & Pagination
   const [search, setSearch] = useState("");
   const [selectedHospitalId, setSelectedHospitalId] = useState("ALL");
@@ -196,6 +200,7 @@ export function InvoiceTrackerDirectory() {
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [selectedGeneratingDonor, setSelectedGeneratingDonor] = useState<any | null>(null);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
   // Multi-donor Record Payment Modal state
   const [isRecordPaymentModalOpen, setIsRecordPaymentModalOpen] = useState(false);
@@ -235,6 +240,16 @@ export function InvoiceTrackerDirectory() {
     return Array.from(branchSet).filter(Boolean).sort();
   }, [selectedHospitalId, clinicBreakdown, availableBranches]);
 
+  // Separated clinics by invoice requirement
+  const clinicsWithInvoice = useMemo(
+    () => clinicBreakdown.filter((c) => c.wantInvoice !== false),
+    [clinicBreakdown]
+  );
+  const clinicsWithoutInvoice = useMemo(
+    () => clinicBreakdown.filter((c) => c.wantInvoice === false),
+    [clinicBreakdown]
+  );
+
   // Load Invoices / Billable Records
   async function loadInvoices() {
     setLoading(true);
@@ -250,6 +265,7 @@ export function InvoiceTrackerDirectory() {
       if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
       if (donorTypeFilter) params.append("donorType", donorTypeFilter);
       if (modeTab !== "ALL") params.append("mode", modeTab);
+      if (clinicInvoiceFilter !== "ALL") params.append("clinicInvoiceType", clinicInvoiceFilter);
       params.append("page", currentPage.toString());
       params.append("limit", itemsPerPage.toString());
 
@@ -289,6 +305,7 @@ export function InvoiceTrackerDirectory() {
     statusFilter,
     donorTypeFilter,
     modeTab,
+    clinicInvoiceFilter,
     currentPage,
     itemsPerPage,
     mainTab,
@@ -392,6 +409,10 @@ export function InvoiceTrackerDirectory() {
 
   // Generate Invoice on the fly
   const handleGenerateInvoice = (inv: any) => {
+    if (inv.assignedHospital?.wantInvoice === false || inv.billingMode === "NO_INVOICE") {
+      toast.error("This clinic is configured as 'Without Invoice'. Invoices cannot be generated for this clinic.");
+      return;
+    }
     setSelectedGeneratingDonor({
       ...inv,
       personalInfo: { fullName: inv.donorName },
@@ -498,6 +519,17 @@ export function InvoiceTrackerDirectory() {
           >
             <FileSpreadsheet className="h-4 w-4" />
             Excel
+          </Button>
+
+          <Button
+            id="btn-open-download-period-modal"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsDownloadModalOpen(true)}
+            className="text-xs h-9 gap-1.5 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 font-semibold shadow-xs"
+          >
+            <Download className="h-4 w-4 text-indigo-600" />
+            Download Invoices (.ZIP)
           </Button>
         </div>
       </div>
@@ -609,6 +641,101 @@ export function InvoiceTrackerDirectory() {
             </div>
           </div>
 
+          {/* Clinic Category Separation Segment: ALL | WITH_INVOICE | WITHOUT_INVOICE */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                  <span>Clinic Invoice Category</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    (Separate clinics with &amp; without tax invoice)
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {clinicInvoiceFilter === "ALL"
+                    ? `Showing all ${clinicBreakdown.length} clinics (${clinicsWithInvoice.length} with tax invoice, ${clinicsWithoutInvoice.length} without invoice)`
+                    : clinicInvoiceFilter === "WITH_INVOICE"
+                    ? `Filtering to ${clinicsWithInvoice.length} clinics configured With Tax Invoice`
+                    : `Filtering to ${clinicsWithoutInvoice.length} clinics configured Without Invoice`}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                id="btn-filter-clinic-all"
+                onClick={() => {
+                  setClinicInvoiceFilter("ALL");
+                  setSelectedHospitalId("ALL");
+                  setSelectedBranch("ALL");
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  clinicInvoiceFilter === "ALL"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <span>All Partner Clinics</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                  {clinicBreakdown.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-filter-clinic-with-invoice"
+                onClick={() => {
+                  setClinicInvoiceFilter("WITH_INVOICE");
+                  setSelectedHospitalId("ALL");
+                  setSelectedBranch("ALL");
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  clinicInvoiceFilter === "WITH_INVOICE"
+                    ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/20"
+                    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 hover:bg-emerald-100/50"
+                }`}
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>Clinics With Invoice</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                  clinicInvoiceFilter === "WITH_INVOICE" ? "bg-white/20 text-white" : "bg-emerald-200/60 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
+                }`}>
+                  {clinicsWithInvoice.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-filter-clinic-without-invoice"
+                onClick={() => {
+                  setClinicInvoiceFilter("WITHOUT_INVOICE");
+                  setSelectedHospitalId("ALL");
+                  setSelectedBranch("ALL");
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  clinicInvoiceFilter === "WITHOUT_INVOICE"
+                    ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-500/20"
+                    : "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 hover:bg-purple-100/50"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Clinics Without Invoice</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                  clinicInvoiceFilter === "WITHOUT_INVOICE" ? "bg-white/20 text-white" : "bg-purple-200/60 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                }`}>
+                  {clinicsWithoutInvoice.length}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Billing Mode Sub-Tabs (Awaiting / Invoiced / No-Invoice) */}
           <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-fit">
             <button
@@ -694,6 +821,7 @@ export function InvoiceTrackerDirectory() {
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Clinic Select */}
                   <select
+                    id="select-clinic-filter"
                     value={selectedHospitalId}
                     onChange={(e) => {
                       setSelectedHospitalId(e.target.value);
@@ -702,13 +830,77 @@ export function InvoiceTrackerDirectory() {
                     }}
                     className="h-8.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-800 dark:text-slate-200"
                   >
-                    <option value="ALL">All Partner Clinics ({clinicBreakdown.length})</option>
-                    {clinicBreakdown.map((c) => (
-                      <option key={c.hospitalId} value={c.hospitalId}>
-                        {c.hospitalName}
-                      </option>
+                    <option value="ALL">
+                      {clinicInvoiceFilter === "ALL"
+                        ? `All Partner Clinics (${clinicBreakdown.length})`
+                        : clinicInvoiceFilter === "WITH_INVOICE"
+                        ? `All With-Invoice Clinics (${clinicsWithInvoice.length})`
+                        : `All Without-Invoice Clinics (${clinicsWithoutInvoice.length})`}
+                    </option>
+                    {(clinicInvoiceFilter === "ALL" || clinicInvoiceFilter === "WITH_INVOICE") && clinicsWithInvoice.length > 0 && (
+                      <optgroup label="📋 CLINICS WITH TAX INVOICE">
+                        {clinicsWithInvoice.map((c) => (
+                          <option key={c.hospitalId} value={c.hospitalId}>
+                            {c.hospitalName} {c.totalCount > 0 ? `(${c.totalCount} cases)` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {(clinicInvoiceFilter === "ALL" || clinicInvoiceFilter === "WITHOUT_INVOICE") && clinicsWithoutInvoice.length > 0 && (
+                      <optgroup label="📄 CLINICS WITHOUT INVOICE">
+                        {clinicsWithoutInvoice.map((c) => (
+                          <option key={c.hospitalId} value={c.hospitalId}>
+                            {c.hospitalName} {c.totalCount > 0 ? `(${c.totalCount} cases)` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+
+                  {/* Year Filter */}
+                  <select
+                    id="select-filter-year"
+                    value={selectedYear}
+                    onChange={(e) => {
+                      setSelectedYear(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-8.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="ALL">All Years</option>
+                    {availableYears.map((yr) => (
+                      <option key={yr} value={yr.toString()}>{yr}</option>
                     ))}
                   </select>
+
+                  {/* Month Filter */}
+                  <select
+                    id="select-filter-month"
+                    value={selectedMonth}
+                    onChange={(e) => {
+                      setSelectedMonth(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-8.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200"
+                  >
+                    {MONTH_OPTIONS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+
+                  {/* Quick Download Invoices for Selected Period */}
+                  {(selectedYear !== "ALL" || selectedMonth !== "ALL") && (
+                    <Button
+                      id="btn-quick-download-period"
+                      size="sm"
+                      onClick={() => setIsDownloadModalOpen(true)}
+                      className="h-8.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 text-xs font-semibold gap-1.5 shadow-xs"
+                      title="Download all invoices for selected year/month"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download {selectedMonth !== "ALL" ? MONTH_OPTIONS.find((m) => m.value === selectedMonth)?.label.split(" ")[0] : ""} {selectedYear !== "ALL" ? selectedYear : ""} (.ZIP)
+                    </Button>
+                  )}
 
                   {/* Financial Year */}
                   <select
@@ -890,8 +1082,17 @@ export function InvoiceTrackerDirectory() {
 
                           {/* Clinic & Branch */}
                           <td className="py-3 px-3">
-                            <div className="font-medium text-slate-900 dark:text-slate-100">
-                              {inv.assignedHospital?.name || "Unassigned Clinic"}
+                            <div className="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
+                              <span>{inv.assignedHospital?.name || "Unassigned Clinic"}</span>
+                              {inv.assignedHospital?.wantInvoice !== false ? (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
+                                  With Invoice
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800">
+                                  Without Invoice
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-slate-500">{inv.assignedBranch}</div>
                           </td>
@@ -941,8 +1142,8 @@ export function InvoiceTrackerDirectory() {
                           {/* Actions */}
                           <td className="py-3 px-3 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
-                              {/* If Awaiting or No Invoice: Generate Invoice */}
-                              {!isInvoiced && (
+                              {/* If Clinic wants tax invoice and not yet invoiced: Only show Generate Invoice */}
+                              {!isInvoiced && inv.assignedHospital?.wantInvoice !== false && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -951,20 +1152,6 @@ export function InvoiceTrackerDirectory() {
                                 >
                                   <Receipt className="h-3.5 w-3.5" />
                                   Generate Inv
-                                </Button>
-                              )}
-
-                              {/* Toggle No-Invoice Needed */}
-                              {isAwaiting && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleChangeBillingMode([inv.registrationId], "NO_INVOICE")
-                                  }
-                                  className="h-7 px-2 text-purple-600 hover:text-purple-800 text-xs font-medium gap-1"
-                                >
-                                  No Inv
                                 </Button>
                               )}
 
@@ -1041,14 +1228,6 @@ export function InvoiceTrackerDirectory() {
 
           <div className="h-4 w-[1px] bg-slate-700" />
 
-          <Button
-            size="sm"
-            onClick={() => handleChangeBillingMode(selectedIds, "NO_INVOICE")}
-            className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs h-8 gap-1.5"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Mark &quot;No Invoice Needed&quot;
-          </Button>
 
           <Button
             size="sm"
@@ -1123,6 +1302,19 @@ export function InvoiceTrackerDirectory() {
           onInvoiceSaved={() => {
             loadInvoices();
           }}
+        />
+      )}
+
+      {/* Download Invoices by Year and Month Modal */}
+      {isDownloadModalOpen && (
+        <DownloadInvoicesModal
+          isOpen={isDownloadModalOpen}
+          onClose={() => setIsDownloadModalOpen(false)}
+          availableYears={availableYears}
+          clinicBreakdown={clinicBreakdown}
+          convertInvoiceToPdfData={convertInvoiceToPdfData}
+          initialYear={selectedYear}
+          initialMonth={selectedMonth}
         />
       )}
     </div>

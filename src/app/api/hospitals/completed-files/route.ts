@@ -376,6 +376,25 @@ export async function PATCH(req: Request) {
       );
     }
 
+    // Safeguard: Block invoice generation for clinics configured as Without Invoice
+    const isAttemptingInvoice =
+      updateFields.isInvoiceGenerated === true ||
+      updateFields.clinicDeal?.isInvoiceGenerated === true ||
+      (updateFields.invoiceNumber && String(updateFields.invoiceNumber).trim() !== "");
+
+    if (isAttemptingInvoice && existing.assignedHospital) {
+      const hosp = await Hospital.findById(existing.assignedHospital).select("wantInvoice name").lean();
+      if (hosp && hosp.wantInvoice === false) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Clinic '${hosp.name}' is configured as 'Without Invoice'. Tax invoices cannot be generated for this clinic.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const updatePayload: any = {
       updatedBy: userName,
       updatedAt: new Date(),

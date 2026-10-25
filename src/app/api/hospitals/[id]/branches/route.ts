@@ -89,6 +89,15 @@ export async function POST(
       return NextResponse.json({ success: false, error: "Branch name is required." }, { status: 400 });
     }
 
+    const isFirstBranch = !Array.isArray(hospital.branches) || hospital.branches.length === 0;
+    const shouldBeMain = isFirstBranch ? true : Boolean(isMainBranch);
+
+    if (shouldBeMain && Array.isArray(hospital.branches)) {
+      hospital.branches.forEach((b: any) => {
+        b.isMainBranch = false;
+      });
+    }
+
     const doctorList = Array.isArray(doctors)
       ? doctors.map((d: any) => typeof d === "string" ? { name: d.trim() } : d)
       : (doctorName ? [{ name: doctorName.trim(), isPrimary: true }] : []);
@@ -97,22 +106,22 @@ export async function POST(
     const newBranch: any = {
       branchName: branchName.trim(),
       branchCode: branchCode.trim(),
-      registrationNumber: registrationNumber.trim(),
-      gstNumber: gstNumber.trim(),
-      contactPerson: contactPerson.trim(),
-      email: email.trim(),
-      mobileNumber: mobileNumber.trim(),
-      telephone: telephone.trim(),
-      doctorName: effectiveDoctorName,
-      doctors: doctorList,
-      pickupLocation: pickupLocation.trim(),
+      registrationNumber: registrationNumber.trim() || hospital.registrationNumber || "",
+      gstNumber: gstNumber.trim() || hospital.gstNumber || "",
+      contactPerson: contactPerson.trim() || hospital.contactPerson || "",
+      email: email.trim() || hospital.email || "",
+      mobileNumber: mobileNumber.trim() || hospital.mobileNumber || "",
+      telephone: telephone.trim() || hospital.telephone || "",
+      doctorName: effectiveDoctorName || hospital.doctorName || "",
+      doctors: doctorList.length > 0 ? doctorList : (hospital.doctors || []),
+      pickupLocation: pickupLocation.trim() || hospital.pickupLocation || "",
       addressLine1: addressLine1.trim(),
       addressLine2: addressLine2.trim(),
-      city: city.trim(),
-      state: state.trim(),
-      country: country.trim() || "India",
-      pincode: pincode.trim(),
-      isMainBranch: Boolean(isMainBranch),
+      city: city.trim() || hospital.city || "",
+      state: state.trim() || hospital.state || "",
+      country: country.trim() || hospital.country || "India",
+      pincode: pincode.trim() || hospital.pincode || "",
+      isMainBranch: shouldBeMain,
       status: status || "ACTIVE",
       eggDonorDealPrice: Number(eggDonorDealPrice || hospital.eggDonorDealPrice || 65000),
       eggProfileDonorDealPrice: Number(eggProfileDonorDealPrice || hospital.eggProfileDonorDealPrice || 85000),
@@ -123,6 +132,9 @@ export async function POST(
       wantInvoice: wantInvoice !== undefined ? Boolean(wantInvoice) : Boolean(hospital.wantInvoice ?? true)
     };
 
+    if (!Array.isArray(hospital.branches)) {
+      hospital.branches = [];
+    }
     hospital.branches.push(newBranch);
     await hospital.save();
 
@@ -238,7 +250,11 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Hospital not found." }, { status: 404 });
     }
 
+    const wasMain = hospital.branches.some((b: any) => b._id?.toString() === branchId && b.isMainBranch);
     hospital.branches = hospital.branches.filter((b: any) => b._id?.toString() !== branchId);
+    if (wasMain && hospital.branches.length > 0) {
+      hospital.branches[0].isMainBranch = true;
+    }
     await hospital.save();
 
     await createAuditLog(

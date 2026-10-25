@@ -3028,83 +3028,81 @@ export default function ManageRegistrationsPage() {
                         )}
                       </label>
 
-                      {currentBranchObj?.doctors && currentBranchObj.doctors.length > 0 ? (
-                        <div className="space-y-2">
-                          <select
-                            value={
-                              currentBranchObj.doctors.some((d: any) => {
-                                const dName = typeof d === "string" ? d : d.name;
-                                return (tempSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
-                              })
-                                ? (tempSelectedBranch?.doctorName || "")
-                                : "__custom__"
-                            }
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "__custom__") {
-                                setTempSelectedBranch(prev => ({
-                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
-                                  branchName: prev?.branchName || currentBranchObj.branchName,
-                                  doctorName: ""
-                                }));
-                              } else {
-                                setTempSelectedBranch(prev => ({
-                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
-                                  branchName: prev?.branchName || currentBranchObj.branchName,
-                                  doctorName: val
-                                }));
-                              }
-                            }}
-                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
-                          >
-                            {currentBranchObj.doctors.map((d: any, dIdx: number) => {
-                              const dName = typeof d === "string" ? d : d.name;
-                              return (
-                                <option key={dIdx} value={dName}>
-                                  Dr. {dName.replace(/^Dr\.?\s*/i, "")}
-                                </option>
-                              );
-                            })}
-                            <option value="__custom__">+ Enter Custom Doctor Name...</option>
-                          </select>
+                      {(() => {
+                        const doctorsList = (currentBranchObj?.doctors && currentBranchObj.doctors.length > 0)
+                          ? currentBranchObj.doctors
+                          : (hosp?.doctors && hosp.doctors.length > 0)
+                          ? hosp.doctors
+                          : (hosp?.doctorName ? [hosp.doctorName] : []);
 
-                          {/* Custom doctor name text input if custom selected or none match */}
-                          {(!currentBranchObj.doctors.some((d: any) => {
+                        if (doctorsList.length > 0) {
+                          const matchesDoctor = doctorsList.some((d: any) => {
                             const dName = typeof d === "string" ? d : d.name;
                             return (tempSelectedBranch?.doctorName?.replace(/^Dr\.?\s*/i, "").trim().toLowerCase()) === dName.replace(/^Dr\.?\s*/i, "").trim().toLowerCase();
-                          })) && (
-                            <input
-                              type="text"
-                              placeholder="Type Treatment Doctor name (e.g. Dr. Sunita Rao)..."
-                              value={tempSelectedBranch?.doctorName || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setTempSelectedBranch(prev => ({
-                                  branchId: prev?.branchId || currentBranchObj._id || "branch_0",
-                                  branchName: prev?.branchName || currentBranchObj.branchName,
-                                  doctorName: val
-                                }));
-                              }}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          placeholder="Enter Treatment Doctor name (e.g. Dr. Sunita Rao)..."
-                          value={tempSelectedBranch?.doctorName || ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setTempSelectedBranch(prev => ({
-                              branchId: prev?.branchId || currentBranchObj?._id || "branch_0",
-                              branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
-                              doctorName: val
-                            }));
-                          }}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
-                        />
-                      )}
+                          });
+
+                          return (
+                            <div className="space-y-2">
+                              <select
+                                value={matchesDoctor ? (tempSelectedBranch?.doctorName || "") : "__custom__"}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setTempSelectedBranch(prev => ({
+                                    branchId: prev?.branchId || currentBranchObj?._id || "main",
+                                    branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                                    doctorName: val === "__custom__" ? "" : val
+                                  }));
+                                }}
+                                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-semibold focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 shadow-xs"
+                              >
+                                {doctorsList.map((d: any, dIdx: number) => {
+                                  const dName = typeof d === "string" ? d : d.name;
+                                  return (
+                                    <option key={dIdx} value={dName}>
+                                      Dr. {dName.replace(/^Dr\.?\s*/i, "")}
+                                    </option>
+                                  );
+                                })}
+                                <option value="__custom__">+ Enter Custom Doctor Name...</option>
+                              </select>
+
+                              {(!matchesDoctor) && (
+                                <input
+                                  type="text"
+                                  placeholder="Type Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                                  value={tempSelectedBranch?.doctorName || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setTempSelectedBranch(prev => ({
+                                      branchId: prev?.branchId || currentBranchObj?._id || "main",
+                                      branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                                      doctorName: val
+                                    }));
+                                  }}
+                                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                                />
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <input
+                            type="text"
+                            placeholder="Enter Treatment Doctor name (e.g. Dr. Sunita Rao)..."
+                            value={tempSelectedBranch?.doctorName || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setTempSelectedBranch(prev => ({
+                                branchId: prev?.branchId || currentBranchObj?._id || "main",
+                                branchName: prev?.branchName || currentBranchObj?.branchName || "Main Center",
+                                doctorName: val
+                              }));
+                            }}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs focus:outline-none focus:border-teal-500"
+                          />
+                        );
+                      })()}
                     </div>
                   </div>
                 );

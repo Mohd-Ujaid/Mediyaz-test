@@ -49,6 +49,7 @@ export function ClinicTransactionsTab({
   // Filters
   const [search, setSearch] = useState("");
   const [selectedHospitalId, setSelectedHospitalId] = useState("ALL");
+  const [clinicInvoiceFilter, setClinicInvoiceFilter] = useState<"ALL" | "WITH_INVOICE" | "WITHOUT_INVOICE">("ALL");
   const [selectedFy, setSelectedFy] = useState("ALL");
   const [selectedQuarter, setSelectedQuarter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
@@ -64,6 +65,7 @@ export function ClinicTransactionsTab({
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (selectedHospitalId && selectedHospitalId !== "ALL") params.append("hospitalId", selectedHospitalId);
+      if (clinicInvoiceFilter !== "ALL") params.append("clinicInvoiceType", clinicInvoiceFilter);
       if (selectedFy && selectedFy !== "ALL") params.append("fy", selectedFy);
       if (selectedQuarter && selectedQuarter !== "ALL") params.append("quarter", selectedQuarter);
       params.append("page", currentPage.toString());
@@ -88,7 +90,7 @@ export function ClinicTransactionsTab({
 
   useEffect(() => {
     loadTransactions();
-  }, [selectedHospitalId, selectedFy, selectedQuarter, currentPage]);
+  }, [selectedHospitalId, clinicInvoiceFilter, selectedFy, selectedQuarter, currentPage]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,6 +189,54 @@ export function ClinicTransactionsTab({
             />
           </div>
 
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            <button
+              type="button"
+              onClick={() => {
+                setClinicInvoiceFilter("ALL");
+                setSelectedHospitalId("ALL");
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                clinicInvoiceFilter === "ALL"
+                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+              }`}
+            >
+              All Clinics
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setClinicInvoiceFilter("WITH_INVOICE");
+                setSelectedHospitalId("ALL");
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                clinicInvoiceFilter === "WITH_INVOICE"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              }`}
+            >
+              With Invoice
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setClinicInvoiceFilter("WITHOUT_INVOICE");
+                setSelectedHospitalId("ALL");
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                clinicInvoiceFilter === "WITHOUT_INVOICE"
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : "text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+              }`}
+            >
+              Without Invoice
+            </button>
+          </div>
+
           <select
             value={selectedHospitalId}
             onChange={(e) => {
@@ -195,12 +245,25 @@ export function ClinicTransactionsTab({
             }}
             className="h-9 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-slate-900 dark:text-slate-100 focus:outline-none"
           >
-            <option value="ALL">All Partner Clinics</option>
-            {hospitals.map((h: any) => (
-              <option key={h.hospitalId || h._id} value={h.hospitalId || h._id}>
-                {h.hospitalName || h.name}
-              </option>
-            ))}
+            <option value="ALL">All Partner Clinics ({hospitals.length})</option>
+            {(clinicInvoiceFilter === "ALL" || clinicInvoiceFilter === "WITH_INVOICE") && (
+              <optgroup label="📋 CLINICS WITH TAX INVOICE">
+                {hospitals.filter((h: any) => h.wantInvoice !== false).map((h: any) => (
+                  <option key={h.hospitalId || h._id} value={h.hospitalId || h._id}>
+                    {h.hospitalName || h.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {(clinicInvoiceFilter === "ALL" || clinicInvoiceFilter === "WITHOUT_INVOICE") && (
+              <optgroup label="📄 CLINICS WITHOUT INVOICE">
+                {hospitals.filter((h: any) => h.wantInvoice === false).map((h: any) => (
+                  <option key={h.hospitalId || h._id} value={h.hospitalId || h._id}>
+                    {h.hospitalName || h.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
 
           <select
@@ -290,8 +353,19 @@ export function ClinicTransactionsTab({
                     <td className="p-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
                       {tx.paymentNo}
                     </td>
-                    <td className="p-3 font-semibold text-slate-900 dark:text-slate-100">
-                      {tx.hospital?.name || tx.hospitalName}
+                    <td className="p-3">
+                      <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 flex-wrap">
+                        <span>{tx.hospital?.name || tx.hospitalName}</span>
+                        {tx.hospital?.wantInvoice !== false ? (
+                          <span className="inline-flex items-center text-[9px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
+                            With Invoice
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center text-[9px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800">
+                            Without Invoice
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-slate-600 dark:text-slate-300 font-medium">
                       {tx.date ? formatDotDate(tx.date) : "-"}

@@ -28,7 +28,7 @@ interface RecordClinicPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  hospitals: Array<{ hospitalId: string; hospitalName: string; shortName?: string }>;
+  hospitals: Array<{ hospitalId: string; hospitalName: string; shortName?: string; wantInvoice?: boolean }>;
   preselectedHospitalId?: string;
   preselectedRegistrationId?: string;
 }
@@ -322,11 +322,28 @@ export function RecordClinicPaymentModal({
                 required
               >
                 <option value="">Select Clinic...</option>
-                {hospitals.map((h) => (
-                  <option key={h.hospitalId} value={h.hospitalId}>
-                    {h.hospitalName} {h.shortName ? `(${h.shortName})` : ""}
-                  </option>
-                ))}
+                {hospitals.some((h) => h.wantInvoice !== false) && (
+                  <optgroup label="📋 CLINICS WITH TAX INVOICE">
+                    {hospitals
+                      .filter((h) => h.wantInvoice !== false)
+                      .map((h) => (
+                        <option key={h.hospitalId} value={h.hospitalId}>
+                          {h.hospitalName} {h.shortName ? `(${h.shortName})` : ""}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                {hospitals.some((h) => h.wantInvoice === false) && (
+                  <optgroup label="📄 CLINICS WITHOUT INVOICE">
+                    {hospitals
+                      .filter((h) => h.wantInvoice === false)
+                      .map((h) => (
+                        <option key={h.hospitalId} value={h.hospitalId}>
+                          {h.hospitalName} {h.shortName ? `(${h.shortName})` : ""}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </select>
               {availableCredit > 0 && (
                 <p className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 mt-1">

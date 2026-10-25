@@ -195,9 +195,17 @@ export async function GET(req: Request) {
       ];
     }
 
+    const clinicInvoiceType = (searchParams.get("clinicInvoiceType") || searchParams.get("clinicInvoice") || "ALL").toUpperCase();
+    if (clinicInvoiceType !== "ALL" && (!hospitalId || hospitalId === "ALL")) {
+      const matchCondition = clinicInvoiceType === "WITHOUT_INVOICE" ? { wantInvoice: false } : { wantInvoice: { $ne: false } };
+      const matchingHospitals = await Hospital.find(matchCondition).select("_id").lean();
+      const hospIds = matchingHospitals.map((h: any) => h._id);
+      filter.hospital = { $in: hospIds };
+    }
+
     const totalCount = await ClinicPayment.countDocuments(filter);
     const payments = await ClinicPayment.find(filter)
-      .populate("hospital", "name shortName code city state gstNumber")
+      .populate("hospital", "name shortName code city state gstNumber wantInvoice")
       .sort({ date: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
