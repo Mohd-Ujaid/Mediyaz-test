@@ -200,43 +200,40 @@ export async function GET(req: Request) {
           ? Number(clinicDeal.gstAmount)
           : Math.round(serviceCharge * 0.18);
 
-      // Standard TDS rate is 2% automatically applied
+      const paymentsList: any[] = Array.isArray(clinicDeal.payments) ? clinicDeal.payments : [];
+      let receivedAmount = 0;
+      let tdsAmount = 0;
+
+      if (paymentsList.length > 0) {
+        receivedAmount = paymentsList.reduce((acc: number, p: any) => acc + Number(p.netAmount ?? p.amount ?? 0), 0);
+        tdsAmount = paymentsList.reduce((acc: number, p: any) => acc + Number(p.tdsAmount ?? 0), 0);
+      } else {
+        receivedAmount = Number(clinicDeal.receivedAmount || 0);
+        tdsAmount = Number(clinicDeal.tdsAmount || clinicDeal.tdsTotal || 0);
+      }
+
       const tdsPercentage =
         clinicDeal.tdsPercentage && Number(clinicDeal.tdsPercentage) > 0
           ? Number(clinicDeal.tdsPercentage)
           : hosp?.tdsPercentage && Number(hosp.tdsPercentage) > 0
           ? Number(hosp.tdsPercentage)
-          : 2;
+          : (dealPrice > 0 && tdsAmount > 0 ? Math.round((tdsAmount / dealPrice) * 100) : 2);
 
-      const tdsAmount =
-        clinicDeal.tdsAmount && Number(clinicDeal.tdsAmount) > 0
-          ? Number(clinicDeal.tdsAmount)
-          : Math.round(dealPrice * (tdsPercentage / 100));
-
-      const netAmount =
-        clinicDeal.netReceivableAmount && Number(clinicDeal.netReceivableAmount) > 0
-          ? Number(clinicDeal.netReceivableAmount)
-          : Math.max(0, dealPrice - tdsAmount + gstAmount);
-
+      const totalSettled = receivedAmount + tdsAmount;
       const isReceived =
         clinicDeal.isPaymentReceived === true ||
         clinicDeal.paymentStatus === "RECEIVED" ||
-        (clinicDeal.receivedAmount && clinicDeal.receivedAmount >= (netAmount > 0 ? netAmount : dealPrice));
+        (dealPrice > 0 && totalSettled >= dealPrice);
 
       const isPartial =
         !isReceived &&
         (clinicDeal.paymentStatus === "PARTIALLY_RECEIVED" ||
-          (clinicDeal.receivedAmount && clinicDeal.receivedAmount > 0 && clinicDeal.receivedAmount < netAmount));
+          (totalSettled > 0 && totalSettled < dealPrice));
 
-      const receivedAmount = isReceived
-        ? (clinicDeal.receivedAmount && clinicDeal.receivedAmount > 0 ? clinicDeal.receivedAmount : netAmount)
-        : clinicDeal.receivedAmount || 0;
-
-      const creditAmount = receivedAmount;
-
-      const pendingAmount = isReceived
-        ? 0
-        : Math.max(0, netAmount - receivedAmount);
+      const finalReceived = isReceived ? (receivedAmount || dealPrice) : receivedAmount;
+      const creditAmount = finalReceived;
+      const pendingAmount = isReceived ? 0 : Math.max(0, dealPrice - (finalReceived + tdsAmount));
+      const netAmount = dealPrice;
 
       const paymentStatus: "RECEIVED" | "PENDING" | "PARTIALLY_RECEIVED" = isReceived
         ? "RECEIVED"
@@ -728,6 +725,19 @@ export async function PATCH(req: Request) {
       const isPaid = status === "PAID";
       const paidAmount = amount !== undefined ? Number(amount) : isPaid ? compAmount : prevDonor.advanceAmount || 0;
       const paymentStatus = isPaid || paidAmount >= compAmount ? "PAID" : paidAmount > 0 ? "PARTIALLY_PAID" : "PENDING";
+      const payDate = receivedDate ? new Date(receivedDate) : new Date();
+
+      const existingPayments: any[] = Array.isArray(prevDonor.payments) ? [...prevDonor.payments] : [];
+      if (paidAmount > 0) {
+        existingPayments.push({
+          amount: paidAmount,
+          date: payDate,
+          method: method || prevDonor.paymentMethod || "bank_transfer",
+          reference: reference !== undefined ? reference : prevDonor.paymentReference || "",
+          notes: notes || "",
+          paidBy: userName,
+        });
+      }
 
       updatePayload.donorDeal = {
         ...prevDonor,
@@ -736,11 +746,12 @@ export async function PATCH(req: Request) {
         balanceAmount: paymentStatus === "PAID" ? 0 : Math.max(0, compAmount - paidAmount),
         paymentMethod: method || prevDonor.paymentMethod || "bank_transfer",
         paymentReference: reference !== undefined ? reference : prevDonor.paymentReference || "",
-        paidAt: paymentStatus === "PAID" ? new Date() : prevDonor.paidAt || null,
+        paidAt: paymentStatus === "PAID" ? payDate : prevDonor.paidAt || null,
         paidBy: userName,
+        payments: existingPayments,
       };
       updatePayload.isDonorPaid = paymentStatus === "PAID";
-      updatePayload.paidAt = paymentStatus === "PAID" ? new Date() : null;
+      updatePayload.paidAt = paymentStatus === "PAID" ? payDate : null;
       updatePayload.paidBy = paymentStatus === "PAID" ? userName : null;
     }
 

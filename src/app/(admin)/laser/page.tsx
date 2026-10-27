@@ -1,15 +1,5 @@
-import React from "react";
-import { LedgerDirectory } from "@/features/ledger/components/LedgerDirectory";
-
-export const metadata = {
-  title: "Accounts Laser Section | Mediyaz ART Bank Admin",
-  description: "Official Clinic and Donor payment accounts laser section with one-click PDF generation.",
-};
+import { redirect } from "next/navigation";
 
 export default function LaserPage() {
-  return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
-      <LedgerDirectory />
-    </div>
-  );
+  redirect("/ledger");
 }

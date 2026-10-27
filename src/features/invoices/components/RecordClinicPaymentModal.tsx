@@ -15,7 +15,7 @@ import {
   CreditCard,
   Building2,
   Calendar,
-  Sparkles,
+  Calculator,
   AlertCircle,
   CheckCircle2,
   Receipt,
@@ -451,7 +451,7 @@ export function RecordClinicPaymentModal({
                 disabled={!parsedTxAmount || donors.length === 0}
                 className="bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800 gap-1.5 text-xs font-semibold"
               >
-                <Sparkles className="h-3.5 w-3.5 text-sky-600" />
+                <Calculator className="h-3.5 w-3.5 text-sky-600" />
                 Auto-Allocate (Oldest First)
               </Button>
             </div>

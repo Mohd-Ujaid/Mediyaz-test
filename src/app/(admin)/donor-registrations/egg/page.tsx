@@ -255,7 +255,7 @@ export default function AdminEggDonorRegistrationsPage() {
     | "suspended"
     | "other";
 
-  const [activeTab, setActiveTab] = useState<EggRegTab>("new");
+  const [activeTab, setActiveTab] = useState<EggRegTab>("all");
 
   const fetchEggRegistrations = useCallback(async () => {
     setLoading(true);
@@ -1182,10 +1182,10 @@ export default function AdminEggDonorRegistrationsPage() {
             tab: "all" as const,
             title: "Total Registration",
             count: stats.total || totalCount,
-            textColor: "text-rose-600 dark:text-rose-400",
-            borderHover: "hover:border-rose-300 dark:hover:border-rose-700",
-            activeBorder: "border-rose-500 dark:border-rose-400 bg-rose-50/50 dark:bg-rose-950/30 ring-2 ring-rose-500/20",
-            badgeBg: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+            textColor: "text-teal-600 dark:text-teal-400",
+            borderHover: "hover:border-teal-300 dark:hover:border-teal-700",
+            activeBorder: "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 ring-2 ring-teal-500/20",
+            badgeBg: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300",
           },
           {
             tab: "new" as const,
@@ -2060,7 +2060,14 @@ export default function AdminEggDonorRegistrationsPage() {
                           <span className="text-[10px] text-muted-foreground block font-semibold">Referral / Sourcing:</span>
                           <span className="text-teal-700 dark:text-teal-300 font-semibold">
                             Source: {selectedReg.referral?.sourceReferralType || "Online"}
-                            {selectedReg.agentCode && ` (Agent / Refer ID: ${selectedReg.agentCode})`}
+                            {selectedReg.referral?.sourceReferralType === "Our Staff" && (selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId) && ` • Staff: ${selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId}`}
+                            {selectedReg.referral?.sourceReferralType === "Refer" && (
+                              <>
+                                {(selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId || selectedReg.agentCode) && ` • Refer: ${selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId || selectedReg.agentCode}`}
+                                {selectedReg.referral?.mobileNumber && ` • Phone: ${selectedReg.referral?.mobileNumber}`}
+                              </>
+                            )}
+                            {selectedReg.referral?.sourceReferralType !== "Our Staff" && selectedReg.referral?.sourceReferralType !== "Refer" && selectedReg.agentCode && ` (Agent / Refer ID: ${selectedReg.agentCode})`}
                             {selectedReg.referredBy && ` (Referred by: ${selectedReg.referredBy})`}
                           </span>
                         </div>

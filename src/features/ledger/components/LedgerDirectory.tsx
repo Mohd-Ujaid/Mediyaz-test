@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -639,7 +640,7 @@ export function LedgerDirectory() {
                 Clinic & Donor Accounts Ledger
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                Laser System
+                General Ledger
               </span>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -687,6 +688,17 @@ export function LedgerDirectory() {
           )}
 
           {/* DOWNLOAD PDF STATEMENT */}
+          <Link href="/reports/cashflow">
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 h-10 shadow-sm"
+              title="View full month-wise & year-wise cash in/out and revenue profit"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Full Revenue & Cash Flow
+            </Button>
+          </Link>
+
           <Button
             variant="outline"
             size="sm"
@@ -874,7 +886,7 @@ export function LedgerDirectory() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
               {clinicAccounts.map((account) => {
                 const isSelected = selectedHospitalId === account.hospitalId;
                 return (
@@ -1369,7 +1381,7 @@ export function LedgerDirectory() {
 
             {/* Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full min-w-[1360px] text-left border-collapse text-xs">
                 <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-800/95 shadow-2xs">
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[10px] whitespace-nowrap">
                     <th className={`${tableDensity === "compact" ? "py-2 px-2 text-center w-8" : "py-3 px-2.5 text-center w-8"}`}>
@@ -1390,16 +1402,16 @@ export function LedgerDirectory() {
                     {visibleClinicCols.opuDate && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Donor OPU Date</th>}
                     {visibleClinicCols.invoiceDate && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Invoice Date</th>}
                     {visibleClinicCols.invoiceNo && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Invoice No.</th>}
-                    <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>Amount</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-right min-w-[110px]`}>Amount</th>
                     {visibleClinicCols.tdsGst && (
                       <>
-                        <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>TDS -</th>
-                        <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>GST +</th>
+                        <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right min-w-[90px]`}>TDS -</th>
+                        <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right min-w-[90px]`}>GST +</th>
                       </>
                     )}
-                    <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right`}>Net Amount</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-right min-w-[115px]`}>Net Amount</th>
                     {visibleClinicCols.creditDate && <th className={tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"}>Credit Date</th>}
-                    <th className={`${tableDensity === "compact" ? "py-2 px-2" : "py-3 px-2.5"} text-right sticky right-0 bg-slate-100/95 dark:bg-slate-800/95 z-20 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)]`}>Credit Amount</th>
+                    <th className={`${tableDensity === "compact" ? "py-2 px-3" : "py-3 px-4"} text-right sticky right-0 bg-slate-100/95 dark:bg-slate-800/95 z-20 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] min-w-[130px]`}>Credit Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800">
@@ -1496,18 +1508,18 @@ export function LedgerDirectory() {
                                 : "N/A"}
                             </td>
                           )}
-                          <td className={`${cellPad} text-right font-bold text-slate-900 dark:text-slate-100`}>
+                          <td className={`${cellPad} text-right font-bold text-slate-900 dark:text-slate-100 min-w-[110px]`}>
                             {formatInr(grossAmt)}
                           </td>
                           {visibleClinicCols.tdsGst && (
                             <>
-                              <td className={`${cellPad} text-right font-semibold text-orange-600 dark:text-orange-400`}>
+                              <td className={`${cellPad} text-right font-semibold text-orange-600 dark:text-orange-400 min-w-[90px]`}>
                                 <div>{tdsAmt > 0 ? `-${formatInr(tdsAmt)}` : "₹0"}</div>
                                 <div className="text-[10px] text-slate-400 font-normal">
                                   {entry.tdsPercentage ? `(${entry.tdsPercentage}%)` : "0%"}
                                 </div>
                               </td>
-                              <td className={`${cellPad} text-right font-semibold text-emerald-600 dark:text-emerald-400`}>
+                              <td className={`${cellPad} text-right font-semibold text-emerald-600 dark:text-emerald-400 min-w-[90px]`}>
                                 <div>{gstAmt > 0 ? `+${formatInr(gstAmt)}` : "₹0"}</div>
                                 <div className="text-[10px] text-slate-400 font-normal">
                                   {gstAmt > 0 ? "18% on SC" : "Exempt"}
@@ -1515,7 +1527,7 @@ export function LedgerDirectory() {
                               </td>
                             </>
                           )}
-                          <td className={`${cellPad} text-right font-black text-teal-700 dark:text-teal-300`}>
+                          <td className={`${cellPad} text-right font-black text-teal-700 dark:text-teal-300 min-w-[115px]`}>
                             {formatInr(netAmt)}
                           </td>
                           {visibleClinicCols.creditDate && (
@@ -1523,7 +1535,7 @@ export function LedgerDirectory() {
                               {credDate}
                             </td>
                           )}
-                          <td className={`${cellPad} text-right font-bold text-emerald-600 dark:text-emerald-400 sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-white group-hover/row:bg-slate-50 dark:bg-slate-900 dark:group-hover/row:bg-slate-800`}>
+                          <td className={`${cellPad} text-right font-bold text-emerald-600 dark:text-emerald-400 sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-white group-hover/row:bg-slate-50 dark:bg-slate-900 dark:group-hover/row:bg-slate-800 min-w-[130px]`}>
                             <div>{formatInr(credAmt)}</div>
                             <span
                               className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold ${
@@ -1550,20 +1562,20 @@ export function LedgerDirectory() {
                       <td colSpan={4 + (visibleClinicCols.clinicName ? 1 : 0) + (visibleClinicCols.location ? 1 : 0) + (visibleClinicCols.opuLocation ? 1 : 0) + (visibleClinicCols.opuDate ? 1 : 0) + (visibleClinicCols.invoiceDate ? 1 : 0) + (visibleClinicCols.invoiceNo ? 1 : 0)} className="py-3 px-3 uppercase tracking-wider">
                         GRAND TOTAL ({clinicTotals.totalRecords} TRANSACTIONS)
                       </td>
-                      <td className="py-3 px-2.5 text-right font-black">
+                      <td className="py-3 px-2.5 text-right font-black min-w-[110px]">
                         {formatInr(clinicTotals.totalDealPrice)}
                       </td>
                       {visibleClinicCols.tdsGst && (
                         <>
-                          <td className="py-3 px-2.5 text-right font-semibold text-orange-600">
+                          <td className="py-3 px-2.5 text-right font-semibold text-orange-600 min-w-[90px]">
                             -{formatInr((clinicTotals as any).totalTdsAmount || 0)}
                           </td>
-                          <td className="py-3 px-2.5 text-right font-semibold text-emerald-600">
+                          <td className="py-3 px-2.5 text-right font-semibold text-emerald-600 min-w-[90px]">
                             +{formatInr((clinicTotals as any).totalGstAmount || 0)}
                           </td>
                         </>
                       )}
-                      <td className="py-3 px-2.5 text-right font-black text-teal-700 dark:text-teal-300">
+                      <td className="py-3 px-2.5 text-right font-black text-teal-700 dark:text-teal-300 min-w-[115px]">
                         {formatInr((clinicTotals as any).totalNetAmount || (clinicTotals.totalDealPrice - ((clinicTotals as any).totalTdsAmount || 0) + ((clinicTotals as any).totalGstAmount || 0)))}
                       </td>
                       {visibleClinicCols.creditDate && (
@@ -1571,7 +1583,7 @@ export function LedgerDirectory() {
                           {clinicTotals.collectionRate}% CLEARED
                         </td>
                       )}
-                      <td className="py-3 px-2.5 text-right text-emerald-600 dark:text-emerald-400 font-black sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-slate-200/90 dark:bg-slate-800">
+                      <td className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400 font-black sticky right-0 z-10 shadow-[-4px_0_8px_-2px_rgba(0,0,0,0.06)] bg-slate-200/90 dark:bg-slate-800 min-w-[130px]">
                         {formatInr(clinicTotals.totalReceived)}
                       </td>
                     </tr>
@@ -1939,7 +1951,7 @@ export function LedgerDirectory() {
 
             {/* Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full min-w-[1100px] text-left border-collapse text-xs">
                 <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-100/95 dark:bg-slate-800/95 shadow-2xs">
                   <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 uppercase font-bold text-[11px]">
                     <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "py-3 px-3"} text-center w-12`}>#</th>

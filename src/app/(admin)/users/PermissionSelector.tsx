@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { 
   ShieldCheck, 
-  Sparkles, 
   RotateCcw, 
   CheckSquare, 
   Square, 
@@ -240,7 +239,7 @@ export function PermissionSelector({
             className="h-7 px-2 text-[11px] font-semibold rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/40 text-[#285b63] dark:text-teal-300 border-[#285b63]/30 disabled:opacity-50"
             title={`Set default permissions for ${role}`}
           >
-            <Sparkles className="w-3 h-3 mr-1 text-amber-500" />
+            <RotateCcw className="w-3 h-3 mr-1" />
             Apply {role} Defaults
           </Button>
 

@@ -68,7 +68,7 @@ export async function GET(req: Request) {
               title: docName.startsWith("Dr.") ? docName : `Dr. ${docName}`,
               subtitle: `${h.name} • ${doc.qualification || doc.specialization || "Treating Doctor"}`,
               badge: "DOCTOR",
-              link: `/hospitals?view=doctors&search=${encodeURIComponent(docName)}`,
+              link: `/hospitals?search=${encodeURIComponent(h.name)}`,
             });
           }
         });
@@ -95,7 +95,7 @@ export async function GET(req: Request) {
                 title: docName.startsWith("Dr.") ? docName : `Dr. ${docName}`,
                 subtitle: `${h.name} • ${doc.qualification || "Treating Doctor"}`,
                 badge: "DOCTOR",
-                link: `/hospitals?view=doctors&search=${encodeURIComponent(docName)}`,
+                link: `/hospitals?search=${encodeURIComponent(h.name)}`,
               });
             }
           });
@@ -137,7 +137,7 @@ export async function GET(req: Request) {
         subtitle: `${d.registrationId} • ${hosp?.shortName || hosp?.name || "Unassigned"}`,
         status: d.status || "NEW",
         badge: "EGG DONOR",
-        link: `/manage-registrations?search=${encodeURIComponent(d.registrationId)}`,
+        link: `/manage-registrations?registrationId=${encodeURIComponent(d.registrationId)}`,
       });
     });
 
@@ -150,7 +150,7 @@ export async function GET(req: Request) {
         subtitle: `${d.registrationId} • ${hosp?.shortName || hosp?.name || "Unassigned"}`,
         status: d.status || "NEW",
         badge: "SPERM DONOR",
-        link: `/manage-sperm-registrations?search=${encodeURIComponent(d.registrationId)}`,
+        link: `/manage-sperm-registrations?registrationId=${encodeURIComponent(d.registrationId)}`,
       });
     });
 

@@ -2,7 +2,7 @@ import React from "react";
 import { LedgerDirectory } from "@/features/ledger/components/LedgerDirectory";
 
 export const metadata = {
-  title: "Accounts Ledger (Laser) | Mediyaz ART Bank Admin",
+  title: "Accounts Ledger | Mediyaz ART Bank Admin",
   description: "Official Clinic and Donor payment accounts ledger with one-click PDF generation.",
 };
 

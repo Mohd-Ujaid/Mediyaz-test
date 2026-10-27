@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function AdminAppointmentsPage() {
-  redirect("/admin");
+  redirect("/dashboard");
 }

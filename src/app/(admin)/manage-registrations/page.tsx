@@ -2013,56 +2013,39 @@ export default function ManageRegistrationsPage() {
               onChange={(e) => {
                 const val = e.target.value;
                 setStatusFilter(val);
-                if (val === "APPROVED") setActiveTab("APPROVED");
-                else if (val === "WAITING_FORM13") setActiveTab("WAITING_FORM13");
-                else if (val === "FILE_COMPLETED") setActiveTab("FILE_COMPLETED");
-                else if (val === "COMPLETED") setActiveTab("COMPLETED");
-                else if (val === "CANCELLED") setActiveTab("CANCELLED");
-                else if (val === "UNDER_REVIEW") setActiveTab("UNDER_REVIEW");
-                else if (val === "SUSPENDED") setActiveTab("SUSPENDED");
-                else if (val === "REJECTED") setActiveTab("REJECTED");
-                else if (val === "" && activeTab !== "all") setActiveTab("all");
-                else if (val === "other") setActiveTab("other");
+                if (!val) {
+                  setActiveTab("all");
+                } else if (val === "APPROVED") {
+                  setActiveTab("APPROVED");
+                } else if (val === "WAITING_FORM13") {
+                  setActiveTab("WAITING_FORM13");
+                } else if (val === "FILE_COMPLETED") {
+                  setActiveTab("FILE_COMPLETED");
+                } else if (val === "COMPLETED") {
+                  setActiveTab("COMPLETED");
+                } else if (val === "CANCELLED") {
+                  setActiveTab("CANCELLED");
+                } else if (val === "UNDER_REVIEW") {
+                  setActiveTab("UNDER_REVIEW");
+                } else if (val === "SUSPENDED") {
+                  setActiveTab("SUSPENDED");
+                } else if (val === "REJECTED") {
+                  setActiveTab("REJECTED");
+                } else {
+                  setActiveTab("other");
+                }
               }}
               className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500 font-medium"
             >
-              {activeTab === "all" ? (
-                <>
-                  <option value="">All Pipeline Statuses</option>
-                  <option value="APPROVED">Status: Approved</option>
-                  <option value="WAITING_FORM13">Status: Waiting Form 13</option>
-                  <option value="FILE_COMPLETED">Status: File Completed</option>
-                  <option value="COMPLETED">Status: Completed</option>
-                  <option value="CANCELLED">Status: Cancelled</option>
-                  <option value="UNDER_REVIEW">Status: Under Review</option>
-                  <option value="SUSPENDED">Status: Suspended</option>
-                  <option value="REJECTED">Status: Rejected</option>
-                </>
-              ) : activeTab === "APPROVED" ? (
-                <option value="APPROVED">Status: Approved</option>
-              ) : activeTab === "WAITING_FORM13" ? (
-                <option value="WAITING_FORM13">Status: Waiting Form 13</option>
-              ) : activeTab === "FILE_COMPLETED" ? (
-                <option value="FILE_COMPLETED">Status: File Completed</option>
-              ) : activeTab === "COMPLETED" ? (
-                <option value="COMPLETED">Status: Completed</option>
-              ) : activeTab === "CANCELLED" ? (
-                <option value="CANCELLED">Status: Cancelled</option>
-              ) : activeTab === "UNDER_REVIEW" ? (
-                <option value="UNDER_REVIEW">Status: Under Review</option>
-              ) : activeTab === "SUSPENDED" ? (
-                <option value="SUSPENDED">Status: Suspended</option>
-              ) : activeTab === "REJECTED" ? (
-                <option value="REJECTED">Status: Rejected</option>
-              ) : (
-                <>
-                  <option value="other">All Other Statuses</option>
-                  <option value="COMPLETED">Status: Completed</option>
-                  <option value="UNDER_REVIEW">Status: Under Review</option>
-                  <option value="SUSPENDED">Status: Suspended</option>
-                  <option value="REJECTED">Status: Rejected</option>
-                </>
-              )}
+              <option value="">All Pipeline Statuses</option>
+              <option value="APPROVED">Status: Approved</option>
+              <option value="WAITING_FORM13">Status: Waiting Form 13</option>
+              <option value="FILE_COMPLETED">Status: File Completed</option>
+              <option value="COMPLETED">Status: Completed</option>
+              <option value="CANCELLED">Status: Cancelled</option>
+              <option value="UNDER_REVIEW">Status: Under Review</option>
+              <option value="SUSPENDED">Status: Suspended</option>
+              <option value="REJECTED">Status: Rejected</option>
             </select>
           </div>
         </div>
@@ -2120,7 +2103,7 @@ export default function ManageRegistrationsPage() {
               </button>
             </div>
 
-            {(search || hospitalFilter || branchFilter || statusFilter !== "APPROVED" || fromDateFilter || toDateFilter || activeTab !== "APPROVED") && (
+            {(search || hospitalFilter || branchFilter || statusFilter || fromDateFilter || toDateFilter || activeTab !== "all") && (
               <button
                 onClick={() => {
                   setSearch("");
@@ -2128,7 +2111,7 @@ export default function ManageRegistrationsPage() {
                   setBranchFilter("");
                   setFromDateFilter("");
                   setToDateFilter("");
-                  handleTabChange("APPROVED");
+                  handleTabChange("all");
                 }}
                 className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 font-semibold underline flex items-center gap-1 cursor-pointer"
               >
@@ -2312,7 +2295,7 @@ export default function ManageRegistrationsPage() {
           <div className="text-center py-20 text-slate-400 text-xs">No approved donor records found.</div>
         ) : (
           <div className="overflow-x-auto w-full">
-            <table className="w-full min-w-[1280px] text-left text-xs border-collapse">
+            <table className="w-full min-w-[1440px] text-left text-xs border-collapse">
               <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                 <tr>
                   <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} w-10 whitespace-nowrap`}>

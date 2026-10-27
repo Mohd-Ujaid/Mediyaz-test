@@ -648,6 +648,7 @@ const SpermDonorRegistrationSchema = new Schema<ISpermDonorRegistration>(
       agreedBy: { type: String },
       paidAt: { type: Date, default: null },
       paidBy: { type: String, default: null },
+      payments: { type: [Schema.Types.Mixed], default: [] },
     },
   },
   {

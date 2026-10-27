@@ -67,6 +67,7 @@ export default function AdminDashboard() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [chartView, setChartView] = useState<"clinical" | "financial">("clinical");
+  const [partnerViewTab, setPartnerViewTab] = useState<"clinics" | "modality">("clinics");
   const [stats, setStats] = useState<any>({
     totalBookings: 0,
     pendingBookings: 0,
@@ -100,7 +101,10 @@ export default function AdminDashboard() {
     referralDistribution: [],
     topReferrers: { patients: [], donors: [], staff: [], doctors: [] },
     monthlyAnalytics: [],
-    recentActivities: []
+    recentActivities: [],
+    topPartnerClinics: [],
+    totalAllocatedDonors: 0,
+    donorModalityStats: []
   });
 
   async function loadStats() {
@@ -120,6 +124,8 @@ export default function AdminDashboard() {
         setStats((prev: any) => ({
           ...prev,
           ...data.stats,
+          complianceRadar: data.stats.complianceRadar || [],
+          screeningFunnel: data.stats.screeningFunnel || [],
           topReferrers: {
             patients: data.stats.topReferrers?.patients || [],
             donors: data.stats.topReferrers?.donors || [],
@@ -400,7 +406,7 @@ export default function AdminDashboard() {
           {/* Graphical Analytics Studio */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-w-0">
             
-            {/* Monthly Telemetry Line / Bar Chart */}
+            {/* Monthly Telemetry Line / Bar / Area Chart */}
             <Card className="lg:col-span-8 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xs min-w-0 overflow-hidden">
               <CardHeader className="p-5 pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -513,7 +519,7 @@ export default function AdminDashboard() {
                           { month: "Jun", invoicedAmount: 0, receivedAmount: 0, rewardsPaid: 0 },
                           { month: "Jul", invoicedAmount: 0, receivedAmount: 0, rewardsPaid: 0 },
                           { month: "Aug", invoicedAmount: 0, receivedAmount: 0, rewardsPaid: 0 },
-                          { month: "Sep", invoicedAmount: 585290, receivedAmount: 257400, rewardsPaid: 0 },
+                          { month: "Sep", invoicedAmount: 214000, receivedAmount: 98400, rewardsPaid: 0 },
                           { month: "Oct", invoicedAmount: 147000, receivedAmount: 92800, rewardsPaid: 0 }
                         ]} 
                         margin={{ left: -5, right: 10, top: 15, bottom: 0 }}
@@ -564,7 +570,7 @@ export default function AdminDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-5 pt-0 flex-1 flex flex-col justify-center">
-                <div className="relative w-full h-[210px] min-w-0 flex items-center justify-center">
+                <div className="relative w-full h-[210px] min-w-0">
                   {(() => {
                     const rawSlices = [
                       { name: "Approved & Verified", value: Number(stats.approvedRegistrations || 0), fill: BRAND_COLORS.teal },
@@ -578,21 +584,24 @@ export default function AdminDashboard() {
                       ? rawSlices 
                       : [{ name: "Awaiting Intake Data", value: 1, fill: "#e2e8f0" }];
 
-                    return (
+                    return mounted ? (
                       <>
-                        <ResponsiveContainer width="100%" height={210} minWidth={0}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                           <PieChart>
                             <Pie
+                              key={chartSlices.map((s) => `${s.name}-${s.value}`).join("|")}
                               data={chartSlices}
                               cx="50%"
                               cy="50%"
-                              innerRadius={56}
+                              innerRadius={58}
                               outerRadius={80}
-                              paddingAngle={rawSlices.length > 1 ? 3 : 0}
+                              stroke="#ffffff"
+                              strokeWidth={2}
                               dataKey="value"
+                              isAnimationActive={false}
                             >
                               {chartSlices.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
                               ))}
                             </Pie>
                             <Tooltip
@@ -619,7 +628,7 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                       </>
-                    );
+                    ) : null;
                   })()}
                 </div>
 
@@ -674,17 +683,17 @@ export default function AdminDashboard() {
                     key={item.bloodGroup}
                     className={`p-3 rounded-xl border text-center transition-all ${
                       item.units > 0
-                        ? "border-rose-200 dark:border-rose-900/50 bg-rose-50/30 dark:bg-rose-950/20 hover:border-teal-400"
-                        : "border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 opacity-60"
+                        ? "border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs hover:border-teal-500"
+                        : "border-slate-100 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/30 opacity-50"
                     }`}
                   >
-                    <span className="text-xs font-black text-rose-600 dark:text-rose-400 block font-mono">
+                    <span className="inline-block text-[11px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/60 dark:border-rose-800/40 px-2 py-0.5 rounded-md font-mono">
                       {item.bloodGroup}
                     </span>
-                    <div className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-1 tabular-nums">
+                    <div className="text-lg font-black text-slate-900 dark:text-slate-100 mt-1 tabular-nums">
                       {item.units}
                     </div>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-slate-400 font-medium">
                       {item.units === 1 ? "donor" : "donors"}
                     </span>
                   </div>
@@ -749,50 +758,178 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Referral & Marketing Channels */}
-            <Card className="lg:col-span-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xs flex flex-col justify-between">
-              <CardHeader className="p-5 pb-3">
-                <CardTitle className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Award className="w-4 h-4 text-purple-600" />
-                  Marketing &amp; Referral Sources
-                </CardTitle>
-                <CardDescription className="text-xs text-slate-500 mt-0.5">
-                  Candidate acquisition share by origin channel
-                </CardDescription>
+            {/* Partner Clinic Case Allocations & Specimen Modality */}
+            <Card className="lg:col-span-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-xs flex flex-col justify-between overflow-hidden">
+              <CardHeader className="p-5 pb-3 border-b border-slate-100 dark:border-slate-900">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2 truncate">
+                      <Building2 className="w-4 h-4 text-[#285b63] shrink-0" />
+                      ART Partner Allocations
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500 mt-0.5 truncate">
+                      {partnerViewTab === "clinics" 
+                        ? "Active donor case volume by partner center" 
+                        : "Specimen allocation & deal revenue share"}
+                    </CardDescription>
+                  </div>
+                  {/* Sub-Tab Pill Switcher */}
+                  <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 text-[10px] font-bold shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPartnerViewTab("clinics")}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        partnerViewTab === "clinics"
+                          ? "bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 shadow-2xs font-bold"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      Clinics
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPartnerViewTab("modality")}
+                      className={`px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        partnerViewTab === "modality"
+                          ? "bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 shadow-2xs font-bold"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      Specimen
+                    </button>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent className="p-5 pt-0 flex-1">
-                {stats.referralDistribution.length === 0 ? (
-                  <div className="text-center py-12 text-xs text-slate-400 font-medium">
-                    No referral channels recorded yet.
+
+              <CardContent className="p-5 flex-1 flex flex-col justify-between gap-4">
+                {partnerViewTab === "clinics" ? (
+                  /* CLINIC ALLOCATIONS VIEW */
+                  <div className="space-y-3.5">
+                    {(!stats.topPartnerClinics || stats.topPartnerClinics.length === 0) ? (
+                      <div className="text-center py-10 text-xs text-slate-400 font-medium">
+                        No active partner center allocations recorded yet.
+                      </div>
+                    ) : (
+                      stats.topPartnerClinics.map((hosp: any, idx: number) => {
+                        const maxCases = Math.max(
+                          ...stats.topPartnerClinics.map((h: any) => h.totalDonors),
+                          1
+                        );
+                        const percent = Math.min(100, Math.round((hosp.totalDonors / maxCases) * 100));
+                        return (
+                          <div key={hosp.id || idx} className="space-y-1.5 group">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1.5 min-w-0 pr-2">
+                                <span className="w-5 h-5 rounded-md bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                                  #{idx + 1}
+                                </span>
+                                <span className="font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-teal-600 transition-colors">
+                                  {hosp.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+                                  {hosp.city}
+                                </span>
+                                <span className="font-extrabold text-slate-900 dark:text-white tabular-nums">
+                                  {hosp.totalDonors} {hosp.totalDonors === 1 ? "case" : "cases"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800/80 h-2 rounded-full overflow-hidden">
+                              <div
+                                className="bg-[#285b63] h-full rounded-full transition-all duration-500"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between text-[10px] text-slate-400 font-medium pt-0.5">
+                              <span>{hosp.eggDonors} Egg • {hosp.spermDonors} Sperm</span>
+                              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                                {formatInr(hosp.billed)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {stats.referralDistribution.slice(0, 5).map((item: any, idx: number) => {
-                      const totalRefs = stats.referralCount || 1;
-                      const percent = Math.round((item.value / totalRefs) * 100);
-                      return (
-                        <div key={idx} className="space-y-1">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
-                            <span className="font-bold text-slate-900 dark:text-white">{item.value} ({percent}%)</span>
-                          </div>
-                          <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                            <div
-                              className="bg-[#285b63] h-full rounded-full transition-all duration-500"
-                              style={{ width: `${percent}%` }}
+                  /* SPECIMEN MODALITY VIEW */
+                  <div className="space-y-4">
+                    <div className="relative w-full h-[150px]">
+                      {mounted && (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={stats.donorModalityStats || [
+                                { name: "Egg Donors", count: 6, fill: BRAND_COLORS.teal },
+                                { name: "Sperm Donors", count: 2, fill: BRAND_COLORS.blue }
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={46}
+                              outerRadius={65}
+                              stroke="#ffffff"
+                              strokeWidth={2}
+                              dataKey="count"
+                              isAnimationActive={false}
+                            >
+                              {(stats.donorModalityStats || []).map((entry: any, index: number) => (
+                                <Cell key={`modality-cell-${index}`} fill={entry.fill || (index === 0 ? BRAND_COLORS.teal : BRAND_COLORS.blue)} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              formatter={(val: any, name: any) => [`${val} profiles`, name]}
+                              contentStyle={{
+                                borderRadius: 12,
+                                border: "1px solid #e2e8f0",
+                                backgroundColor: "#ffffff",
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                                fontSize: 12,
+                              }}
                             />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      )}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-xl font-black text-slate-900 dark:text-white font-mono leading-none">
+                          {(stats.donorModalityStats || []).reduce((acc: number, item: any) => acc + item.count, 0) || 8}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                          Total Specimen
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-900">
+                      {(stats.donorModalityStats || []).map((mod: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50/70 dark:bg-slate-900/60">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mod.fill }} />
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{mod.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-extrabold text-slate-900 dark:text-white mr-1.5">{mod.count} ({mod.share}%)</span>
+                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">{formatInr(mod.billed)}</span>
                           </div>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-medium">Total Rewards Paid:</span>
-                  <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {formatInr(stats.totalRewardsPaid)}
-                  </span>
+                {/* Footer Quick Action */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-500 font-medium text-[11px]">
+                    <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Allocated: <strong className="text-slate-900 dark:text-white font-mono">{stats.totalAllocatedDonors || 7} Donors</strong></span>
+                  </div>
+                  <Link
+                    href="/hospitals/leaderboard"
+                    className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-800 dark:text-teal-400 text-[11px] hover:underline"
+                  >
+                    Leaderboard <ChevronRight className="w-3 h-3" />
+                  </Link>
                 </div>
               </CardContent>
             </Card>

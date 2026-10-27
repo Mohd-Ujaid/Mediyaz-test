@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   KeyRound,
   BarChart3,
+  TrendingUp,
 } from "lucide-react";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { GlobalSearchModal } from "@/components/layout/GlobalSearchModal";
@@ -101,8 +102,7 @@ const sidebarNavigation: SidebarGroupSection[] = [
     items: [
       { href: "/donor-registrations/egg", label: "Egg Registrations", icon: Heart, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/donor-registrations/sperm", label: "Sperm Registrations", icon: Dna, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/hospitals", label: "Hospital Registration", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
-      { href: "/hospitals?view=doctors", label: "Doctor Registration", icon: Stethoscope, requiredPermission: "VIEW_HOSPITALS" },
+      { href: "/hospitals", label: "ART Clinics & Hospitals", icon: Building2, requiredPermission: "VIEW_HOSPITALS" },
     ]
   },
   {
@@ -122,9 +122,10 @@ const sidebarNavigation: SidebarGroupSection[] = [
   {
     title: "Billing & Accounts",
     items: [
+      { href: "/reports/cashflow", label: "Revenue & Cash Flow", icon: TrendingUp, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/invoices", label: "Invoice Tracker", icon: Receipt, requiredPermission: "VIEW_REGISTRATIONS" },
       { href: "/reports/finance", label: "Tax & Financial Audits", icon: BarChart3, requiredPermission: "VIEW_REGISTRATIONS" },
-      { href: "/ledger", label: "Accounts Ledger (Laser)", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
+      { href: "/ledger", label: "Accounts Ledger", icon: BookOpen, requiredPermission: "VIEW_REGISTRATIONS" },
     ]
   },
   {
@@ -353,7 +354,7 @@ export default function AdminLayoutClient({
         </SidebarHeader>
         
         {/* Navigation Content */}
-        <SidebarContent className="px-3 group-data-[collapsible=icon]:px-1.5 py-3 space-y-4 group-data-[collapsible=icon]:space-y-2 overflow-x-hidden">
+        <SidebarContent className="px-3 group-data-[collapsible=icon]:px-1.5 pt-3 pb-20 space-y-4 group-data-[collapsible=icon]:space-y-2 overflow-x-hidden">
           {filteredLinks.map((group) => (
             <SidebarGroup key={group.title} className="p-0">
               <SidebarGroupLabel className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-3 mb-1 truncate whitespace-nowrap group-data-[collapsible=icon]:hidden">

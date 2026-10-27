@@ -811,11 +811,11 @@ export default function AdminEmployeesPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="font-semibold">Exp (Yrs)</label>
-                <Input type="number" value={createForm.experienceYears} onChange={(e) => setCreateForm({ ...createForm, experienceYears: parseInt(e.target.value) })} required />
+                <Input type="number" value={createForm.experienceYears ?? ""} onChange={(e) => setCreateForm({ ...createForm, experienceYears: e.target.value === "" ? "" : (parseInt(e.target.value) || 0) })} required />
               </div>
               <div className="space-y-1 col-span-2">
                 <label className="font-semibold">Salary ($/year)</label>
-                <Input type="number" value={createForm.salary} onChange={(e) => setCreateForm({ ...createForm, salary: parseInt(e.target.value) })} required />
+                <Input type="number" value={createForm.salary ?? ""} onChange={(e) => setCreateForm({ ...createForm, salary: e.target.value === "" ? "" : (parseInt(e.target.value) || 0) })} required />
               </div>
             </div>
             <div className="space-y-1">

@@ -276,8 +276,8 @@ export default function AdminSpermDonorRegistrationsPage() {
     }
   }, [selectedReg]);
 
-  // Active status tab: default "new"
-  const [activeTab, setActiveTab] = useState<SpermRegTab>("new");
+  // Active status tab: default "all"
+  const [activeTab, setActiveTab] = useState<SpermRegTab>("all");
 
   const fetchSpermRegistrations = useCallback(async () => {
     setLoading(true);
@@ -2163,7 +2163,14 @@ export default function AdminSpermDonorRegistrationsPage() {
                           <span className="text-[10px] text-muted-foreground block font-semibold">Referral / Sourcing:</span>
                           <span className="text-teal-700 dark:text-teal-300 font-semibold">
                             Source: {selectedReg.referral?.sourceReferralType || selectedReg.registrationSource || "Online"}
-                            {selectedReg.agentCode && ` (Agent / Refer ID: ${selectedReg.agentCode})`}
+                            {selectedReg.referral?.sourceReferralType === "Our Staff" && (selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId) && ` • Staff: ${selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId}`}
+                            {selectedReg.referral?.sourceReferralType === "Refer" && (
+                              <>
+                                {(selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId || selectedReg.agentCode) && ` • Refer: ${selectedReg.referral?.referrerName || selectedReg.referral?.patientOrDonorId || selectedReg.agentCode}`}
+                                {selectedReg.referral?.mobileNumber && ` • Phone: ${selectedReg.referral?.mobileNumber}`}
+                              </>
+                            )}
+                            {selectedReg.referral?.sourceReferralType !== "Our Staff" && selectedReg.referral?.sourceReferralType !== "Refer" && selectedReg.agentCode && ` (Agent / Refer ID: ${selectedReg.agentCode})`}
                             {selectedReg.referredBy && ` (Referred by: ${selectedReg.referredBy})`}
                           </span>
                         </div>

@@ -306,6 +306,14 @@ export interface IDonorDeal {
   notes?: string;
   agreedAt?: Date;
   agreedBy?: string;
+  payments?: Array<{
+    amount: number;
+    date: Date;
+    method?: string;
+    reference?: string;
+    notes?: string;
+    paidBy?: string;
+  }>;
 }
 
 const fileRefSubSchema = {
@@ -593,6 +601,7 @@ const EggDonorRegistrationSchema = new Schema<IEggDonorRegistration>(
       agreedBy: { type: String },
       paidAt: { type: Date, default: null },
       paidBy: { type: String, default: null },
+      payments: { type: [Schema.Types.Mixed], default: [] },
     },
     isDonorPaid: { type: Boolean, default: false },
     paidAt: { type: Date, default: null },

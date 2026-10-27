@@ -261,7 +261,7 @@ export default function HospitalLeaderboardPage() {
               <div className="grid grid-cols-2 gap-2 my-4 pt-3 border-t text-xs">
                 <div>
                   <span className="text-muted-foreground text-[10px] uppercase font-semibold">Donors Dispatched</span>
-                  <div className="text-lg font-black text-foreground">{topThree[1].totalDonorsSent} Donors</div>
+                  <div className="text-lg font-black text-foreground">{topThree[1].totalDonorsSent} {topThree[1].totalDonorsSent === 1 ? "Donor" : "Donors"}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground text-[10px] uppercase font-semibold">Payment Received</span>
@@ -311,7 +311,7 @@ export default function HospitalLeaderboardPage() {
               <div className="grid grid-cols-2 gap-3 my-4 pt-3 border-t border-amber-500/20 text-xs">
                 <div>
                   <span className="text-muted-foreground text-[10px] uppercase font-semibold">Total Donors Sent</span>
-                  <div className="text-2xl font-black text-foreground">{topThree[0].totalDonorsSent} Donors</div>
+                  <div className="text-2xl font-black text-foreground">{topThree[0].totalDonorsSent} {topThree[0].totalDonorsSent === 1 ? "Donor" : "Donors"}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {topThree[0].eggDonorsCount} Egg • {topThree[0].spermDonorsCount} Sperm
                   </div>
@@ -364,7 +364,7 @@ export default function HospitalLeaderboardPage() {
               <div className="grid grid-cols-2 gap-2 my-4 pt-3 border-t text-xs">
                 <div>
                   <span className="text-muted-foreground text-[10px] uppercase font-semibold">Donors Dispatched</span>
-                  <div className="text-lg font-black text-foreground">{topThree[2].totalDonorsSent} Donors</div>
+                  <div className="text-lg font-black text-foreground">{topThree[2].totalDonorsSent} {topThree[2].totalDonorsSent === 1 ? "Donor" : "Donors"}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground text-[10px] uppercase font-semibold">Payment Received</span>

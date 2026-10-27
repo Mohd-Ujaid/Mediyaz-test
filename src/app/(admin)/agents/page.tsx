@@ -59,7 +59,7 @@ export default function AdminAgentsPage() {
   // Payout processing modal
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [payoutDonor, setPayoutDonor] = useState<any | null>(null);
-  const [payoutAmount, setPayoutAmount] = useState<number>(0);
+  const [payoutAmount, setPayoutAmount] = useState<number | string>(0);
   const [payoutStatus, setPayoutStatus] = useState("PAID");
   const [paymentRef, setPaymentRef] = useState("");
   const [payoutNotes, setPayoutNotes] = useState("");
@@ -338,7 +338,7 @@ export default function AdminAgentsPage() {
           donorRegistrationId: payoutDonor.registrationId || payoutDonor._id,
           agentCode: selectedAgent?.agentCode || payoutDonor.agentCode,
           agentId: selectedAgent?._id || payoutDonor.agentId,
-          payoutAmount,
+          payoutAmount: Number(payoutAmount) || 0,
           payoutStatus,
           paymentReference: paymentRef,
           notes: payoutNotes,
@@ -913,8 +913,8 @@ export default function AdminAgentsPage() {
               <label className="text-xs font-bold text-slate-700">Commission Amount (₹)</label>
               <Input
                 type="number"
-                value={payoutAmount}
-                onChange={(e) => setPayoutAmount(Number(e.target.value))}
+                value={payoutAmount !== undefined && payoutAmount !== null ? payoutAmount : ""}
+                onChange={(e) => setPayoutAmount(e.target.value === "" ? "" : Number(e.target.value))}
                 className="rounded-xl text-xs font-bold text-slate-900"
               />
             </div>

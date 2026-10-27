@@ -143,21 +143,6 @@ export default function HospitalManagementPage() {
   const [formTab, setFormTab] = useState<"basic" | "branches" | "financial">("basic");
   const [detailTab, setDetailTab] = useState<"info" | "branches" | "financial" | "history">("info");
   
-  // View Switcher: Clinics vs Treating Doctors
-  const [activeMainTab, setActiveMainTab] = useState<"clinics" | "doctors">("clinics");
-  const [doctorSearch, setDoctorSearch] = useState("");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const sp = new URLSearchParams(window.location.search);
-      if (sp.get("view") === "doctors") {
-        setActiveMainTab("doctors");
-      }
-    }
-  }, []);
-
-  const [doctorSpecialtyFilter, setDoctorSpecialtyFilter] = useState("ALL");
-  const [doctorRegFilter, setDoctorRegFilter] = useState<"ALL" | "REGISTERED" | "PENDING">("ALL");
 
   // Dedicated Doctor Modal State
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
@@ -1257,130 +1242,6 @@ export default function HospitalManagementPage() {
     }
   };
 
-  // Compile list of all treating doctors across partner clinics and branches
-  const allDoctors = hospitals.flatMap((hosp) => {
-    const list: any[] = [];
-    if (Array.isArray(hosp.doctors) && hosp.doctors.length > 0) {
-      hosp.doctors.forEach((d: any, docIdx: number) => {
-        const dName = typeof d === "string" ? d : d.name;
-        if (dName) {
-          list.push({
-            _id: d._id || `doc-hosp-${hosp._id}-${docIdx}`,
-            name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
-            rawName: dName,
-            specialization: (typeof d === "object" && d.specialization) || "Infertility & IVF Specialist",
-            phone: (typeof d === "object" && d.phone) || hosp.mobileNumber || "—",
-            email: (typeof d === "object" && d.email) || hosp.email || "—",
-            regNumber: (typeof d === "object" && d.regNumber) || "—",
-            hospital: hosp,
-            branchId: "main",
-            branchName: "Main Center",
-            isHospitalLevel: true,
-            docIndex: docIdx,
-            isPrimary: typeof d === "object" ? Boolean(d.isPrimary) : false,
-            status: typeof d === "object" ? (d.status || "ACTIVE") : "ACTIVE",
-          });
-        }
-      });
-    } else if (hosp.doctorName) {
-      const docNames = hosp.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean);
-      docNames.forEach((dName: string, docIdx: number) => {
-        list.push({
-          _id: `doc-hosp-${hosp._id}-${docIdx}`,
-          name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
-          rawName: dName,
-          specialization: "Infertility & IVF Specialist",
-          phone: hosp.mobileNumber || "—",
-          email: hosp.email || "—",
-          regNumber: "—",
-          hospital: hosp,
-          branchId: "main",
-          branchName: "Main Center",
-          isHospitalLevel: true,
-          docIndex: docIdx,
-          isPrimary: false,
-          status: "ACTIVE",
-        });
-      });
-    }
-
-    if (Array.isArray(hosp.branches)) {
-      hosp.branches.forEach((b: any) => {
-        if (Array.isArray(b.doctors) && b.doctors.length > 0) {
-          b.doctors.forEach((d: any, docIdx: number) => {
-            const dName = typeof d === "string" ? d : d.name;
-            if (dName) {
-              list.push({
-                _id: d._id || `doc-branch-${b._id || b.branchName}-${docIdx}`,
-                name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
-                rawName: dName,
-                specialization: (typeof d === "object" && d.specialization) || "Infertility & IVF Specialist",
-                phone: (typeof d === "object" && d.phone) || b.mobileNumber || "—",
-                email: (typeof d === "object" && d.email) || b.email || "—",
-                regNumber: (typeof d === "object" && d.regNumber) || "—",
-                hospital: hosp,
-                branchId: b._id || b.branchName,
-                branchName: b.branchName,
-                isHospitalLevel: false,
-                docIndex: docIdx,
-                isPrimary: typeof d === "object" ? Boolean(d.isPrimary) : false,
-                status: typeof d === "object" ? (d.status || "ACTIVE") : "ACTIVE",
-              });
-            }
-          });
-        } else if (b.doctorName) {
-          const docNames = b.doctorName.split(",").map((s: string) => s.trim()).filter(Boolean);
-          docNames.forEach((dName: string, docIdx: number) => {
-            list.push({
-              _id: `doc-branch-${b._id || b.branchName}-${docIdx}`,
-              name: dName.startsWith("Dr.") || dName.startsWith("Dr ") ? dName : `Dr. ${dName}`,
-              rawName: dName,
-              specialization: "Infertility & IVF Specialist",
-              phone: b.mobileNumber || "—",
-              email: b.email || "—",
-              regNumber: "—",
-              hospital: hosp,
-              branchId: b._id || b.branchName,
-              branchName: b.branchName,
-              isHospitalLevel: false,
-              docIndex: docIdx,
-              isPrimary: false,
-              status: "ACTIVE",
-            });
-          });
-        }
-      });
-    }
-
-    return list;
-  });
-
-  const filteredDoctors = allDoctors.filter((d) => {
-    if (doctorSearch) {
-      const q = doctorSearch.toLowerCase();
-      const match =
-        d.name.toLowerCase().includes(q) ||
-        d.hospital.name.toLowerCase().includes(q) ||
-        (d.branchName && d.branchName.toLowerCase().includes(q)) ||
-        d.specialization.toLowerCase().includes(q) ||
-        (d.regNumber && d.regNumber.toLowerCase().includes(q)) ||
-        (d.phone && d.phone.includes(q));
-      if (!match) return false;
-    }
-
-    if (doctorSpecialtyFilter !== "ALL") {
-      const spec = d.specialization.toLowerCase();
-      if (doctorSpecialtyFilter === "IVF" && !spec.includes("ivf") && !spec.includes("infertil")) return false;
-      if (doctorSpecialtyFilter === "EMBRYOLOGY" && !spec.includes("embryo")) return false;
-      if (doctorSpecialtyFilter === "GYNECOLOGY" && !spec.includes("gynec") && !spec.includes("obste")) return false;
-      if (doctorSpecialtyFilter === "ANDROLOGY" && !spec.includes("andro")) return false;
-    }
-
-    if (doctorRegFilter === "REGISTERED" && (!d.regNumber || d.regNumber === "—")) return false;
-    if (doctorRegFilter === "PENDING" && d.regNumber && d.regNumber !== "—") return false;
-
-    return true;
-  });
 
   return (
     <div className="space-y-6 pb-12">
@@ -1388,7 +1249,7 @@ export default function HospitalManagementPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-teal-600" /> ART Clinics & Doctor Registration
+            <Building2 className="w-6 h-6 text-teal-600" /> ART Clinics &amp; Hospitals
           </h1>
         </div>
         {isAdmin && (
@@ -1400,57 +1261,16 @@ export default function HospitalManagementPage() {
             >
               <Download className="w-3.5 h-3.5" /> Export CSV
             </Button>
-            {activeMainTab === "doctors" ? (
-              <Button
-                onClick={() => openAddDoctorModal()}
-                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1.5 cursor-pointer shadow-sm hover:shadow"
-              >
-                <UserPlus className="w-3.5 h-3.5" /> Add Treating Doctor
-              </Button>
-            ) : (
-              <Button
-                id="btn-add-partner-hospital"
-                onClick={() => { resetForm(); setSelectedHospital(null); setIsFormOpen(true); }}
-                className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer shadow-sm hover:shadow"
-              >
-                <Plus className="w-4 h-4" /> Add Partner Hospital
-              </Button>
-            )}
+            <Button
+              id="btn-add-partner-hospital"
+              onClick={() => { resetForm(); setSelectedHospital(null); setIsFormOpen(true); }}
+              className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer shadow-sm hover:shadow"
+            >
+              <Plus className="w-4 h-4" /> Add Partner Hospital
+            </Button>
           </div>
         )}
       </div>
-
-      {/* Main Tab Switcher: Clinics vs Treating Doctors */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => setActiveMainTab("clinics")}
-          className={`pb-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-            activeMainTab === "clinics"
-              ? "border-teal-600 text-teal-700 dark:text-teal-400"
-              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          Registered ART Clinics ({stats.total || hospitals.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveMainTab("doctors")}
-          className={`pb-3 px-4 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
-            activeMainTab === "doctors"
-              ? "border-teal-600 text-teal-700 dark:text-teal-400"
-              : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-          }`}
-        >
-          <Stethoscope className="w-4 h-4" />
-          Treating Doctors Directory ({allDoctors.length})
-        </button>
-      </div>
-
-      {/* View Switcher: Clinics Content vs Treating Doctors Content */}
-      {activeMainTab === "clinics" ? (
-        <>
           {/* Interactive Hospital Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -1729,16 +1549,24 @@ export default function HospitalManagementPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="p-3.5 text-slate-600">{h.registrationNumber}</td>
-                    <td className="p-3.5 text-slate-600">{h.hospitalType}</td>
+                    <td className="p-3.5 text-slate-600 font-mono text-[11px]">{h.registrationNumber || "—"}</td>
+                    <td className="p-3.5 text-slate-600">{h.hospitalType || "Clinic / Hospital"}</td>
                     <td className="p-3.5 text-slate-600">
-                      {h.city}, {h.state}
+                      {[h.city, h.state].filter(Boolean).join(", ") || (
+                        <span className="text-slate-400 italic text-[11px]">Location unassigned</span>
+                      )}
                     </td>
                     <td className="p-3.5">
-                      <div className="space-y-0.5">
-                        <div className="font-semibold text-slate-700 dark:text-slate-300">{h.contactPerson}</div>
-                        <div className="text-[10px] text-slate-400">{h.mobileNumber}</div>
-                      </div>
+                      {h.contactPerson || h.mobileNumber ? (
+                        <div className="space-y-0.5">
+                          <div className="font-semibold text-slate-700 dark:text-slate-300">
+                            {h.contactPerson || "—"}
+                          </div>
+                          {h.mobileNumber && <div className="text-[10px] text-slate-400 font-mono">{h.mobileNumber}</div>}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">No contact listed</span>
+                      )}
                     </td>
                     <td className="p-3.5">
                       <button
@@ -1850,246 +1678,7 @@ export default function HospitalManagementPage() {
           />
         )}
         </Card>
-        </>
-      ) : (
-        /* TREATING DOCTORS DIRECTORY VIEW */
-        <div className="space-y-4">
-          {/* Doctors Metric Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                Total Doctors
-              </div>
-              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-white mt-1.5">
-                {allDoctors.length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1">Across all partner clinics</div>
-            </div>
 
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> NMC Registered
-              </div>
-              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400 mt-1.5">
-                {allDoctors.filter((d) => d.regNumber && d.regNumber !== "—").length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1">Statutory verified records</div>
-            </div>
-
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                IVF Specialists
-              </div>
-              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-purple-600 dark:text-purple-400 mt-1.5">
-                {allDoctors.filter((d) => d.specialization.toLowerCase().includes("ivf") || d.specialization.toLowerCase().includes("infertil")).length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1">Clinical fertility consultants</div>
-            </div>
-
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/40 shadow-2xs">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Embryologists
-              </div>
-              <div className="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight text-blue-600 dark:text-blue-400 mt-1.5">
-                {allDoctors.filter((d) => d.specialization.toLowerCase().includes("embryo")).length}
-              </div>
-              <div className="text-[10px] text-slate-400 mt-1">Lab & IVF embryologists</div>
-            </div>
-          </div>
-
-          {/* Search & Filters */}
-          <Card className="rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="relative sm:col-span-2">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search doctor by name, clinic, branch, NMC reg, or phone..."
-                  value={doctorSearch}
-                  onChange={(e) => setDoctorSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                />
-              </div>
-
-              <div>
-                <select
-                  value={doctorSpecialtyFilter}
-                  onChange={(e) => setDoctorSpecialtyFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                >
-                  <option value="ALL">All Specialties</option>
-                  <option value="IVF">IVF & Infertility Specialists</option>
-                  <option value="EMBRYOLOGY">Embryologists</option>
-                  <option value="GYNECOLOGY">Gynecologists & Obstetricians</option>
-                  <option value="ANDROLOGY">Andrologists</option>
-                </select>
-              </div>
-
-              <div>
-                <select
-                  value={doctorRegFilter}
-                  onChange={(e) => setDoctorRegFilter(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:outline-none focus:border-teal-500"
-                >
-                  <option value="ALL">All NMC Statuses</option>
-                  <option value="REGISTERED">Verified NMC Registered</option>
-                  <option value="PENDING">Pending NMC Registration</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground font-medium pt-3 mt-3 border-t border-slate-100 dark:border-slate-900">
-              <span>Showing {filteredDoctors.length} of {allDoctors.length} treating doctors</span>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  onClick={() => openAddDoctorModal()}
-                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs h-7 px-2.5 gap-1 cursor-pointer"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> + Add Treating Doctor
-                </Button>
-              )}
-            </div>
-          </Card>
-
-          {filteredDoctors.length === 0 ? (
-            <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
-              <Stethoscope className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-1" />
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No treating doctors found</p>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                No doctors matched your current search filters. Register treating doctors or adjust your filters above.
-              </p>
-              {isAdmin && (
-                <Button
-                  onClick={() => openAddDoctorModal()}
-                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs gap-1 cursor-pointer mt-2"
-                >
-                  <UserPlus className="w-3.5 h-3.5" /> Register Doctor Now
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredDoctors.map((doc, idx) => (
-                <Card
-                  key={`${doc.name}-${doc.hospital._id}-${doc.branchId || idx}`}
-                  className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between gap-3"
-                >
-                  <div className="space-y-3">
-                    {/* Header info */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-400 flex items-center justify-center font-bold text-sm shrink-0">
-                          <Stethoscope className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">{doc.name}</h4>
-                            {doc.isPrimary && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 rounded-md">
-                                Primary
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-teal-600 dark:text-teal-400 font-medium">
-                            {doc.specialization}
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                        doc.status === "ACTIVE"
-                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-200/50"
-                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                      }`}>
-                        {doc.status || "ACTIVE"}
-                      </span>
-                    </div>
-
-                    {/* NMC/MCI Reg Box */}
-                    <div>
-                      {doc.regNumber && doc.regNumber !== "—" ? (
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/60">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span>NMC Reg: {doc.regNumber}</span>
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-mono font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60">
-                          <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                          <span>NMC Reg: Pending Record</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Affiliation details */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate font-semibold text-slate-800 dark:text-slate-200">
-                          {doc.hospital.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px]">
-                        <GitBranch className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">Branch: {doc.branchName || "Main Center"}</span>
-                      </div>
-                      {doc.phone && doc.phone !== "—" && (
-                        <div className="flex items-center gap-2 text-[11px]">
-                          <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <a href={`tel:${doc.phone}`} className="hover:text-teal-600 hover:underline">
-                            {doc.phone}
-                          </a>
-                        </div>
-                      )}
-                      {doc.email && doc.email !== "—" && (
-                        <div className="flex items-center gap-2 text-[11px]">
-                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <a href={`mailto:${doc.email}`} className="hover:text-teal-600 hover:underline truncate">
-                            {doc.email}
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions Footer */}
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openClinicDashboard(doc.hospital, "info")}
-                      className="text-xs h-7 px-2.5 rounded-lg text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800 hover:bg-teal-50 dark:hover:bg-teal-950/40 gap-1 cursor-pointer"
-                    >
-                      <Eye className="w-3 h-3" /> Clinic Profile
-                    </Button>
-
-                    {isAdmin && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openEditDoctorModal(doc)}
-                          className="h-7 px-2 text-xs rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 cursor-pointer"
-                          title="Edit Doctor Details"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteDoctor(doc)}
-                          className="h-7 px-2 text-xs rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer"
-                          title="Remove Doctor"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* DIALOG 1: ADD / EDIT PARTNER CLINIC WITH 2-STEP WIZARD */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
@@ -2265,8 +1854,8 @@ export default function HospitalManagementPage() {
                           step="0.1"
                           min="0"
                           max="30"
-                          value={formFields.tdsPercentage}
-                          onChange={(e) => setFormFields({ ...formFields, tdsPercentage: Number(e.target.value) })}
+                          value={formFields.tdsPercentage !== undefined && formFields.tdsPercentage !== null ? formFields.tdsPercentage : ""}
+                          onChange={(e) => setFormFields({ ...formFields, tdsPercentage: e.target.value === "" ? ("" as any) : Number(e.target.value) })}
                           className="w-full px-3 py-2 border rounded-xl focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 pr-8 font-mono"
                           placeholder="Standard 2%"
                         />

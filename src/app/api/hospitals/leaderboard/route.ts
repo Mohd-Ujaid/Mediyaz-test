@@ -127,16 +127,29 @@ export async function GET(req: Request) {
 
         totalDealValue += dealPrice;
 
+        const paymentsList: any[] = Array.isArray(reg.clinicDeal?.payments) ? reg.clinicDeal.payments : [];
+        let recAmt = 0;
+        let tdsAmt = 0;
+
+        if (paymentsList.length > 0) {
+          recAmt = paymentsList.reduce((acc: number, p: any) => acc + Number(p.netAmount ?? p.amount ?? 0), 0);
+          tdsAmt = paymentsList.reduce((acc: number, p: any) => acc + Number(p.tdsAmount ?? 0), 0);
+        } else {
+          recAmt = Number(reg.clinicDeal?.receivedAmount || 0);
+          tdsAmt = Number(reg.clinicDeal?.tdsAmount || reg.clinicDeal?.tdsTotal || 0);
+        }
+
+        const totalSettled = recAmt + tdsAmt;
         const isHospPaid =
           reg.clinicDeal?.isPaymentReceived === true ||
-          reg.clinicDeal?.paymentStatus === "RECEIVED";
+          reg.clinicDeal?.paymentStatus === "RECEIVED" ||
+          (dealPrice > 0 && totalSettled >= dealPrice);
 
-        const recAmt = isHospPaid
-          ? dealPrice
-          : Number(reg.clinicDeal?.receivedAmount) || 0;
+        const finalRecAmt = isHospPaid ? (recAmt || dealPrice) : recAmt;
+        const regPending = isHospPaid ? 0 : Math.max(0, dealPrice - (finalRecAmt + tdsAmt));
 
-        totalPaymentReceived += recAmt;
-        if (isHospPaid || recAmt >= dealPrice) {
+        totalPaymentReceived += finalRecAmt;
+        if (isHospPaid || totalSettled >= dealPrice) {
           fullyPaidDonorsCount++;
         }
 
@@ -150,8 +163,10 @@ export async function GET(req: Request) {
           category: cat,
           status: st,
           dealPrice,
-          paymentStatus: isHospPaid ? "RECEIVED" : (reg.clinicDeal?.paymentStatus || "PENDING"),
-          receivedAmount: recAmt,
+          paymentStatus: isHospPaid ? "RECEIVED" : (reg.clinicDeal?.paymentStatus || (recAmt > 0 ? "PARTIALLY_RECEIVED" : "PENDING")),
+          receivedAmount: finalRecAmt,
+          tdsAmount: tdsAmt,
+          pendingAmount: regPending,
           paymentReference: reg.clinicDeal?.paymentReference || "",
           pickupDate: reg.pickupDate || "",
           recruitmentDate: reg.recruitmentDate || "",
@@ -163,7 +178,10 @@ export async function GET(req: Request) {
       // Sort detailed donors by latest assignment date
       detailedDonors.sort((a, b) => new Date(b.assignedAt || 0).getTime() - new Date(a.assignedAt || 0).getTime());
 
-      const pendingBalance = Math.max(0, totalDealValue - totalPaymentReceived);
+      const pendingBalance = Math.max(
+        0,
+        detailedDonors.reduce((sum, d) => sum + (d.pendingAmount || 0), 0)
+      );
       const collectionRate = totalDealValue > 0 ? Math.round((totalPaymentReceived / totalDealValue) * 100) : 0;
 
       return {

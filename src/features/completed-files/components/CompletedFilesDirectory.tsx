@@ -1752,17 +1752,19 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       <Input
                         type="number"
                         min={0}
-                        value={currentTotal}
+                        value={paymentForm.totalAmount ?? paymentForm.hospitalDealPrice ?? ""}
                         onChange={(e) => {
-                          const newTotal = Number(e.target.value) || 0;
-                          const newTdsAmt = Math.round(newTotal * (currentTdsPct / 100));
-                          const newNetRec = Math.max(0, newTotal - newTdsAmt + currentGstAmt);
+                          const raw = e.target.value;
+                          const newTotal = raw === "" ? ("" as any) : Number(raw);
+                          const numTotal = Number(raw) || 0;
+                          const newTdsAmt = Math.round(numTotal * (currentTdsPct / 100));
+                          const newNetRec = Math.max(0, numTotal - newTdsAmt + currentGstAmt);
                           const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
                           setPaymentForm({
                             ...paymentForm,
                             hospitalDealPrice: newTotal,
                             totalAmount: newTotal,
-                            donorReimbursement: Math.max(0, newTotal - currentServ),
+                            donorReimbursement: Math.max(0, numTotal - currentServ),
                             tdsAmount: newTdsAmt,
                             hospitalReceivedAmount: isRec ? newNetRec : paymentForm.hospitalReceivedAmount,
                           });
@@ -1780,16 +1782,18 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       <Input
                         type="number"
                         min={0}
-                        value={currentServ}
+                        value={paymentForm.serviceCharge !== undefined ? paymentForm.serviceCharge : ""}
                         onChange={(e) => {
-                          const newServ = Number(e.target.value) || 0;
-                          const newGst = Math.round(newServ * 0.18);
+                          const raw = e.target.value;
+                          const newServ = raw === "" ? ("" as any) : Number(raw);
+                          const numServ = Number(raw) || 0;
+                          const newGst = Math.round(numServ * 0.18);
                           const newNetRec = Math.max(0, currentTotal - currentTdsAmt + newGst);
                           const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
                           setPaymentForm({
                             ...paymentForm,
                             serviceCharge: newServ,
-                            donorReimbursement: Math.max(0, currentTotal - newServ),
+                            donorReimbursement: Math.max(0, currentTotal - numServ),
                             hospitalReceivedAmount: isRec ? newNetRec : paymentForm.hospitalReceivedAmount,
                           });
                         }}
@@ -1882,9 +1886,18 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       min={0}
                       max={10}
                       step={0.1}
-                      value={paymentForm.tdsPercentage}
+                      value={paymentForm.tdsPercentage !== undefined && paymentForm.tdsPercentage !== null ? paymentForm.tdsPercentage : ""}
                       onChange={(e) => {
-                        const val = Math.max(0, Math.min(10, Number(e.target.value) || 0));
+                        const raw = e.target.value;
+                        if (raw === "") {
+                          setPaymentForm({
+                            ...paymentForm,
+                            tdsPercentage: "" as any,
+                            tdsAmount: 0,
+                          });
+                          return;
+                        }
+                        const val = Math.max(0, Math.min(10, Number(raw) || 0));
                         const newTdsAmt = Math.round(currentTotal * (val / 100));
                         const newNetReceivable = Math.max(0, currentTotal - newTdsAmt + currentGstAmt);
                         const isRec = paymentForm.hospitalPaymentStatus === "RECEIVED";
@@ -1971,8 +1984,8 @@ Exported from Mediyaz ART Bank Portal on ${new Date().toLocaleString("en-IN")}
                       <label className="text-[11px] font-semibold text-muted-foreground">Amount Received in Bank (₹)</label>
                       <Input
                         type="number"
-                        value={paymentForm.hospitalReceivedAmount}
-                        onChange={(e) => setPaymentForm({ ...paymentForm, hospitalReceivedAmount: Number(e.target.value) })}
+                        value={paymentForm.hospitalReceivedAmount !== undefined && paymentForm.hospitalReceivedAmount !== null ? paymentForm.hospitalReceivedAmount : ""}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, hospitalReceivedAmount: e.target.value === "" ? ("" as any) : Number(e.target.value) })}
                         className="h-9 rounded-lg text-xs font-bold"
                         placeholder="e.g. 58500"
                       />

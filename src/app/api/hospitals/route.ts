@@ -188,9 +188,23 @@ export async function POST(req: Request) {
     } = body;
 
     // Validate inputs - Clinic Entity
-    if (!name || !hospitalType) {
+    if (!name || name.trim().length < 3 || !hospitalType) {
       return NextResponse.json(
-        { success: false, error: "Hospital Name and Hospital Type are required." },
+        { success: false, error: "Valid Hospital Name (min 3 characters) and Hospital Type are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!city || !city.trim() || !state || !state.trim()) {
+      return NextResponse.json(
+        { success: false, error: "Hospital City and State are required." },
+        { status: 400 }
+      );
+    }
+
+    if (!registrationNumber || !registrationNumber.trim()) {
+      return NextResponse.json(
+        { success: false, error: "Official Registration Number is required under ART Act 2021." },
         { status: 400 }
       );
     }

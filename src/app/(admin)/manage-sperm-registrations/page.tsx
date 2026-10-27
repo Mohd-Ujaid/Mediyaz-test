@@ -1726,38 +1726,33 @@ export default function ManageSpermRegistrationsPage() {
               onChange={(e) => {
                 const val = e.target.value;
                 setStatusFilter(val);
-                if (val === "APPROVED") setActiveTab("APPROVED");
-                else if (val === "WAITING_FORM13") setActiveTab("WAITING_FORM13");
-                else if (val === "FILE_COMPLETED") setActiveTab("FILE_COMPLETED");
-                else if (val === "CANCELLED") setActiveTab("CANCELLED");
-                else if (val === "" && activeTab !== "all") setActiveTab("all");
-                else if (["COMPLETED", "UNDER_REVIEW", "SUSPENDED", "REJECTED", "other"].includes(val)) setActiveTab("other");
+                if (!val) {
+                  setActiveTab("all");
+                } else if (val === "APPROVED") {
+                  setActiveTab("APPROVED");
+                } else if (val === "WAITING_FORM13") {
+                  setActiveTab("WAITING_FORM13");
+                } else if (val === "FILE_COMPLETED") {
+                  setActiveTab("FILE_COMPLETED");
+                } else if (val === "CANCELLED") {
+                  setActiveTab("CANCELLED");
+                } else if (["COMPLETED", "UNDER_REVIEW", "SUSPENDED", "REJECTED"].includes(val)) {
+                  setActiveTab("other");
+                } else {
+                  setActiveTab("other");
+                }
               }}
               className="w-full h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3 text-xs focus:outline-none focus:border-teal-500 font-medium"
             >
-              {activeTab === "all" ? (
-                <>
-                  <option value="">All Pipeline Statuses</option>
-                  <option value="APPROVED">Status: Approved</option>
-                  <option value="WAITING_FORM13">Status: Waiting Form 13</option>
-                  <option value="FILE_COMPLETED">Status: File Completed</option>
-                  <option value="CANCELLED">Status: Cancelled</option>
-                  <option value="COMPLETED">Status: Completed</option>
-                  <option value="UNDER_REVIEW">Status: Under Review</option>
-                  <option value="SUSPENDED">Status: Suspended</option>
-                  <option value="REJECTED">Status: Rejected</option>
-                </>
-              ) : activeTab === "other" ? (
-                <>
-                  <option value="other">All Other Statuses</option>
-                  <option value="COMPLETED">Status: Completed</option>
-                  <option value="UNDER_REVIEW">Status: Under Review</option>
-                  <option value="SUSPENDED">Status: Suspended</option>
-                  <option value="REJECTED">Status: Rejected</option>
-                </>
-              ) : (
-                <option value={activeTab}>Filter: {activeTab.replace(/_/g, " ")}</option>
-              )}
+              <option value="">All Pipeline Statuses</option>
+              <option value="APPROVED">Status: Approved</option>
+              <option value="WAITING_FORM13">Status: Waiting Form 13</option>
+              <option value="FILE_COMPLETED">Status: File Completed</option>
+              <option value="CANCELLED">Status: Cancelled</option>
+              <option value="COMPLETED">Status: Completed</option>
+              <option value="UNDER_REVIEW">Status: Under Review</option>
+              <option value="SUSPENDED">Status: Suspended</option>
+              <option value="REJECTED">Status: Rejected</option>
             </select>
           </div>
         </div>
@@ -1798,7 +1793,7 @@ export default function ManageSpermRegistrationsPage() {
             )}
           </div>
 
-          {(search || hospitalFilter || branchFilter || statusFilter !== "APPROVED" || fromDateFilter || toDateFilter || activeTab !== "APPROVED") && (
+          {(search || hospitalFilter || branchFilter || statusFilter || fromDateFilter || toDateFilter || activeTab !== "all") && (
             <Button
               variant="outline"
               size="sm"
@@ -1806,8 +1801,8 @@ export default function ManageSpermRegistrationsPage() {
                 setSearch("");
                 setHospitalFilter("");
                 setBranchFilter("");
-                setStatusFilter("APPROVED");
-                setActiveTab("APPROVED");
+                setStatusFilter("");
+                setActiveTab("all");
                 setFromDateFilter("");
                 setToDateFilter("");
               }}
@@ -2008,7 +2003,7 @@ export default function ManageSpermRegistrationsPage() {
           <div className="text-center py-20 text-slate-400 text-xs">No sperm donor records found for the selected status.</div>
         ) : (
           <div className="overflow-x-auto w-full">
-            <table className="w-full min-w-[1280px] text-left text-xs border-collapse">
+            <table className="w-full min-w-[1440px] text-left text-xs border-collapse">
               <thead className="sticky top-0 z-20 backdrop-blur-md bg-slate-50/95 dark:bg-slate-900/95 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 shadow-2xs">
                 <tr>
                   <th className={`${tableDensity === "compact" ? "py-2 px-2.5" : "p-3.5"} w-10 whitespace-nowrap`}>

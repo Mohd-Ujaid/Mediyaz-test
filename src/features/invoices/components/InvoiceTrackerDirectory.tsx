@@ -641,165 +641,135 @@ export function InvoiceTrackerDirectory() {
             </div>
           </div>
 
-          {/* Clinic Category Separation Segment: ALL | WITH_INVOICE | WITHOUT_INVOICE */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-                <Building2 className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                  <span>Clinic Invoice Category</span>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    (Separate clinics with &amp; without tax invoice)
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {clinicInvoiceFilter === "ALL"
-                    ? `Showing all ${clinicBreakdown.length} clinics (${clinicsWithInvoice.length} with tax invoice, ${clinicsWithoutInvoice.length} without invoice)`
-                    : clinicInvoiceFilter === "WITH_INVOICE"
-                    ? `Filtering to ${clinicsWithInvoice.length} clinics configured With Tax Invoice`
-                    : `Filtering to ${clinicsWithoutInvoice.length} clinics configured Without Invoice`}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Unified Sub-Navigation & Partner Clinic Category Toolbar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+            {/* Billing Mode Status Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl w-fit">
               <button
                 type="button"
-                id="btn-filter-clinic-all"
                 onClick={() => {
-                  setClinicInvoiceFilter("ALL");
-                  setSelectedHospitalId("ALL");
-                  setSelectedBranch("ALL");
+                  setModeTab("ALL");
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  clinicInvoiceFilter === "ALL"
-                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-all ${
+                  modeTab === "ALL"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
                 }`}
               >
-                <span>All Partner Clinics</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                  {clinicBreakdown.length}
-                </span>
+                All Billable ({stats.totalInvoices})
               </button>
 
               <button
                 type="button"
-                id="btn-filter-clinic-with-invoice"
                 onClick={() => {
-                  setClinicInvoiceFilter("WITH_INVOICE");
-                  setSelectedHospitalId("ALL");
-                  setSelectedBranch("ALL");
+                  setModeTab("AWAITING");
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  clinicInvoiceFilter === "WITH_INVOICE"
-                    ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/20"
-                    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 hover:bg-emerald-100/50"
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all ${
+                  modeTab === "AWAITING"
+                    ? "bg-sky-600 text-white shadow-xs"
+                    : "text-sky-700 dark:text-sky-400 hover:bg-sky-100/50"
                 }`}
               >
-                <Receipt className="w-3.5 h-3.5" />
-                <span>Clinics With Invoice</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                  clinicInvoiceFilter === "WITH_INVOICE" ? "bg-white/20 text-white" : "bg-emerald-200/60 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200"
-                }`}>
-                  {clinicsWithInvoice.length}
-                </span>
+                <Clock className="h-3.5 w-3.5" />
+                Awaiting Invoice ({stats.awaitingCount})
               </button>
 
               <button
                 type="button"
-                id="btn-filter-clinic-without-invoice"
                 onClick={() => {
-                  setClinicInvoiceFilter("WITHOUT_INVOICE");
-                  setSelectedHospitalId("ALL");
-                  setSelectedBranch("ALL");
+                  setModeTab("INVOICED");
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  clinicInvoiceFilter === "WITHOUT_INVOICE"
-                    ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-500/20"
-                    : "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 hover:bg-purple-100/50"
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all ${
+                  modeTab === "INVOICED"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100/50"
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Clinics Without Invoice</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                  clinicInvoiceFilter === "WITHOUT_INVOICE" ? "bg-white/20 text-white" : "bg-purple-200/60 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                }`}>
-                  {clinicsWithoutInvoice.length}
-                </span>
+                <FileCheck className="h-3.5 w-3.5" />
+                Invoiced ({stats.invoicedCount})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setModeTab("NO_INVOICE");
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all ${
+                  modeTab === "NO_INVOICE"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-purple-700 dark:text-purple-400 hover:bg-purple-100/50"
+                }`}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Without Invoice ({stats.noInvoiceCount})
               </button>
             </div>
-          </div>
 
-          {/* Billing Mode Sub-Tabs (Awaiting / Invoiced / No-Invoice) */}
-          <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl w-fit">
-            <button
-              type="button"
-              onClick={() => {
-                setModeTab("ALL");
-                setCurrentPage(1);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                modeTab === "ALL"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-              }`}
-            >
-              All Billable ({stats.totalInvoices})
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setModeTab("AWAITING");
-                setCurrentPage(1);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
-                modeTab === "AWAITING"
-                  ? "bg-sky-600 text-white shadow-sm"
-                  : "text-sky-700 dark:text-sky-400 hover:bg-sky-100/50"
-              }`}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              Awaiting Invoice ({stats.awaitingCount})
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setModeTab("INVOICED");
-                setCurrentPage(1);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
-                modeTab === "INVOICED"
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100/50"
-              }`}
-            >
-              <FileCheck className="h-3.5 w-3.5" />
-              Invoiced ({stats.invoicedCount})
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setModeTab("NO_INVOICE");
-                setCurrentPage(1);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
-                modeTab === "NO_INVOICE"
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : "text-purple-700 dark:text-purple-400 hover:bg-purple-100/50"
-              }`}
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Without Invoice ({stats.noInvoiceCount})
-            </button>
+            {/* Partner Clinic Category Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider hidden sm:inline-block">
+                Clinic Model:
+              </span>
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
+                <button
+                  type="button"
+                  id="btn-filter-clinic-all"
+                  onClick={() => {
+                    setClinicInvoiceFilter("ALL");
+                    setSelectedHospitalId("ALL");
+                    setSelectedBranch("ALL");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-semibold text-xs transition-all ${
+                    clinicInvoiceFilter === "ALL"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                  }`}
+                >
+                  All Clinics ({clinicBreakdown.length})
+                </button>
+                <button
+                  type="button"
+                  id="btn-filter-clinic-with-invoice"
+                  onClick={() => {
+                    setClinicInvoiceFilter("WITH_INVOICE");
+                    setSelectedHospitalId("ALL");
+                    setSelectedBranch("ALL");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 transition-all ${
+                    clinicInvoiceFilter === "WITH_INVOICE"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100/50"
+                  }`}
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  Tax Invoiced ({clinicsWithInvoice.length})
+                </button>
+                <button
+                  type="button"
+                  id="btn-filter-clinic-without-invoice"
+                  onClick={() => {
+                    setClinicInvoiceFilter("WITHOUT_INVOICE");
+                    setSelectedHospitalId("ALL");
+                    setSelectedBranch("ALL");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-semibold text-xs flex items-center gap-1 transition-all ${
+                    clinicInvoiceFilter === "WITHOUT_INVOICE"
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "text-purple-700 dark:text-purple-400 hover:bg-purple-100/50"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Direct ({clinicsWithoutInvoice.length})
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* TABLE CONTAINER */}
@@ -1108,7 +1078,9 @@ export function InvoiceTrackerDirectory() {
                           </td>
 
                           {/* TDS */}
-                          <td className="py-3 px-3 text-right text-amber-600 dark:text-amber-400 font-medium">
+                          <td className={`py-3 px-3 text-right font-medium ${
+                            (inv.tdsAmount || 0) > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-slate-400 dark:text-slate-500"
+                          }`}>
                             ₹{(inv.tdsAmount || 0).toLocaleString("en-IN")}
                           </td>
 
@@ -1118,7 +1090,9 @@ export function InvoiceTrackerDirectory() {
                           </td>
 
                           {/* Pending */}
-                          <td className="py-3 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                          <td className={`py-3 px-3 text-right font-bold ${
+                            (inv.pendingAmount || 0) > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-400 dark:text-slate-500"
+                          }`}>
                             ₹{(inv.pendingAmount || 0).toLocaleString("en-IN")}
                           </td>
 
